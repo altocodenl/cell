@@ -52,6 +52,10 @@ Execution takes code plus a location. The location contains the input and is whe
 
 Execution creates two byproducts: the expansion of the code with data and the actual transformations to the input, which become the output.
 
+Execution is not a single happening. It is, rather, a route (event listener). When its input data and code change, it is automatically re-executed.
+
+Every action happens as the result of routes responding to incoming events. Cells is autopoietic.
+
 Core programs are the ones given by cells, which you cannot change. They are the building blocks.
 
 Two types of storage: data (small, fast) and files (large, slow).
@@ -97,9 +101,23 @@ no circular locations!
 
 - Puts data first and can be considered a database.
 
+- It has a single data space, like the web does.
+
 - Its internal execution mechanism and storage area is part of the global object and is in userspace.
 
 - Has a client/server architecture.
+
+- Is built with events from the ground up.
+
+### What does cells have in common with spreadsheets
+
+- A single information space where all code and data are present.
+
+- Code (formulas) is bound to a cell and that's where its result is shown.
+
+- The result of a cell containing code can be used as data for other cells, as well as cells containing literal information.
+
+- A cell is recalculated when its inputs (code or another cell) change.
 
 ### Things that cells does away with, and which will never be part of its core
 
@@ -114,3 +132,11 @@ no circular locations!
 - Classes & object oriented programming.
 
 You're however able to create any of these as a layer within cells.
+
+## Acknowledgments
+
+[Kartik Agaram](http://akkartik.name) has provided extremely valuable insights and questions.
+
+## License
+
+ac:pic is written by [Altocode](https://altocode.nl) and released into the public domain.
