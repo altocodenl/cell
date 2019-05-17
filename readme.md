@@ -56,11 +56,27 @@ Execution is not a single happening. It is, rather, a route (event listener). Wh
 
 Every action happens as the result of routes responding to incoming events. Cells is autopoietic.
 
+The route space is the set of code that can be potentially be executed when there is an incoming event.
+
+Routes can generate events themselves.
+
+Action is carried out in a sequential, deterministic, reproducible single thread.
+
 Core programs are the ones given by cells, which you cannot change. They are the building blocks.
 
 Two types of storage: data (small, fast) and files (large, slow).
 
 Data is stored in a built-in database.
+
+Errors are a type of data.
+
+The interface is web, through a web browser. The language is implemented as a server, reachable through HTTP. Applications can be mere extensions of the code. An API endpoint is a mere program.
+
+There's no distinction between an external API call and an internal change triggered by another thing (like a timer).
+
+Except the internals of the native functions, everything else happens in userspace.
+
+Access is restricted programatically. There's no hardcoded sandbox. There is no true distinction between internal and external programs, except on how you choose to expose them.
 
 ## Fundamentals
 
@@ -72,7 +88,7 @@ Programs are the dynamic aspect of data. And they can be represented as data. Th
 
 ### Values
 
-There are four kind of values:
+There are four types of values:
 - number. They are shown right aligned.
 - text. They are shown left aligned.
 - blist. A blist is a list where the keys are integers (1, 2, 3...).
