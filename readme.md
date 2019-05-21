@@ -52,6 +52,8 @@ Execution takes code plus a location. The location contains the input and is whe
 
 Execution creates two byproducts: the expansion of the code with data and the actual transformations to the input, which become the output.
 
+The expansion of the code with data allows to see the execution of the code transparently, even as it happens.
+
 Execution is not a single happening. It is, rather, a route (event listener). When its input data and code change, it is automatically re-executed.
 
 Every action happens as the result of routes responding to incoming events. Cells is autopoietic.
@@ -77,6 +79,8 @@ There's no distinction between an external API call and an internal change trigg
 Except the internals of the native functions, everything else happens in userspace.
 
 Access is restricted programatically. There's no hardcoded sandbox. There is no true distinction between internal and external programs, except on how you choose to expose them.
+
+Internally, there is no tokenizing, since programs are already structured data. And there's no parsing, just execution of the code done inside out. There's only code and literals.
 
 ## Fundamentals
 
