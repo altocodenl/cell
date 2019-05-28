@@ -68,7 +68,9 @@ Core programs are the ones given by cells, which you cannot change. They are the
 
 Two types of storage: data (small, fast) and files (large, slow).
 
-Data is stored in a built-in database.
+Data is stored in a built-in database. The database is merely a set of programs for reading and writing data. By making data storage and retrieval an integral part of the language, everything happens on the same space. Your queries can be as involved as you want, and there's no need to manipulate the data before putting things or after the database in a separate layer.
+
+Because all operations happen in the same data space, a read is also a write and a write is also a read. There is a single program for this operation, called *copy*.
 
 Errors are a type of data.
 
@@ -157,6 +159,8 @@ You're however able to create any of these as a layer within cells.
 
 [Kartik Agaram](http://akkartik.name) has provided extremely valuable insights and questions.
 
+Leon Marshall has contributed the term "speak" to describe interactions between programs.
+
 ## License
 
-ac:pic is written by [Altocode](https://altocode.nl) and released into the public domain.
+cells is written by [Altocode](https://altocode.nl) and released into the public domain.
