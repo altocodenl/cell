@@ -6,7 +6,7 @@ Cells is a simple and transparent programming interface.
 
 Programming is an universal tool for problem solving. It is also a wonderful means for artistic expression. Programming allows you to harness the power of computers for creative purposes.
 
-Programming is hard. Some difficulties are inherent to programming. Programming is inherently, essentially, unavoidably hard. Kind of like playing an instrument. But a great deal of what makes programming hard is not essential to programming itself, but rather [accidental](https://en.wikipedia.org/wiki/No_Silver_Bullet). This accidental complexity turns a hard endeavor into an almost impossible task for most.
+Programming is hard. Some difficulties are inherent to programming. Programming is inherently, essentially, unavoidably hard. Like writing, like playing an instrument. But a great deal of what makes programming hard is not essential to programming itself, but rather [accidental](https://en.wikipedia.org/wiki/No_Silver_Bullet). This accidental complexity turns a hard endeavor into an almost impossible task for most.
 
 Cells attemps to do away with the accidental complexity of programming, while being as enlightening as possible about the essential complexity of programming. Instead of shielding users from the real problems, cells put users face to face with the problems, but equipped with tools to understand and solve them. The value of these tools is in their adaptability and universality.
 
@@ -34,13 +34,13 @@ Programming is about transforming data.
 
 Data is the static. Programming is the dynamic.
 
-Four types: text, number, blist (numeric keys) and xlist (textual keys).
+Four types: text, number, list (numeric keys) and hash (textual keys).
 
-All data is inside a xlist that contains data.
+All data is inside a hash that contains data.
 
 All data is accessible unless explicitly forbidden by access rules.
 
-Access/location paths are blists containing text and number.
+Access/location paths are lists containing text and number.
 
 Code is made of programs.
 
@@ -61,6 +61,8 @@ Every action happens as the result of routes responding to incoming events. Cell
 The route space is the set of code that can be potentially be executed when there is an incoming event.
 
 Routes can generate events themselves.
+
+The shell for interacting with cells is simply some code that performs requests to certain routes.
 
 Action is carried out in a sequential, deterministic, reproducible single thread.
 
@@ -84,11 +86,13 @@ Access is restricted programatically. There's no hardcoded sandbox. There is no 
 
 Internally, there is no tokenizing, since programs are already structured data. And there's no parsing, just execution of the code done inside out. There's only code and literals.
 
+While code is expressed sequentially by default, there is a function for executing code sequences paralelly, to allow for parallel execution where possible. This also allows for further conceptual clarity: independent things need not be in the same sequence.
+
 ## Fundamentals
 
 ### What is programming?
 
-Programming is about manipulating data: checking a user's identity, querying sales data, moving a file from place to place.
+Programming is manipulating data: checking a user's identity, querying sales data, moving a file from place to place.
 
 Programs are the dynamic aspect of data. And they can be represented as data. They can be written as data. A machine takes this special data called a program, and processes data from it.
 
@@ -97,14 +101,14 @@ Programs are the dynamic aspect of data. And they can be represented as data. Th
 There are four types of values:
 - number. They are shown right aligned.
 - text. They are shown left aligned.
-- blist. A blist is a list where the keys are integers (1, 2, 3...).
-- xlist. A xlist is a list where the keys are text.
+- list. A list is a list where the keys are integers (1, 2, 3...).
+- hash. A hash is a list where the keys are text.
 
 Interestingly (and usefully) enough, you can place lists within lists.
 
 ### Locations & files
 
-A location is a blist. If start with /, it is absolute. Does not have to be flattened but it must resolve to it. You can put code inside as well.
+A location is a list. If start with /, it is absolute. Does not have to be flattened but it must resolve to it. You can put code inside as well.
 
 no circular locations!
 
