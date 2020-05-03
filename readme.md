@@ -159,6 +159,24 @@ no circular locations!
 
 You're however able to create any of these as a layer within cells.
 
+## An autopoietic theory of computation (loose ideas)
+
+Autopoietic theory of computation:
+- Starts with events. Why events + listeners instead of function calls? It works in UIs, and it works in servers. It might work everywhere.
+- Event listeners allow you to match 0 or n to your call. 0 is comfortable for developing (no "function is undefined" errors). But the key is n. n allows you to have a sequence of functions reacting to a said and going in succession, passing control. Core assumption that we cover below: things happen one at a time.
+- Wildcard verbs allow you to track a lot of things and specify access.
+- The reactive elements become possible when you listen not just to a verb, but a given path. By specifying event listeners with path, you can make them be triggered only with certain arguments - if the path is the first argument, then the listener would match conditionally on it.
+- Don't "command", "say" instead. Autopoetic. Respond. Internally triggered. Call & respond, following Gleick's description in first chapter of The Information.
+- Listeners decide whether they want to respond. Overall order is determined before, by first come. But it's core that they themselves decide, and that they can call each other through the same mechanism. It is self-similar, and it scales.
+- Initial listeners bootstrap the system. In that way, you can have a self-modifying structure that can still remain secure and understandable. Strong echoes of how a language can be extended from its primitives, but instead concerning access.
+- Said statements trigger an internal *ping pang*: the structure says things to itself from within the boundary.
+- Surface to listen, then internal area of execution. And concurrency has two options: when listening to something, do you do the whole thing internally (assuming it stops, but if it doesn't, then it's valid too) and listen only after you're done with everything and no more things are triggered? Or do you keep listening to things and you have multiple execution threads? Whatever you choose must be understandable, the guarantees of what happens or what doesn't. It makes sense to have n threads per n cpus, but the modification of data should have guarantees. But then, where do they lie? What if we had elegant locks? We could put all the guarantees we wanted without demanding things. The system would still be responsive to tell us what's going on where. And we could scale as best as possible, within reason.
+- If you want a consistent system that runs parallely, things that concern a certain unit of consistency must be run sequentially. Unrelated things can run in parallel without a problem. If data must be consistent and it can only exist in one state at a time, the process must be either sequential or be sequentialized after the fact with eventual consistency. This is a hard limit. Parallel systems are hard to understand because of the potential combinatorial possibilities of reducing parallel sequences related to one concern into a single thread.
+- Authentication can be passed along. It's up to the listener to decide to serve or not the request, or pass control along.
+- Surface of the system also responds with data. That's communication. Same mechanism, in reverse.
+- Like receptors and substances. But receptors operate in parallel to a great extent and by aggregation; the systems done with cells are very simple, things happen mostly one at a time because that's how we understand them, and things either happen or not, we don't work usually with bounds. But the analogy stands.
+- Autopoiesis as compatible yet diametrally opposed to the cybernetic paradigm of computation (input/output). The focus is on what happens inside the boundary; also it goes beyond epistemologically by pointing to the self-constructed (*poiesis*) representation of reality that takes place inside the boundary, whereas cybernetics assumes an external reality.
+
 ## Acknowledgments
 
 [Kartik Agaram](http://akkartik.name) has provided extremely valuable insights and questions.
