@@ -1,30 +1,296 @@
-# Cells
+# cell
 
-Cells is a simple and transparent programming interface.
+cell is a simple and transparent programming interface.
 
 ## Purpose
 
 Programming is an universal tool for problem solving. It is also a wonderful means for artistic expression. Programming allows you to harness the power of computers for creative purposes.
 
-Programming is hard. Some difficulties are inherent to programming. Programming is inherently, essentially, unavoidably hard. Like writing, like playing an instrument. But a great deal of what makes programming hard is not essential to programming itself, but rather [accidental](https://en.wikipedia.org/wiki/No_Silver_Bullet). This accidental complexity turns a hard endeavor into an almost impossible task for most.
+Programming is hard. Some difficulties are inherent to programming. Programming is inherently, essentially, unavoidably hard. Like writing, like playing an instrument. But a great deal of what makes programming hard is not essential to programming itself, but rather [accidental](https://en.wikipedia.org/wiki/No_Silver_Bullet). This accidental complexity turns a hard endeavor into an almost impossible task for most, and a mostly vexatious endeavor for those who still program.
 
-Cells attemps to do away with the accidental complexity of programming, while being as enlightening as possible about the essential complexity of programming. Instead of shielding users from the real problems, cells put users face to face with the problems, but equipped with tools to understand and solve them. The value of these tools is in their adaptability and universality.
+cell attemps to radically do away with the accidental complexity of programming, while shining a light on the essential complexity of programming. Instead of shielding users from the real problems, cell put users face to face with the problems they must face anyway, but equipped with tools to understand and solve them. The value of these tools is in their adaptability and universality.
 
-Cells intends to be the simplest way to both learn how to program and to program real world useful applications, by everyone, for everyone. And if it can't reach that high point, it intends to pave the way for another tool to actually become that.
+cell intends to be the simplest way to both learn how to program and to program real world useful applications, by everyone, for everyone. And if it fails to reach that aspiration, it intends to pave the way for another tool to actually become that.
 
-Cells accomplish this purpose through simplicity and transparency. Simplicity means a few concepts that together allow to program anything. Transparency means seeing through and not hiding the users from the hard issues of implementation. Anything that is hard but real, should be seen and understood.
+cell accomplishes everything it does through simplicity and transparency. Simplicity means that a few concepts, that can be understood in isolation, can be combined with some skill to program anything. Transparency means seeing through and not hiding the users from the hard issues of implementation. Anything that is hard but real, should be seen and understood.
 
-Cells is the development of a few ideas that feel right and create their own space together.
+*TODO: connect programming to disys.*
 
 ## Axioms
 
-Systems should be understandable.
+1. A digital information system (disys) is a system that uses computers to 1) store information; 2) transform information; 3) transmit information. Data is equal to information.
+2. Disys can and should be understandable by those who make them and those who use them.
+3. Well-designed disys should last a very long time (decades, at least).
+4. Everyone should have the tools to build their own disys.
+5. The making of disys (programming) should be as hard (but not harder) than writing.
 
-Well-designed systems should last a very long time.
+## The data vocabulary
 
-Everyone should have the tools to build their own systems.
+The starting point of any disys is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. So it is all about data.
 
-Good programming should be as hard (but not harder) as good writing.
+To talk about data, we're going to set a vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
+
+In cell, there are only four data types:
+
+1. Number
+2. Text
+3. List
+4. Hash
+
+The first two, number and text, are *single* data types. That means that they represent a *single value*. For example:
+
+```
+1234
+```
+
+```
+Hi
+```
+
+A list is a sequence of values. The list is the first *multiple* data type, because it can hold *multiple* values inside itself -- zero or more values, to be precise. These values can be of any type. For example:
+
+```
+1: 1234
+2: Hi
+```
+
+Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *paths*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Paths are how you can get to a specific value inside a list. The paths of all lists are always numbers (integer numbers, to be more precise).
+
+The last data type is hash. Like a list, it can hold multiple values. However, its paths are not numbers, but texts.
+
+```
+name: Odd
+age: 32
+```
+
+Tables are a good way to represent data. For example, the hash we just saw can be expressed in this table:
+
+<table>
+   <tr>
+      <th>Name</th>
+      <th>Age</th>
+   </tr>
+   <tr>
+      <td>Odd</td>
+      <td>32</td>
+   </tr>
+</table>
+
+Both lists and hashes can contain other multiple values (lists and hashes) inside it. For example:
+
+<table>
+   <tr>
+      <th>Name</th>
+      <th>Age</th>
+      <th>Messages</th>
+   </tr>
+   <tr>
+      <td>Odd</td>
+      <td>32</td>
+      <td>
+         <table>
+            <tr>
+               <th>1</th>
+               <th>2</th>
+            </tr>
+            <tr>
+               <td>1234</td>
+               <td>Hi</td>
+            </tr>
+         </table>
+      </td>
+   </tr>
+</table>
+
+Note in the example above that we added a new path to the hash, called `messages`. `messages` takes us to a list of two values, which we saw earlier.
+
+If we want to express something that could be either "yes" or "no", or "true" or "false", we can simply use `0` or `1`.
+
+<table>
+   <tr>
+      <th>Name</th>
+      <th>Age</th>
+      <th>Messages</th>
+      <th>Online</th>
+   </tr>
+   <tr>
+      <td>Odd</td>
+      <td>32</td>
+      <td>
+         <table>
+            <tr>
+               <th>1</th>
+               <th>2</th>
+            </tr>
+            <tr>
+               <td>1234</td>
+               <td>Hi</td>
+            </tr>
+         </table>
+      </td>
+      <th>
+         1
+      </th>
+   </tr>
+</table>
+
+Hopefully, this hash, which itself contains a text, a number and a list, is understandable. What it needs now is a context. The data in there strongly hints towards a messaging system. Perhaps, the data of the system could look like this:
+
+<table>
+   <tr>
+      <th>Users</th>
+   </tr>
+   <tr>
+      <td>
+         <table>
+            <tr>
+               <th>1</th>
+            </tr>
+            <tr>
+               <td>
+                  <table>
+                     <tr>
+                        <th>Name</th>
+                        <th>Age</th>
+                        <th>Messages</th>
+                        <th>Online</th>
+                     </tr>
+                     <tr>
+                        <td>Odd</td>
+                        <td>32</td>
+                        <td>
+                           <table>
+                              <tr>
+                                 <th>1</th>
+                                 <th>2</th>
+                              </tr>
+                              <tr>
+                                 <td>1234</td>
+                                 <td>Hi</td>
+                              </tr>
+                           </table>
+                        </td>
+                        <td>1</td>
+                     </tr>
+                  </table>
+               </td>
+            </tr>
+         </table>
+      </td>
+   </tr>
+</table>
+
+Then, we could add another user.
+
+<table>
+   <tr>
+      <th>Users</th>
+   </tr>
+   <tr>
+      <td>
+         <table>
+            <tr>
+               <th>1</th>
+               <th>2</th>
+            </tr>
+            <tr>
+               <td>
+                  <table>
+                     <tr>
+                        <th>Name</th>
+                        <th>Age</th>
+                        <th>Messages</th>
+                        <th>Online</th>
+                     </tr>
+                     <tr>
+                        <td>Odd</td>
+                        <td>32</td>
+                        <td>
+                           <table>
+                              <tr>
+                                 <th>1</th>
+                                 <th>2</th>
+                              </tr>
+                              <tr>
+                                 <td>1234</td>
+                                 <td>Hi</td>
+                              </tr>
+                           </table>
+                        </td>
+                        <td>1</td>
+                     </tr>
+                  </table>
+               </td>
+               <td>
+                  <table>
+                     <tr>
+                        <th>Name</th>
+                        <th>Age</th>
+                        <th>Messages</th>
+                        <th>Online</th>
+                     </tr>
+                     <tr>
+                        <td>Eoin</td>
+                        <td>38</td>
+                        <td>
+                           <table>
+                              <tr>
+                                 <th>1</th>
+                              </tr>
+                              <tr>
+                                 <td>Hi, Odd!</td>
+                              </tr>
+                           </table>
+                        </td>
+                        <td>0</td>
+                     </tr>
+                  </table>
+               </td>
+            </tr>
+         </table>
+      </td>
+   </tr>
+</table>
+
+If we're designing in a notebook or a blackboard, we can use a shorthand for this data, since for most of us it is not fun to draw tables by hand. Here's a way to represent the table above in text format:
+
+
+```
+users 1 name Odd
+users 1 age 32
+users 1 messages 1 1234
+users 1 messages 2 Hi
+users 1 online 1
+users 2 name Eoin
+users 2 age 38
+users 2 messages 1 "Hi, Odd!"
+users 2 online 0
+```
+
+A bit messy, but quite compact! There's a few things that are worth noting about the text representation above:
+
+- There is a single line per simple value.
+- The paths of complex values are to the left and they expand to the right, for example: `users 1 name`.
+
+If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit:
+
+```
+users 1 name Odd
+        age 32
+        messages 1 1234
+                 2 Hi
+        online 1
+      2 name Eoin
+        age 38
+        messages 1 "Hi, Odd!"
+        online 0
+```
+
+
+
+
+
+
 
 ## Main ideas
 
@@ -56,17 +322,17 @@ The expansion of the code with data allows to see the execution of the code tran
 
 Execution is not a single happening. It is, rather, a route (event listener). When its input data and code change, it is automatically re-executed.
 
-Every action happens as the result of routes responding to incoming events. Cells is autopoietic.
+Every action happens as the result of routes responding to incoming events. cell is autopoietic.
 
 The route space is the set of code that can be potentially be executed when there is an incoming event.
 
 Routes can generate events themselves.
 
-The shell for interacting with cells is simply some code that performs requests to certain routes.
+The shell for interacting with cell is simply some code that performs requests to certain routes.
 
 Action is carried out in a sequential, deterministic, reproducible single thread.
 
-Core programs are the ones given by cells, which you cannot change. They are the building blocks.
+Core programs are the ones given by cell, which you cannot change. They are the building blocks.
 
 Two types of storage: data (small, fast) and files (large, slow).
 
@@ -94,6 +360,8 @@ While code is expressed sequentially by default, there is a function for executi
 
 Programming is manipulating data: checking a user's identity, querying sales data, moving a file from place to place.
 
+Programs are data transformations. And they are themselves data.
+
 Programs are the dynamic aspect of data. And they can be represented as data. They can be written as data. A machine takes this special data called a program, and processes data from it.
 
 ### Values
@@ -103,6 +371,7 @@ There are four types of values:
 - text. They are shown left aligned.
 - list. A list is a list where the keys are integers (1, 2, 3...).
 - hash. A hash is a list where the keys are text.
+- function. The fifth type!
 
 Interestingly (and usefully) enough, you can place lists within lists.
 
@@ -119,7 +388,7 @@ no circular locations!
 3. Conditional: can discard or expand the sequence dynamically
 4. Iteration: do the same thing for this piece of data (or this number of times)
 
-### What makes cells different to programming languages?
+### What makes cell different to programming languages?
 
 - Graphical, yet fully powered.
 
@@ -135,17 +404,17 @@ no circular locations!
 
 - Is built with events from the ground up.
 
-### What does cells have in common with spreadsheets
+### What does cell have in common with spreadsheets
 
 - A single information space where all code and data are present.
 
 - Code (formulas) is bound to a cell and that's where its result is shown.
 
-- The result of a cell containing code can be used as data for other cells, as well as cells containing literal information.
+- The result of a cell containing code can be used as data for other cell, as well as cell containing literal information.
 
 - A cell is recalculated when its inputs (code or another cell) change.
 
-### Things that cells does away with, and which will never be part of its core
+### Things that cell does away with, and which will never be part of its core
 
 - Extra built-in types, like booleans, null, undefined.
 
@@ -157,7 +426,7 @@ no circular locations!
 
 - Classes & object oriented programming.
 
-You're however able to create any of these as a layer within cells.
+You're however able to create any of these as a layer within cell.
 
 ## An autopoietic theory of computation (loose ideas)
 
@@ -174,7 +443,7 @@ Autopoietic theory of computation:
 - If you want a consistent system that runs parallely, things that concern a certain unit of consistency must be run sequentially. Unrelated things can run in parallel without a problem. If data must be consistent and it can only exist in one state at a time, the process must be either sequential or be sequentialized after the fact with eventual consistency. This is a hard limit. Parallel systems are hard to understand because of the potential combinatorial possibilities of reducing parallel sequences related to one concern into a single thread.
 - Authentication can be passed along. It's up to the listener to decide to serve or not the request, or pass control along.
 - Surface of the system also responds with data. That's communication. Same mechanism, in reverse.
-- Like receptors and substances. But receptors operate in parallel to a great extent and by aggregation; the systems done with cells are very simple, things happen mostly one at a time because that's how we understand them, and things either happen or not, we don't work usually with bounds. But the analogy stands.
+- Like receptors and substances. But receptors operate in parallel to a great extent and by aggregation; the systems done with cell are very simple, things happen mostly one at a time because that's how we understand them, and things either happen or not, we don't work usually with bounds. But the analogy stands.
 - Autopoiesis as compatible yet diametrally opposed to the cybernetic paradigm of computation (input/output). The focus is on what happens inside the boundary; also it goes beyond epistemologically by pointing to the self-constructed (*poiesis*) representation of reality that takes place inside the boundary, whereas cybernetics assumes an external reality.
 
 ## Acknowledgments
@@ -185,4 +454,4 @@ Leon Marshall has contributed the term "speak" to describe interactions between 
 
 ## License
 
-cells is written by [Altocode](https://altocode.nl) and released into the public domain.
+cell is written by [Altocode](https://altocode.nl) and released into the public domain.
