@@ -63,7 +63,7 @@ name: Odd
 age: 32
 ```
 
-Tables are a good way to represent data. For example, the hash we just saw can be expressed in this table:
+Tables are a good way to represent data. For example, the hash we just saw can be expressed in **table format**:
 
 <table>
    <tr>
@@ -252,7 +252,7 @@ Then, we could add another user.
    </tr>
 </table>
 
-If we're designing in a notebook or a blackboard, we can use a shorthand for this data, since for most of us it is not fun to draw tables by hand. Here's a way to represent the table above in text format:
+If we're designing in a notebook or a blackboard, we can use a shorthand for this data, since for most of us it is not fun to draw tables by hand. Here's a way to represent the table above in **text format**:
 
 
 ```
@@ -272,7 +272,7 @@ A bit messy, but quite compact! There's a few things that are worth noting about
 - There is a single line per simple value.
 - The paths of complex values are to the left and they expand to the right, for example: `users 1 name`.
 
-If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit:
+If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit (**abridged text format**):
 
 ```
 users 1 name Odd
@@ -286,6 +286,31 @@ users 1 name Odd
         online 0
 ```
 
+You can also use the **JSON format** to represent data. You can use arrays for lists and objects for hashes.
+
+```json
+{
+   "users": [
+      {
+         "name": "Odd",
+         "age": 32
+         "messages": [
+            1234,
+            "Hi"
+         ],
+         "online": 1
+      },
+      {
+         "name": "Eoin",
+         "age": 38
+         "messages": [
+            "Hi, Odd!,
+         ],
+         "online": 0
+      }
+   ]
+}
+```
 
 
 
