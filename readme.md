@@ -270,7 +270,8 @@ users 2 online 0
 A bit messy, but quite compact! There's a few things that are worth noting about the text representation above:
 
 - There is a single line per simple value.
-- The paths of complex values are to the left and they expand to the right, for example: `users 1 name`.
+- The paths of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
+- The value is the rightmost element in each line.
 
 If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit (**abridged text format**):
 
@@ -311,6 +312,8 @@ You can also use the **JSON format** to represent data. You can use arrays for l
    ]
 }
 ```
+
+With this, we're ready to start doing things with data!
 
 
 
