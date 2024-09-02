@@ -26,7 +26,7 @@ cell accomplishes everything it does through simplicity and transparency. Simpli
 
 ## The data vocabulary
 
-The starting point of any disys is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. So it is all about data.
+The starting point of any disys is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
 To talk about data, we're going to set a vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
 
