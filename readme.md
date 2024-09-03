@@ -305,7 +305,7 @@ You can also use the **JSON format** to represent cell data. You can use arrays 
          "name": "Eoin",
          "age": 38
          "messages": [
-            "Hi, Odd!
+            "Hi, Odd!"
          ],
          "online": 0
       }
