@@ -28,7 +28,7 @@ cell accomplishes everything it does through simplicity and transparency. Simpli
 
 The starting point of any disys is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
-To talk about data, we're going to set a vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
+To talk about data, we're going to establish a common vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
 
 In cell, there are only four data types:
 
@@ -56,14 +56,14 @@ A list is a sequence of values. The list is the first *multiple* data type, beca
 
 Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *paths*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Paths are how you can get to a specific value inside a list. The paths of all lists are always numbers (integer numbers, to be more precise).
 
-The last data type is hash. Like a list, it can hold multiple values. However, its paths are not numbers, but texts.
+The four and last data type is the *hash*. Like a list, it can hold multiple values. However, its paths are not numbers, but texts.
 
 ```
 name: Odd
 age: 32
 ```
 
-Tables are a good way to represent data. For example, the hash we just saw can be expressed in **table format**:
+Tables are a good way to represent cell data. For example, the hash we just saw can be expressed in **table format**:
 
 <table>
    <tr>
@@ -104,7 +104,7 @@ Both lists and hashes can contain other multiple values (lists and hashes) insid
 
 Note in the example above that we added a new path to the hash, called `messages`. `messages` takes us to a list of two values, which we saw earlier.
 
-If we want to express something that could be either "yes" or "no", or "true" or "false", we can simply use `0` or `1`.
+If we want to express something that could be either "yes" or "no", or "true" or "false", we can simply use `0` or `1`. `0` represents "no", while `1` represents "yes".
 
 <table>
    <tr>
@@ -269,7 +269,7 @@ users 2 online 0
 
 A bit messy, but quite compact! There's a few things that are worth noting about the text representation above:
 
-- There is a single line per simple value.
+- There is a single line per single value.
 - The paths of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
 - The value is the rightmost element in each line.
 
@@ -287,7 +287,7 @@ users 1 name Odd
         online 0
 ```
 
-You can also use the **JSON format** to represent data. You can use arrays for lists and objects for hashes.
+You can also use the **JSON format** to represent cell data. You can use arrays for lists and objects for hashes.
 
 ```json
 {
@@ -305,7 +305,7 @@ You can also use the **JSON format** to represent data. You can use arrays for l
          "name": "Eoin",
          "age": 38
          "messages": [
-            "Hi, Odd!,
+            "Hi, Odd!
          ],
          "online": 0
       }
