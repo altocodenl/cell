@@ -24,7 +24,7 @@ cell accomplishes everything it does through simplicity and transparency. Simpli
 4. Everyone should have the tools to build their own disys.
 5. The making of disys (programming) should be as hard (but not harder) than writing.
 
-## The data vocabulary
+## The data vocabulary: `fourdata`
 
 The starting point of any disys is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
@@ -62,6 +62,8 @@ The four and last data type is the *hash*. Like a list, it can hold multiple val
 name: Odd
 age: 32
 ```
+
+Because there are only four types of data in this vocabulary, we call it `fourdata`.
 
 Tables are a good way to represent cell data. For example, the hash we just saw can be expressed in **table format**:
 
@@ -254,7 +256,6 @@ Then, we could add another user.
 
 If we're designing in a notebook or a blackboard, we can use a shorthand for this data, since for most of us it is not fun to draw tables by hand. Here's a way to represent the table above in **text format**:
 
-
 ```
 users 1 name Odd
 users 1 age 32
@@ -287,7 +288,7 @@ users 1 name Odd
         online 0
 ```
 
-You can also use the **JSON format** to represent cell data. You can use arrays for lists and objects for hashes.
+You can also use the **JSON format** to represent datafour. You can use arrays for lists and objects for hashes. For booleans, you can use 0 and 1.
 
 ```json
 {
@@ -314,6 +315,9 @@ You can also use the **JSON format** to represent cell data. You can use arrays 
 ```
 
 With this, we're ready to start doing things with data!
+
+
+- The address space: a single hash. aspace.
 
 
 
