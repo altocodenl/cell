@@ -317,7 +317,9 @@ You can also use the **JSON format** to represent datafour. You can use arrays f
 With this, we're ready to start doing things with data!
 
 
-- The address space: a single hash. aspace.
+- The address space: a single hash. aspace. why a hash? well, who wants to remember number positions? Only good for huge lists of things with other defining characteristics, or very small ones.
+
+
 
 
 
