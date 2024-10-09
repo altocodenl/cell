@@ -19,10 +19,66 @@ var toFourData = function (v) {
    if (Type === 'boolean') return v ? 1 : 0;
    if (Type === 'date') return v.getTime ();
    if (Type === 'regex') return v.toString ();
-   if (Type === 'function') return v.toString ();
+   if (Type === 'function') return v.toString ().slice (0, 1000);
 
    // Invalid values (nan, infinity, null, undefined) are returned as empty strings
    return '';
+}
+
+// data is fourdata
+// stringify: number-like texts (either values or keys in objects), values with spaces or values with double quotes.
+// increment list keys by 1
+// sort object keys alphabetically
+// returns all paths with no abbreviations
+var pather = function (data, path, output) {
+
+   data = toFourData (data);
+
+   var text = function (t) {
+      return (t.match (/[\s"]/) || t.match (/^-?\d/)) ? JSON.stringify (t) : t;
+   }
+
+   if (! output) output = [];
+   if (! path) path = [];
+
+   if (teishi.simple (data)) {
+      if (type (data) === 'string') output.push ([...path, text (data)]);
+      else output.push ([...path, data + '']);
+   }
+   else {
+      if (type (data) === 'object') data = dale.obj (dale.keys (data).sort (), function (k) {
+         return [k, data [k]];
+      });
+      dale.go (data, function (v, k) {
+         if (type (data) === 'object') k = text (k);
+         else k = k + 1;
+         pather (v, [...path, k + ''], output);
+      });
+   }
+   return output;
+}
+
+// only print nonrepeated
+var apather = function (data) {
+   var lastPrinted = [];
+   dale.go (pather (data), function (path) {
+      // Chop off extra length in lastPrinted
+      lastPrinted = lastPrinted.slice (0, path.length);
+
+      var toPrint = [];
+      dale.go (path, function (v, k) {
+         if (lastPrinted [k] === v) return toPrint [k] = dale.go (dale.times (v.length), function () {return ' '}).join ('');
+         lastPrinted [k] = v;
+         toPrint [k] = v;
+      });
+      console.log (toPrint.join (' '));
+   });
+}
+
+clog = function () {
+   var args = [new Date ().toISOString ()].concat (teishi.copy (arguments));
+   apather ({log: args});
+   return false;
 }
 
 // *** LISTENERS ***
@@ -165,7 +221,6 @@ views.cell = function () {
    });
 }
 
-   // colors: blue for numbers (also in indexes), black for strings, green for hidden nested
 /*
    return B.view ([['data'], ['state', 'invalidTextarea']], function (data, invalid) {
       return ['div', [
