@@ -17,6 +17,14 @@ var map1_n = function (fn, n) {
    [['loop', 'times'], ['@@', 2], ['@@', 3]],
 ]]
 
+1 map1-n
+2 1 1 1 loop
+      2 times
+    2 1 @@
+      2 2
+    3 1 @@
+      2 3
+
 (do
    ((x a (+ 1 x)))
    ((> x b))
@@ -36,6 +44,18 @@ var do_ab = function (a, b) {
    ]],
 ]]
 
+1 do_ab
+2 1 1 1 loop
+      2 times
+    2 1 1 1 math
+          2 -
+        2 1 @@
+          2 b
+        3 1 @@
+          2 a
+      2 1 log
+        2 1 @@
+          2 v
 
 (defun double (x) (* x 2))
 

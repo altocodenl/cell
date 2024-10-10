@@ -62,7 +62,7 @@ age 32
 
 Because there are only four types of data in this vocabulary, we call it `fourdata`.
 
-Tables are a good way to represent cell data. For example, the hash we just saw can be expressed in **table format**:
+Tables are a common way to represent data. For example, the hash we just saw can be expressed in **table format**:
 
 <table>
    <tr>
@@ -251,7 +251,7 @@ Then, we could add another user.
    </tr>
 </table>
 
-If we're designing in a notebook or a blackboard, we can use a shorthand for this data, since for most of us it is not fun to draw tables by hand. Here's a way to represent the table above in **line format**:
+While tables are a standard way of looking at data, I much prefer to use text. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Here's a way to represent the data above in **line format**:
 
 ```
 users 1 name Odd
@@ -267,11 +267,11 @@ users 2 online 0
 
 A bit blockish, but quite compact! There's a few things that are worth noting about the line representation above:
 
-- There is a single line per single value.
+- There is one line per single value.
 - The paths of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
 - The value is the rightmost element in each line.
 
-If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit (**abridged line format**):
+If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit. This is the **abridged line format** for fourdata (or alf).
 
 ```
 users 1 name Odd
@@ -287,7 +287,77 @@ users 1 name Odd
 
 This abridged line format of fourdata will be *the* way in which we represent data.
 
+### [ASIDE FOR EXPERIENCED PROGRAMMERS] alf vs JSON
+
+*If you don't have much programming experience yet, you can skip this section.*
+
+The combination of fourdata and alf is quite radical. If you come from using JSON as a data representation format, here's what you cannot directly represent in alf:
+
+1. `true|false`
+2. `null`
+3. Empty arrays
+4. Empty objects
+
+We saw earlier that booleans can be represented as `0` and `1`. As for `null`, it can be represented by the *absence* of a certain key in a hash; but inside a list, it has to be represented with something else, such as the text `null` or an empty string.
+
+The impossibility of representing empty arrays (with lists) or empty objects (with hashes) is a much more radical departure. However, I consider it a virtue. There are no empty "boxes" anywhere; if you are expecting a "box" (multiple data type, either list or hash) and it is absent, then you can treat it like an empty list or hash in your code. But there's no need to burden the data representation with that.
+
+Other notable properties of alf:
+- A 1:1 mapping between a data line and each single value.
+- The use of indentation without a fixed amount of spaces, but rather using the length of the keys to push values to the right.
+- The fact that the notation fully determines how data looks like, leaving neither room nor need for pretty printing.
+- The avoidance of over-quoting texts that are evidently texts and contain no spaces.
+- Sparse arrays can happen naturally by skipping the missing entries. For example, `[null, 'hello']` maps to a single entry: `2 hello`.
+
+You can still use JSON instead of alf to represent fourdata. For example, the last example of the previous section could be written as:
+
+```json
+{
+    "users": [
+       {
+           "name": "Odd",
+           "age": 32,
+           "messages": [
+              1234,
+              "Hi"
+           ],
+           "online": true
+       }, {
+           "name": "Eoin",
+           "age": 38,
+           "messages": [
+              "Hi, Odd!"
+           ],
+           "online": false
+       }
+    ]
+}
+```
+
+Still, alf is more compact and has considerably less noise, only requiring quotes around `Hi, Odd!` since that text contains space.
+
+```
+users 1 name Odd
+        age 32
+        messages 1 1234
+                 2 Hi
+        online 1
+      2 name Eoin
+        age 38
+        messages 1 "Hi, Odd!"
+        online 0
+```
+
+While you can use the facilities provided by cell to generate alf from JSON or viceversa, it is useful to be able to write it by hand. If you do, here are the main points:
+
+- Sort hash keys alphabetically
+- Stringify texts that contain a double quote, a whitespace character or start like a number (texts that start like a number start with either a digit or a dash followed by a digit).
+- Stringify empty strings.
+- Stringify keys of hashes that look like a number.
+
 ## The language
+
+because alf is completely deterministic, and we write code in alf, there's no pretty printing or indentation conventions that are optional. All the code looks the same!
 
 how calls can be:
 - 1:1

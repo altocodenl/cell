@@ -26,7 +26,7 @@ var toFourData = function (v) {
 }
 
 // data is fourdata
-// stringify: number-like texts (either values or keys in objects), values with spaces or values with double quotes.
+// stringify: number-like texts (either values or keys in objects), values with spaces or values with double quotes, or empty strings
 // increment list keys by 1
 // sort object keys alphabetically
 // returns all paths with no abbreviations
@@ -35,7 +35,7 @@ var pather = function (data, path, output) {
    data = toFourData (data);
 
    var text = function (t) {
-      return (t.match (/[\s"]/) || t.match (/^-?\d/)) ? JSON.stringify (t) : t;
+      return (t.length === 0 || t.match (/[\s"]/) || t.match (/^-?\d/)) ? JSON.stringify (t) : t;
    }
 
    if (! output) output = [];
@@ -74,6 +74,8 @@ var apather = function (data) {
       console.log (toPrint.join (' '));
    });
 }
+
+window.apather = apather;
 
 clog = function () {
    var args = [new Date ().toISOString ()].concat (teishi.copy (arguments));
