@@ -51,9 +51,9 @@ A list is a sequence of values. The list is the first *multiple* data type, beca
 2 Hi
 ```
 
-Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *paths*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Paths are how you can get to a specific value inside a list. The paths of all lists are always numbers (integer numbers, to be more precise).
+Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *keys*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Keys are how you can get to a specific value inside a list. The keys of all lists are always positive integers.
 
-The four and last data type is the *hash*. Like a list, it can hold multiple values. However, its paths are not numbers, but texts.
+The four and last data type is the *hash*. Like a list, it can hold multiple values. However, its keys are not numbers, but texts.
 
 ```
 name Odd
@@ -101,7 +101,7 @@ Both lists and hashes can contain other multiple values (lists and hashes) insid
    </tr>
 </table>
 
-Note in the example above that we added a new path to the hash, called `messages`. `messages` takes us to a list of two values, which we saw earlier.
+Note in the example above that we added a new key to the hash, called `messages`. `messages` takes us to a list of two values, which we saw earlier.
 
 If we want to express something that could be either "yes" or "no", or "true" or "false", we can simply use `0` or `1`. `0` represents "no", while `1` represents "yes".
 
@@ -251,7 +251,9 @@ Then, we could add another user.
    </tr>
 </table>
 
-While tables are a standard way of looking at data, I much prefer to use text. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Here's a way to represent the data above in **line format**:
+While tables are a common way to look at data, cell is based on text. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Also, for large datasets, text is more readily parseable.
+
+Here's a way to represent the data above in **line format**:
 
 ```
 users 1 name Odd
@@ -268,7 +270,7 @@ users 2 online 0
 A bit blockish, but quite compact! There's a few things that are worth noting about the line representation above:
 
 - There is one line per single value.
-- The paths of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
+- The keys of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
 - The value is the rightmost element in each line.
 
 If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit. This is the **abridged line format** for fourdata (or alf).
@@ -334,7 +336,7 @@ You can still use JSON instead of alf to represent fourdata. For example, the la
 }
 ```
 
-Still, alf is more compact and has considerably less noise, only requiring quotes around `Hi, Odd!` since that text contains space.
+Still, alf is more compact and has considerably less noise (less quotes, no colons, no commas, no square or curly brackeets), only requiring quotes around `Hi, Odd!` since that text contains space.
 
 ```
 users 1 name Odd
@@ -369,6 +371,17 @@ call, responder, expansion, result
 sequence, cond, loop
 stdout & stderr
 
+call receives a verb and one or more arguments. if you pass a single hash, the reference to the arguments will be shrunk from `1 foo` to `foo`.
+
+validation of arguments with conditional return/throw.
+
+Side effects as change in state that is not in the transformation itself.
+
+context and scope are the same thing. It is referring to data with relative paths rather than absolute ones. And not literally relative ones, but with a more sophisticated mechanism of going "up" the chain until you find something.
+Reference is also a call.
+
+Reactivity event system is just doing it through those calls through the event system. push vs pull.
+
 TODO: everything :)
 
 ## The database
@@ -380,6 +393,8 @@ TODO: everything :)
 TODO: everything :)
 
 ## The interface maker
+
+Reactive connections to data sources (like server) to always have fresh data. You can avoid refreshing if it affects user experience, but still have the data ready.
 
 TODO: everything :)
 
