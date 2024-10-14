@@ -30,7 +30,7 @@ var toFourData = function (v) {
 // increment list keys by 1
 // sort object keys alphabetically
 // returns all paths with no abbreviations
-var pather = function (data, path, output) {
+var pather = function (data, query, path, output) {
 
    data = toFourData (data);
 
@@ -46,22 +46,26 @@ var pather = function (data, path, output) {
       else output.push ([...path, data + '']);
    }
    else {
+      if (query !== undefined) {
+         if (! JSON.stringify (data).match (query + '')) return;
+      }
       if (type (data) === 'object') data = dale.obj (dale.keys (data).sort (), function (k) {
          return [k, data [k]];
       });
       dale.go (data, function (v, k) {
          if (type (data) === 'object') k = text (k);
          else k = k + 1;
-         pather (v, [...path, k + ''], output);
+         pather (v, query, [...path, k + ''], output);
       });
    }
    return output;
 }
 
 // only print nonrepeated
-var apather = function (data) {
+var apather = function (data, query) {
    var lastPrinted = [];
-   dale.go (pather (data), function (path) {
+   var output = [];
+   dale.go (pather (data, query), function (path) {
       // Chop off extra length in lastPrinted
       lastPrinted = lastPrinted.slice (0, path.length);
 
@@ -71,17 +75,13 @@ var apather = function (data) {
          lastPrinted [k] = v;
          toPrint [k] = v;
       });
-      console.log (toPrint.join (' '));
+      output.push (toPrint.join (' '));
+      //console.log (toPrint.join (' '));
    });
+   return output;
 }
 
 window.apather = apather;
-
-clog = function () {
-   var args = [new Date ().toISOString ()].concat (teishi.copy (arguments));
-   apather ({log: args});
-   return false;
-}
 
 // *** LISTENERS ***
 
@@ -153,6 +153,16 @@ views.css = ['style', [
    ['.pointer', {
       cursor: 'pointer'
    }],
+   ['textarea.output', {
+     width: '90vw',
+     height: '90vh',
+     'background-color': '#1e1e1e',
+     color: '#ffffff',
+     border: 'none',
+     padding: 10,
+     'font-family': 'monospace',
+     reisze: 'none'
+   }],
 ]];
 
 // *** BASE VIEW ***
@@ -160,31 +170,32 @@ views.css = ['style', [
 views.base = function () {
    return ['div', [
       views.css,
-      views.currentPath (),
-      views.cell ()
+      views.cell (),
+      views.query ()
    ]];
 }
 
 // *** CELL VIEW ***
 
-views.currentPath = function () {
-   return B.view ('currentPath', function (path) {
-      return ['div', [
-         ['label', {
-            class: 'pointer',
-            onclick: B.ev ('set', 'currentPath', [])
-         }, 'Current path:'],
-         ['ul', dale.go (path, function (v, k) {
-            return ['li', {
-               class: 'pointer',
-               onclick: B.ev ('set', 'currentPath', B.get ('currentPath').slice (0, k + 1))
-            }, type (v) === 'integer' ? v + 1 : v];
-         })],
-      ]];
+views.cell = function () {
+   return B.view ([['data'], ['query']], function (data, query) {
+      clog (query);
+      return ['textarea', {class: 'output'}, apather (data, query).join ('\n')];
    });
 }
 
-views.cell = function () {
+views.query = function () {
+   return B.view ('query', function (query) {
+      if (query === undefined) query = '';
+      return ['input', {
+         oninput: B.ev ('set', 'query'),
+         onchange: B.ev ('set', 'query'),
+         value: query
+      }];
+   });
+}
+
+views.cellTable = function () {
    var alwaysRight = false;
 
    // data is fourdata
