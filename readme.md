@@ -350,16 +350,16 @@ users 1 name Odd
         online 0
 ```
 
-While you can use the facilities provided by cell to generate alf from JSON or viceversa, it is useful to be able to write it by hand. If you do, here are the main points:
+While you can use the tools provided by cell to generate alf from JSON or viceversa, it is useful to be able to write it by hand. If you do, here are the main points:
 
-- Sort hash keys alphabetically
-- Stringify texts that contain a double quote, a whitespace character or start like a number (texts that start like a number start with either a digit or a dash followed by a digit).
+- Sort hash keys alphabetically.
+- Stringify texts that contain a double quote, a whitespace character or look like a number (texts that start like a number start with either a digit or a dash followed by a digit).
 - Stringify empty strings.
 - Stringify keys of hashes that look like a number.
 
 ## The language
 
-because alf is completely deterministic, and we write code in alf, there's no pretty printing or indentation conventions that are optional. All the code looks the same!
+Because alf is completely deterministic, and we write code in alf, there's no pretty printing or indentation conventions that are optional. All the code looks the same!
 
 how calls can be:
 - 1:1
