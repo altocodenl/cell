@@ -51,7 +51,7 @@ A list is a sequence of values. The list is the first *multiple* data type, beca
 2 Hi
 ```
 
-Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *keys*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Keys are how you can get to a specific value inside a list. The keys of all lists are always positive integers.
+Note that each value in a list has a position. In the list above, `1234` comes first, and then comes `Hi`. This list, that has two values, also has two *keys*: `1` and `2`. `1` takes you to the first value, `1234`, while `2` takes you to the second value, `Hi`. Keys are how you can refer to a specific value inside a list. The keys of all lists are always positive integers.
 
 The four and last data type is the *hash*. Like a list, it can hold multiple values. However, its keys are not numbers, but texts.
 
@@ -251,18 +251,18 @@ Then, we could add another user.
    </tr>
 </table>
 
-While tables are a common way to look at data, cell is based on text. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Also, for large datasets, text is more readily parseable.
+While tables are a common way to look at data, cell uses text to represent data. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Also, for large datasets, text is easier to read than a table.
 
-Here's a way to represent the data above in **line format**:
+Here's a way to represent the data above in **line fourdata** format:
 
 ```
-users 1 name Odd
 users 1 age 32
 users 1 messages 1 1234
 users 1 messages 2 Hi
+users 1 name Odd
 users 1 online 1
-users 2 name Eoin
 users 2 age 38
+users 2 name Eoin
 users 2 messages 1 "Hi, Odd!"
 users 2 online 0
 ```
@@ -272,22 +272,23 @@ A bit blockish, but quite compact! There's a few things that are worth noting ab
 - There is one line per single value.
 - The keys of multiple values go from left to right, for example: `users 1 name`, `users 1 age`.
 - The value is the rightmost element in each line.
+- When representing a hash, the lines for each of its keys are alphabetically sorted. In the example above, `age` comes before any other line for a user hash because it starts with `a`.
 
-If you don't like the repetition of the above representation, you can use empty spaces to represent what you omit. This is the **abridged line format** for fourdata (or alf).
+The representation above can be improved by replacing the repeated elements with whitespace. This is the **abridged line fourdata** format (or alf).
 
 ```
-users 1 name Odd
-        age 32
+users 1 age 32
         messages 1 1234
                  2 Hi
+        name Odd
         online 1
-      2 name Eoin
-        age 38
+      2 age 38
         messages 1 "Hi, Odd!"
+        name Eoin
         online 0
 ```
 
-This abridged line format of fourdata will be *the* way in which we represent data.
+Abridged line fourdata will be *the* way in which we represent data in cell.
 
 ### [ASIDE FOR EXPERIENCED PROGRAMMERS] alf vs JSON
 
@@ -306,9 +307,11 @@ The impossibility of representing empty arrays (with lists) or empty objects (wi
 
 Other notable properties of alf:
 - A 1:1 mapping between a data line and each single value.
+- Fully deterministic
+   - The order of keys in hashes is always alphabetical.
+   - The notation fully determines how much data (and in which order) goes on each line, leaving neither room nor need for [pretty printing](https://en.wikipedia.org/wiki/Prettyprint).
 - The use of indentation without a fixed amount of spaces, but rather using the length of the keys to push values to the right.
-- The fact that the notation fully determines how data looks like, leaving neither room nor need for pretty printing.
-- The avoidance of over-quoting texts that are evidently texts and contain no spaces.
+- Low noise: no quoting of texts that are evidently texts, no special characters except for whitespace to separate keys and values.
 - Sparse arrays can happen naturally by skipping the missing entries. For example, `[null, 'hello']` maps to a single entry: `2 hello`.
 
 You can still use JSON instead of alf to represent fourdata. For example, the last example of the previous section could be written as:
@@ -339,14 +342,14 @@ You can still use JSON instead of alf to represent fourdata. For example, the la
 Still, alf is more compact and has considerably less noise (less quotes, no colons, no commas, no square or curly brackeets), only requiring quotes around `Hi, Odd!` since that text contains space.
 
 ```
-users 1 name Odd
-        age 32
+users 1 age 32
         messages 1 1234
                  2 Hi
+        name Odd
         online 1
-      2 name Eoin
-        age 38
+      2 age 38
         messages 1 "Hi, Odd!"
+        name Eoin
         online 0
 ```
 
@@ -383,6 +386,22 @@ Reference is also a call.
 Reactivity event system is just doing it through those calls through the event system. push vs pull.
 
 TODO: everything :)
+
+## Comparison between cell and other programming languages
+
+cell most resembles the following programming languages: [Tcl](https://en.wikipedia.org/wiki/Tcl), [J](https://en.wikipedia.org/wiki/J_(programming_language)) and other array languages and [lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)). To a lesser extent, [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)).
+
+Like all of these languages, cell is [homoiconic](https://en.wikipedia.org/wiki/Homoiconicity). The languages above have almost no syntax; we can perhaps ay that cell has no syntax, apart from the syntax used to represent alf.
+
+Like these languages, cell has text, number and list as first-class structures. Unlike them, it has native support for hashes. This is, in my opinion, the biggest advantage that cell has over lisp.
+
+The main differences between cell and these languages is the embodiment of [pillars 2 and 3 of TODIS](https://github.com/altocodenl/todis?tab=readme-ov-file#the-five-pillars):
+- All the data exists in a single dataspace that is fully addressable.
+- The execution of the interpreter happens within this dataspace, so that intermediate results can be seen and manipulated.
+
+The two decisions above make macros just like normal programming, by simply modifying the intermediate results of the interpreter.
+
+Like Tcl with [Tk](https://en.wikipedia.org/wiki/Tk_(software)), the interface maker comes integrated with the language. Unlike the languages above, cell also comes integrated with a server to expose an API.
 
 ## The database
 

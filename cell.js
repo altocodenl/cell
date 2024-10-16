@@ -42,13 +42,13 @@ var pather = function (data, query, path, output) {
    if (! path) path = [];
 
    if (teishi.simple (data)) {
-      if (type (data) === 'string') output.push ([...path, text (data)]);
-      else output.push ([...path, data + '']);
+      var line = [...path, type (data) === 'string' ? text (data) : data + ''];
+      if (query !== undefined) {
+         if (! JSON.stringify (line).match (new RegExp (query, 'i'))) return;
+      }
+      output.push (line);
    }
    else {
-      if (query !== undefined) {
-         if (! JSON.stringify (data).match (query + '')) return;
-      }
       if (type (data) === 'object') data = dale.obj (dale.keys (data).sort (), function (k) {
          return [k, data [k]];
       });
@@ -74,9 +74,9 @@ var apather = function (data, query) {
          if (lastPrinted [k] === v) return toPrint [k] = dale.go (dale.times (v.length), function () {return ' '}).join ('');
          lastPrinted [k] = v;
          toPrint [k] = v;
+         lastPrinted = lastPrinted.slice (0, k + 1); // Reprint things from the first difference.
       });
       output.push (toPrint.join (' '));
-      //console.log (toPrint.join (' '));
    });
    return output;
 }
@@ -155,6 +155,7 @@ views.css = ['style', [
    }],
    ['textarea.output', {
      width: '90vw',
+     'white-space': 'nowrap',
      height: '90vh',
      'background-color': '#1e1e1e',
      color: '#ffffff',
@@ -179,8 +180,9 @@ views.base = function () {
 
 views.cell = function () {
    return B.view ([['data'], ['query']], function (data, query) {
-      clog (query);
-      return ['textarea', {class: 'output'}, apather (data, query).join ('\n')];
+      console.log (apather (data, query) [0]);
+      // TODO: fix issue with textarea getting appended content
+      return ['textarea', {opaque: true, class: 'output'}, apather (data, query).join ('\n')];
    });
 }
 
