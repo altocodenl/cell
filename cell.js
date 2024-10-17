@@ -119,7 +119,6 @@ B.mrespond ([
    }],
 
    ['input', 'data', function (x, data) {
-      window.che = eval (data);
       // eval is necessary if we're pasting JS literals that are not JSON
       B.call ('set', 'data', teishi.parse (data) || eval (data));
    }],
