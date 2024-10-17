@@ -167,15 +167,15 @@ views.css = ['style', [
       width: '40vw',
    }],
    ['textarea.output', {
-     width: '98vw',
-     'white-space': 'nowrap',
-     height: '80vh',
-     'background-color': '#1e1e1e',
-     color: '#ffffff',
-     border: 'none',
-     padding: 10,
-     'font-family': 'monospace',
-     resize: 'none'
+      width: '98vw',
+      'white-space': 'nowrap',
+      height: '80vh',
+      'background-color': '#1e1e1e',
+      color: '#ffffff',
+      border: 'none',
+      padding: 10,
+      'font-family': 'monospace',
+      resize: 'none'
    }],
 ]];
 
@@ -194,11 +194,11 @@ views.base = function () {
 
 views.cell = function () {
    return B.view ([['data'], ['dotMode'], ['query']], function (data, dotMode, query) {
-      var value = apather (data, dotMode, query);
+      var value = apather (data, dotMode, query).join ('\n');
       return ['div', [
          ['textarea', {
             class: 'output',
-            value: apather (data, dotMode, query).join ('\n')
+            value: value
          }, value]
       ]];
    });
