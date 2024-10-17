@@ -4,8 +4,10 @@ cell is a simple and transparent programming system. It is an implementation of 
 
 - A programming language: allows to express sequences of data transformations.
 - A database: allows to validate and query information.
-- An API: can expose surfaces to the network and can interact with other exposed surfaces.
-- An interface maker: allows to create graphical interfaces to interact with data.
+- A service: can expose an API to the network and can interact with other APIs.
+- An interface: allows to create graphical interfaces to interact with data.
+
+This is the quadrivium: language, database, service and interface.
 
 cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the possibility that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground.
 
@@ -21,9 +23,9 @@ cell intends to be the simplest way to both learn how to program and to program 
 
 To understand more about the philosophy and purpose of cell, I encourage you to take a peek at [TODIS](https://github.com/altocodenl/todis). If you like what you see, then cell might be for you.
 
-## The data vocabulary: `fourdata`
+## The data representation: `fourdata`
 
-The starting point of any DIS is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
+The starting point of any digital information system is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
 To talk about data, we're going to establish a common vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
 
@@ -362,7 +364,13 @@ While you can use the tools provided by cell to generate alf from JSON or viceve
 
 ## The language
 
+TODO: everything :)
+
 Because alf is completely deterministic, and we write code in alf, there's no pretty printing or indentation conventions that are optional. All the code looks the same!
+
+texts that have an @ in front are calls. They don't have to be terminal values. The interpreter goes from right to left resolving references. Functions are references too.
+
+See the expansions of the references.
 
 how calls can be:
 - 1:1
@@ -384,8 +392,6 @@ context and scope are the same thing. It is referring to data with relative path
 Reference is also a call.
 
 Reactivity event system is just doing it through those calls through the event system. push vs pull.
-
-TODO: everything :)
 
 ## Comparison between cell and other programming languages
 
