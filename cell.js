@@ -62,7 +62,7 @@ var pather = function (data, query, path, output) {
 }
 
 // only print nonrepeated
-var apather = function (data, query) {
+var apather = function (data, dotMode, query) {
    var lastPrinted = [];
    var output = [];
    dale.go (pather (data, query), function (path) {
@@ -73,15 +73,16 @@ var apather = function (data, query) {
       dale.go (path, function (v, k) {
          if (lastPrinted [k] === v) return toPrint [k] = dale.go (dale.times (v.length), function () {return ' '}).join ('');
          lastPrinted [k] = v;
-         toPrint [k] = v;
+         if (! dotMode) toPrint [k] = v;
+         else {
+            toPrint [k] = v.match (/^\d+$/) && k + 1 < path.length ? '.' : v;
+         }
          lastPrinted = lastPrinted.slice (0, k + 1); // Reprint things from the first difference.
       });
       output.push (toPrint.join (' '));
    });
    return output;
 }
-
-window.apather = apather;
 
 // *** LISTENERS ***
 
@@ -91,6 +92,7 @@ B.mrespond ([
 
    ['initialize', [], {burn: true}, function (x) {
       B.call (x, 'load', []);
+      B.call (x, 'set', 'dotMode', true);
       B.mount ('body', views.base);
    }],
 
@@ -114,6 +116,12 @@ B.mrespond ([
 
    ['call', [], function (x) {
       B.call.apply (teishi.copy (arguments));
+   }],
+
+   ['input', 'data', function (x, data) {
+      window.che = eval (data);
+      // eval is necessary if we're pasting JS literals that are not JSON
+      B.call ('set', 'data', teishi.parse (data) || eval (data));
    }],
 ]);
 
@@ -153,16 +161,21 @@ views.css = ['style', [
    ['.pointer', {
       cursor: 'pointer'
    }],
+   ['.left', {
+      float: 'left',
+      'margin-left': 30,
+      width: '40vw',
+   }],
    ['textarea.output', {
-     width: '90vw',
+     width: '98vw',
      'white-space': 'nowrap',
-     height: '90vh',
+     height: '80vh',
      'background-color': '#1e1e1e',
      color: '#ffffff',
      border: 'none',
      padding: 10,
      'font-family': 'monospace',
-     reisze: 'none'
+     resize: 'none'
    }],
 ]];
 
@@ -172,28 +185,53 @@ views.base = function () {
    return ['div', [
       views.css,
       views.cell (),
-      views.query ()
+      views.input (),
+      views.query (),
    ]];
 }
 
-// *** CELL VIEW ***
+// *** VIEWS ***
 
 views.cell = function () {
-   return B.view ([['data'], ['query']], function (data, query) {
-      console.log (apather (data, query) [0]);
-      // TODO: fix issue with textarea getting appended content
-      return ['textarea', {opaque: true, class: 'output'}, apather (data, query).join ('\n')];
+   return B.view ([['data'], ['dotMode'], ['query']], function (data, dotMode, query) {
+      var value = apather (data, dotMode, query);
+      return ['div', [
+         ['textarea', {
+            class: 'output',
+            value: apather (data, dotMode, query).join ('\n')
+         }, value]
+      ]];
    });
 }
 
 views.query = function () {
-   return B.view ('query', function (query) {
+   return B.view ([['query'], ['dotMode']], function (query, dotMode) {
       if (query === undefined) query = '';
-      return ['input', {
-         oninput: B.ev ('set', 'query'),
-         onchange: B.ev ('set', 'query'),
-         value: query
-      }];
+      return ['div', {class: 'left'}, [
+         ['h3', 'Query'],
+         ['textarea', {
+            oninput: B.ev ('set', 'query'),
+            onchange: B.ev ('set', 'query'),
+            value: query
+         }],
+         ['input', {
+            type: 'checkbox',
+            checked: 0,
+            onclick: B.ev ('set', 'dotMode', ! dotMode)
+         }],
+         ['label', ' dot mode']
+      ]];
+   });
+}
+
+views.input = function () {
+   return B.view ('rawData', function (rawData) {
+      return ['div', {class: 'left'}, [
+         ['h3', 'Input'],
+         ['textarea', {
+            onchange: B.ev ('input', 'data'),
+         }]
+      ]];
    });
 }
 
@@ -236,21 +274,6 @@ views.cellTable = function () {
    });
 }
 
-/*
-   return B.view ([['data'], ['state', 'invalidTextarea']], function (data, invalid) {
-      return ['div', [
-         ['div', {class: 'cells'}, makeCell (data)],
-         ['br'], ['br'],
-         ['textarea', {
-            style: invalid ? style ({'background-color': 'palevioletred'}) : '',
-            rows: 30,
-            cols: 100,
-            oninput:  B.ev ('update', 'textarea', {raw: 'this.value'}),
-            onchange: B.ev ('update', 'textarea', {raw: 'this.value'})
-         }, JSON.stringify (data, null, '   ')]
-      ]];
-   });
-}
-*/
+// *** INITIALIZATION ***
 
 B.call ('initialize', []);
