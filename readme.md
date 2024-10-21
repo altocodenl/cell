@@ -27,7 +27,7 @@ To understand more about the philosophy and purpose of cell, I encourage you to 
 
 The starting point of any digital information system is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
-To talk about data, we're going to establish a common vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that still allows us to move forward.
+To talk about data, we're going to establish a common vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that allows us to move forward.
 
 In cell, there are only four data types:
 
@@ -264,8 +264,8 @@ users 1 messages 2 Hi
 users 1 name Odd
 users 1 online 1
 users 2 age 38
-users 2 name Eoin
 users 2 messages 1 "Hi, Odd!"
+users 2 name Eoin
 users 2 online 0
 ```
 
@@ -368,7 +368,9 @@ TODO: everything :)
 
 Because alf is completely deterministic, and we write code in alf, there's no pretty printing or indentation conventions that are optional. All the code looks the same!
 
-texts that have an @ in front are calls. They don't have to be terminal values. The interpreter goes from right to left resolving references. Functions are references too.
+texts that have an @ in front are calls. They don't have to be terminal values. The interpreter goes from right to left resolving references. Functions are references too. No precedence rules needed. Though, you could define @( and @) if you wanted.
+
+fluent hash style: as long as you don't need parenthesis, you can add multiple things right to left. the responses will be shown call by call.
 
 See the expansions of the references.
 
@@ -412,6 +414,14 @@ Like Tcl with [Tk](https://en.wikipedia.org/wiki/Tk_(software)), the interface m
 ## The database
 
 TODO: everything :)
+
+Four validations:
+- type
+- equality
+- range for numbers
+- match for text
+
+More open regex format with lists: literal, character class, backreference or lookahead
 
 ## The service
 
