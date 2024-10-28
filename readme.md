@@ -11,6 +11,13 @@ This is the quadrivium: language, database, service and interface.
 
 cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the possibility that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground.
 
+What can cell be used for?
+
+- Understand an existing system or design a new one.
+- Define the logic of a system.
+- Create interfaces for a system.
+- Test a system.
+
 ## Purpose
 
 Programming is an universal tool for problem solving. It is also a wonderful means for artistic expression. Programming allows you to harness the power of computers for creative purposes.
@@ -27,7 +34,7 @@ To understand more about the philosophy and purpose of cell, I encourage you to 
 
 The starting point of any digital information system is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
 
-To talk about data, we're going to establish a common vocabulary to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that allows us to move forward.
+To talk about data, we're going to establish a common representation to understand and express data. There are many ways to go about this, but we're going to choose the simplest possible one that allows us to move forward.
 
 In cell, there are only four data types:
 
@@ -36,7 +43,7 @@ In cell, there are only four data types:
 3. List
 4. Hash
 
-The first two, number and text, are *single* data types. That means that they represent a *single value*. For example:
+The first two, number and text, are the *single* data types. That means that they represent a *single value*. For example:
 
 ```
 1234
@@ -62,7 +69,7 @@ name Odd
 age 32
 ```
 
-Because there are only four types of data in this vocabulary, we call it `fourdata`.
+Because there are only four types of data in this representation, we call it `fourdata`.
 
 Tables are a common way to represent data. For example, the hash we just saw can be expressed in **table format**:
 
@@ -255,7 +262,7 @@ Then, we could add another user.
 
 While tables are a common way to look at data, cell uses text to represent data. Text takes up less space and is easier to input, whether in a computer, a notebook or a blackboard. Also, for large datasets, text is easier to read than a table.
 
-Here's a way to represent the data above in **line fourdata** format:
+Here's a way to represent the data above in **text format**:
 
 ```
 users 1 age 32
@@ -276,7 +283,7 @@ A bit blockish, but quite compact! There's a few things that are worth noting ab
 - The value is the rightmost element in each line.
 - When representing a hash, the lines for each of its keys are alphabetically sorted. In the example above, `age` comes before any other line for a user hash because it starts with `a`.
 
-The representation above can be improved by replacing the repeated elements with whitespace. This is the **abridged line fourdata** format (or alf).
+The representation above can be improved by replacing the repeated elements with whitespace. This is the **abridged text format** format.
 
 ```
 users 1 age 32
@@ -290,7 +297,7 @@ users 1 age 32
         online 0
 ```
 
-Abridged line fourdata will be *the* way in which we represent data in cell.
+This abridged text format will be *the* way in which we represent data in cell. From now on, you can consider fourdata and this text representation to be indistinguishable.
 
 ### [ASIDE FOR EXPERIENCED PROGRAMMERS] alf vs JSON
 
