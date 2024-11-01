@@ -377,6 +377,12 @@ Because alf is completely deterministic, and we write code in alf, there's no pr
 
 texts that have an @ in front are calls. They don't have to be terminal values. The interpreter goes from right to left resolving references. Functions are references too. No precedence rules needed. Though, you could define @( and @) if you wanted.
 
+References are calls, they are the most basic type of call.
+
+@ is reactive! If the value at it changes, things are re-run. This also goes for functions, if their definitions are changed, they are re-run.
+
+@done to be done, rather than "return". add a value next ot it.
+
 fluent hash style: as long as you don't need parenthesis, you can add multiple things right to left. the responses will be shown call by call.
 
 See the expansions of the references.
@@ -401,6 +407,61 @@ context and scope are the same thing. It is referring to data with relative path
 Reference is also a call.
 
 Reactivity event system is just doing it through those calls through the event system. push vs pull.
+
+
+definition:
+```
+entityify 1 @if cond @not @prod
+                then @validate type text
+                               value @text
+            2 @replace text @text
+                       with 1 & &amp;
+                            2 < &lt;
+                            3 < &gt;
+                            4 \" &quot;
+                            5 ' &#39;
+```
+
+successful execution:
+
+```
+result1 call 1 @entityify text &salamin;
+             2 call @if cond call @not call @prod
+                                       res ""
+                             res 1
+               res call @validate type text
+                                  value call @text
+                                        res &salamin;
+                   res 1
+             3 call @replace text call @text
+                                  res &salamin;
+                             with 1 & &amp;
+                                  2 < &lt;
+                                  3 < &gt;
+                                  4 \" &quot;
+                                  5 ' &#39;
+               res &amp;salamin;
+```
+
+unsuccessful execution:
+```
+result1 call 1 @entityify text foo bar
+             2 call @if cond call @not call @prod
+                                       res ""
+                             res 1
+               res call @validate type text
+                                  value call @text
+                                        res foo bar
+                   res error 1 "Expected text but instead got hash"
+                             2 foo bar
+```
+
+### The editor
+
+It's going to be like a vim! only that you start in insert mode :)
+Use keys E and R for expand and reduce.
+Always a cursor pointing at data.
+when you see the values only, you're compressing the part that does the computation, which extends down and to the right. it's like a macro, the resolving of it, but it's just code that runs through the data and gives you a part of it.
 
 ## Comparison between cell and other programming languages
 
@@ -437,6 +498,10 @@ TODO: everything :)
 ## The interface maker
 
 Reactive connections to data sources (like server) to always have fresh data. You can avoid refreshing if it affects user experience, but still have the data ready.
+
+PWAs out of the box.
+
+Forms and reports just are interfaces.
 
 TODO: everything :)
 
