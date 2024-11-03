@@ -1,34 +1,27 @@
 # cell
 
-cell is a simple and transparent programming system. It is an implementation of the paradigm of [The Organization of Information Systems](https://github.com/altocodenl/todis). Concretely, cell is four things:
+cell is a programming system that intends to make programming **as effective as possible**. cell does this through two things:
 
-- A programming language: allows to express sequences of data transformations.
-- A database: allows to validate and query information.
-- A service: can expose an API to the network and can interact with other APIs.
-- An interface: allows to create graphical interfaces to interact with data.
+1. Making programming as simple as possible.
+2. Without losing expressive power.
+
+cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis). cell is four things:
+
+1. A programming language: allows to express sequences of data transformations.
+2. A database: allows to validate and query information.
+3. A service: can expose an API to the network and can interact with other APIs.
+4. An interface: allows to create graphical interfaces to interact with data.
 
 This is the quadrivium: language, database, service and interface.
 
-cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the possibility that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground.
+cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the angle that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground.
 
 What can cell be used for?
 
-- Understand an existing system or design a new one.
-- Define the logic of a system.
-- Create interfaces for a system.
-- Test a system.
-
-## Purpose
-
-Programming is an universal tool for problem solving. It is also a wonderful means for artistic expression. Programming allows you to harness the power of computers for creative purposes.
-
-Programming is hard. Some difficulties are inherent to programming. Programming is inherently, essentially, unavoidably hard. Like writing, like playing an instrument. But a great deal of what makes programming hard is not essential to programming itself, but rather [accidental](https://en.wikipedia.org/wiki/No_Silver_Bullet). This accidental complexity turns a hard endeavor into an almost impossible task for most, and a mostly vexatious endeavor for those who still program.
-
-cell attemps to radically do away with the accidental complexity of programming, while shining a light on the essential complexity of programming. Instead of shielding users from the real problems, cell put users face to face with the problems they must face anyway, but equipped with tools to understand and solve them. The value of these tools is in their adaptability and universality.
-
-cell intends to be the simplest way to both learn how to program and to program real world useful applications, by everyone, for everyone. And if it fails to reach that aspiration, it intends to pave the way for another tool to actually become that.
-
-To understand more about the philosophy and purpose of cell, I encourage you to take a peek at [TODIS](https://github.com/altocodenl/todis). If you like what you see, then cell might be for you.
+1. Understand an existing system or design a new one.
+2. Define the logic of a system.
+3. Create interfaces for a system.
+4. Test a system.
 
 ## The data representation: `fourdata`
 
@@ -490,6 +483,13 @@ Four validations:
 - match for text
 
 More open regex format with lists: literal, character class, backreference or lookahead
+
+How is this implemented? Make a single table on a relational database, with 2000 columns, the odd ones text and the even ones number. For a path element at position m, store it in m\*2 if it's text and m\*2+1 if it is a number. perform queries accordingly.
+
+What do you get out of this?
+- ACID, because it's backed by a relational database.
+- Fast querying on arbitrary path elements.
+- Range and match tests.
 
 ## The service
 
