@@ -491,6 +491,12 @@ What do you get out of this?
 - Fast querying on arbitrary path elements.
 - Range and match tests.
 
+Tackling consistency:
+- run the sync code in the db within a transaction
+- make async ops not have consistency requirements except for checking things when they are ready for sync again
+- have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
+- If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
+
 ## The service
 
 TODO: everything :)
