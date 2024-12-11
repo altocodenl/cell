@@ -497,6 +497,8 @@ Tackling consistency:
 - have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
 - If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
 
+Vague but compelling: every change generates a new id. This can recompute the entire dataspace affected by it. This creates a snapshot. The latest versions are resolved lexically.
+
 ## The service
 
 TODO: everything :)
@@ -510,6 +512,13 @@ PWAs out of the box.
 Forms and reports just are interfaces.
 
 TODO: everything :)
+
+## TODO
+
+- Project, with 8 hex identifiers
+- Altocookies: login with email with link or oauth with providers that always provide email (google)
+- Split screen 60/40, llm prompt on the right
+- Differ by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
 
 ## Acknowledgments
 
