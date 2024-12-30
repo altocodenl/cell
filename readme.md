@@ -5,16 +5,23 @@ cell is a programming system that intends to make programming **as effective as 
 1. Making programming as simple as possible.
 2. Without losing expressive power.
 
-cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis). cell is four things:
+cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis).
+
+cell is four things:
 
 1. A programming language: allows to express sequences of data transformations.
-2. A database: allows to validate and query information.
+2. A database: allows to structure and query information.
 3. A service: can expose an API to the network and can interact with other APIs.
 4. An interface: allows to create graphical interfaces to interact with data.
 
-This is the quadrivium: language, database, service and interface.
+This is cell's [quadrivium](https://en.wikipedia.org/wiki/Quadrivium#:~:text=The%20quadrivium%20was%20the%20upper,number%20in%20space%20and%20time).): language, database, service and interface. Curiously, it maps to the four things one normally does with programs:
 
-cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the angle that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground.
+- A script to get something done.
+- Shape and retrieve well-structured information.
+- Interact with other systems through APIs.
+- Create graphical user interfaces.
+
+cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the angle that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground. cell is thought from the ground up as a simple, consistent whole.
 
 What can cell be used for?
 
@@ -513,12 +520,27 @@ Forms and reports just are interfaces.
 
 TODO: everything :)
 
+## Other stuff
+
+### departures of cell from lisp
+
+- Include hashes as a base type
+- Specify exactly how data looks like in terms of pretty-printing
+- No parenthesis, but a couple of evaluation rules (still too few to be considered a proper full-blown syntax)
+- Everything's quoted by default, you need to make calls explicitly
+- Macros are simple data manipulation operations on sequences. The explicitness of @ allows this, because it can considered as data until it is expanded.
+
 ## TODO
 
 - Project, with 8 hex identifiers
 - Altocookies: login with email with link or oauth with providers that always provide email (google)
 - Split screen 60/40, llm prompt on the right
+- Recursive lambdas by referencing itself from inside the loop?
 - Differ by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
+- PWAs out of the box.
+- Encrypted dumps/restores
+- Implementation of U and of pg's lisp interpreter.
+- Self-hosting.
 
 ## Acknowledgments
 

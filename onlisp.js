@@ -10,11 +10,13 @@
 )
 
 var map1_n = function (fn, n) {
-   return dale.go (dale.times (n), fn);
+   return Array (n).keys ().map (function (x) {
+      return fn (x + 1);
+   });
 }
 
-map1-n @ : loop call @ m fn
-                times @ m n
+"map 1 to n" @ : m @ loop call @ m fn
+                          times @ m n
 
 (do
    ((x a (+ 1 x)))
@@ -23,14 +25,14 @@ map1-n @ : loop call @ m fn
 )
 
 var do_ab = function (a, b) {
-   dale.go (dale.times (b - a), function (v) {
-      console.log (v);
+   Array (b - a).keys ().forEach (function (x) {
+      console.log (x + 1);
    });
 }
 
-do-ab @ : @ loop call @ : @ print @ m
-                 times @ - 1 @ m b
-                           2 @ m a
+"do a b" @ : m @ loop call @ : v @ print @ v
+                      times @ - 1 @ m b
+                                2 @ m a
 
 (defun double (x) (* x 2))
 
@@ -38,8 +40,8 @@ var Double = function (x) {
    return x * 2;
 }
 
-double @ : * 1 @ m
-             2 2
+double @ : x @ * 1 @ x
+                 2 2
 
 (sort ’(1 4 2 5 6 7 3) #’<)
 
@@ -55,12 +57,17 @@ double @ : * 1 @ m
        6 7
        7 3
 
+Or
+
+@ sort @ list 1 4 2 5 6 7 3
+
 (remove-if #’evenp ’(1 2 3 4 5 6 7))
 
-dale.fil ([1, 2, 3, 4, 5, 6, 7], undefined, function (v) {
-   if (v % 2 === 0) return v;
+[1, 2, 3, 4, 5, 6, 7].filter (function (v) {
+   return v % 2 === 0;
 });
 
-@ filter call @ : @ = @ % 1 @ m
+@ filter call @ : = 1 @ % 1 @ list
                           2 2
+                    2 0
          list @ times 7
