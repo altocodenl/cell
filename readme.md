@@ -14,7 +14,7 @@ cell is four things:
 3. A service: can expose an API to the network and can interact with other APIs.
 4. An interface: allows to create graphical interfaces to interact with data.
 
-This is cell's [quadrivium](https://en.wikipedia.org/wiki/Quadrivium#:~:text=The%20quadrivium%20was%20the%20upper,number%20in%20space%20and%20time).): language, database, service and interface. Curiously, it maps to the four things one normally does with programs:
+This is cell's [quadrivium](https://en.wikipedia.org/wiki/Quadrivium): language, database, service and interface. Curiously, it maps to the four things one normally does with programs:
 
 - A script to get something done.
 - Shape and retrieve well-structured information.
@@ -29,6 +29,8 @@ What can cell be used for?
 2. Define the logic of a system.
 3. Create interfaces for a system.
 4. Test a system.
+
+**DEAR READER: this system is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
 
 ## The data representation: `fourdata`
 
@@ -381,6 +383,8 @@ References are calls, they are the most basic type of call.
 
 @ is reactive! If the value at it changes, things are re-run. This also goes for functions, if their definitions are changed, they are re-run.
 
+create responders as soon as you have well formed calls. have them in dataspace themselves, in their own data representation based in fourdata.
+
 @done to be done, rather than "return". add a value next ot it.
 
 fluent hash style: as long as you don't need parenthesis, you can add multiple things right to left. the responses will be shown call by call.
@@ -459,6 +463,7 @@ result1 call 1 @entityify text foo bar
 ### The editor
 
 It's going to be like a vim! only that you start in insert mode :)
+Make the editor move per word, rather than by character. only in insert mode move by character.
 Use keys E and R for expand and reduce.
 Always a cursor pointing at data.
 when you see the values only, you're compressing the part that does the computation, which extends down and to the right. it's like a macro, the resolving of it, but it's just code that runs through the data and gives you a part of it.
