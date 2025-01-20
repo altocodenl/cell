@@ -1,0 +1,39 @@
+https://github.com/altocodenl/cell
+
+https://github.com/altocodenl/TODIS
+
+Self-similarity: snowflakes are fractal
+
+Pillar 1: single representation of data
+- Text to represent all data
+- Four types of data:
+
+
+1 born 1959
+  firstName Gustavo
+  lastName Cerati
+2 born 1962
+  firstName John
+  lastName Squire
+
+@ + 1 10
+    2 10
+= 20
+
+The web browser is our home, our base:
+- Portable
+- Fast runtime
+- Interface maker
+- An open standard
+
+https://github.com/fpereiro/gotob
+
+Relying on:
+- Javascript (also gotoB)
+- DOM (and the web browser in general)
+
+Requirements for the very first version:
+- Textarea
+- See data (in fourdata format)
+- Read from JSON?
+- Output to JSON?
