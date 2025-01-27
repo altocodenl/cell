@@ -1,0 +1,42 @@
+Fifth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! I finally get to write some javascript to get things going. Today, I play Deadmau's Random Album Title (at zero volume to avoid copyright infringement...).
+
+github.com/altocodenl/cell
+
+- Rather than saying "set", I'm going to say "put".
+
+verbs 1 get
+      2 put
+
+@ foo
+= bar
+
+@ put foo bar
+= bar
+
+call 1 "receive message"
+     2 "parse it into either a get or put call"
+     3 "if the message is not a valid call, return ""ERROR"""
+     4 "get localstorage"
+     5 "if it's put, update localstorage"
+     6 "if it's get, return the value"
+     7 "if it's put, return ""OK"""
+
+For now, let's go with single line
+
+"test cases" invalid 1 message whatevs
+                       = "Call must start with ""@@"""
+                     2 message @get
+                       = "Call must start with ""@"" and have a space after it"
+                     3 message "@ get " "
+                       = "You opened a quote that you forgot to close"
+             "valid gets" 1 message @
+                          = "the whole thing"
+                          2 message @ foo
+                          = "get whatever is at foo"
+                          3 message "@  foo"
+                          = "get whatever is at foo"
+             "valid puts" ...
+
+var makeCall = function (message) {
+   // @
+}

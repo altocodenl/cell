@@ -1,0 +1,97 @@
+Fourth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Some philosophical stuff in there, like a read being a write and a write being a read. Today, I play Alphaville's Forever Young (at zero volume to avoid copyright infringement...).
+
+github.com/altocodenl/cell
+
+1 "zeroes and ones"
+2 "groupings of zeroes and ones"
+3 characters
+4 text
+5 "structured data"
+
+
+localStorage getItem
+             setItem
+
+dataspace at t: call: dataspace at t + 1
+
+Perhaps every call modifies the dataspace.
+
+var makeCall = function (call) {
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+   // Send the call to actual cell
+
+   localStorage.setItem ('cell', updatedDataspace);
+}
+
+Manual mode, example 1:
+
+Call: @ get foo
+
+Dataspace: ""
+
+Response: ""
+
+Manual mode, example 2:
+
+Call: @ set foo bar
+
+Dataspace: ""
+
+Dataspace updated to: foo bar
+
+Response: OK
+
+Manual mode, example 3: @ get foo
+
+Dataspace: foo bar
+
+Response: bar
+
+@ destination message
+= response
+
+Dissecting what I do manually:
+
+- Assume that input only has one line
+- I split the line by their spaces.
+
+call "@ get foo"
+parsed 1 @
+       2 get
+       3 foo
+
+What is a well formed call?
+1 "First element is ""@"""
+2 "Second element is either ""get"" or ""set"""
+3 "If second element is get, no other requirements"
+4 "If second element is set, no other requirements"
+
+@ get: gets entire dataspace
+@ set: sets the entire dataspace to ""
+@ set foo: sets the entire dataspace to foo
+@ set foo bar: sets the entire dataspace to foo bar
+
+Basic manual implementation
+
+- @ get, no third element in the call: respond with the entire dataspace
+- @ get and there are more elements in the call, find them.
+   - Go line by line on the dataspace.
+   - If the line starts with the message (the third, fourth, etc. elements of the call joined by a space), take that line, remove the message from it plus one space, and make that the response.
+
+dataspace:
+"alphaville 1969
+foo bar"
+
+(Note: we have, we will support multiline text)
+
+@ get
+- First line: no match ("alphaville 1969")
+- Second line: match! ("foo bar"). We take "foo bar", remove "foo " and get "bar".
+- We put "bar" in the response ("current call =").
+
+
+foo bar
+    whatever
+something else
+foo whatever

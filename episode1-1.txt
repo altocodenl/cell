@@ -1,6 +1,8 @@
-https://github.com/altocodenl/cell
+F1rst post! I'm building a programming language/environment from scratch while recording myself. This is the intro episode where I describe the idea. Hope you like The Smiths, otherwise it's going to be a tough watch.
 
-https://github.com/altocodenl/TODIS
+github.com/altocodenl/cell
+
+github.com/altocodenl/TODIS
 
 Self-similarity: snowflakes are fractal
 
@@ -26,7 +28,7 @@ The web browser is our home, our base:
 - Interface maker
 - An open standard
 
-https://github.com/fpereiro/gotob
+github.com/fpereiro/gotob
 
 Relying on:
 - Javascript (also gotoB)

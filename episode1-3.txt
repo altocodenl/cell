@@ -1,0 +1,31 @@
+Third episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, I play Kraftwerk but at 0 volume to avoid copyright infringement.
+
+Kraftwerk: https://www.youtube.com/watch?v=miWlfAlllOI&list=PLm69e5uphTZw60fA8n3SkHaY12JFwCyCB&index=1
+
+"basic calls" 1 set
+              2 get
+
+"after the call" foo bar
+"before the call" ""
+call "@ set foo bar"
+
+todo 1 "interpret the text that comes in the call"
+     2 "update the dataspace within cell"
+
+problems 1 "parse the call" 1 "split the text into words (tokens)"
+                            2 "the rest of the parsing"
+         2 "define the internal representation of data"
+
+"a call is:" @ destination message
+             = response
+
+"assume the call is structured (parsed) as fourdata already"
+
+1 "current call" @ get foo
+                 = ""
+
+2 "current call" @ set foo bar
+                 = OK
+
+3 "current call" @ get foo
+                 = bar

@@ -30,6 +30,8 @@ What can cell be used for?
 3. Create interfaces for a system.
 4. Test a system.
 
+The intention of cell, much like Forth or Lisp, is to be adaptable to any programming context.
+
 **DEAR READER: this system is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
 
 ## The data representation: `fourdata`

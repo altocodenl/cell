@@ -1,0 +1,29 @@
+Second episode! I'm building a programming language/environment from scratch while recording myself. Today, we have the very Stone Roses playing for us.
+
+- We need to write a parser.
+
+Why?
+
+- JSON -> fourdata
+- fourdata -> JSON
+
+Parsing: text -> fourdata (text, number, list, hash)
+Serializing: fourdata -> text
+
+Look at a few use cases and induce/generalize from them.
+
+"example 1" fourdata foo bar
+            json "{""foo"": ""bar""}"
+"example 2" fourdata . 1
+                     . 2
+                     . 3
+            json "[1, 2, 3]"
+
+@ + . 10
+    . 10
+= 20
+
+No special internal representation, we just use fourdata for everything.
+
+parsing: text -> fourdata
+serializing: fourdata -> text
