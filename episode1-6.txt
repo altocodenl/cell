@@ -1,0 +1,87 @@
+Fifth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! A bit more of javascript, and me identifying as at least partially Confucian. Today, I play the Grim Fandango OST (at zero volume to avoid copyright infringement...).
+
+Fun fact: it looks like you can paste anything into a Youtube video description except for angle brackets.
+
+github.com/altocodenl/cell
+
+"test cases" invalid 1 message whatevs
+                       = "Call must start with ""@"""
+                     2 message @get
+                       = "Call must start with ""@"" and have a space after it"
+                     3 message "@ get " "
+                       = "You opened a quote that you forgot to close"
+             "valid get call" 1 message @
+                                = "get the whole thing"
+                              2 message @ foo
+                                = "get whatever is at foo"
+                              3 message "@  foo"
+                                = "get whatever is at foo"
+             "valid put calls" 1 message "@ put"
+                                 = "delete the whole thing"
+                               2 message "@ put foo"
+                                 = "delete foo"
+                               3 message "@ put foo bar"
+                                 = "set foo to bar"
+
+call 1 "receive message"
+     2 "parse it into either a get or put call"
+     3 "if the message is not a valid call, return ""ERROR"""
+     4 "get localstorage"
+     5 "if it's put, update localstorage"
+     6 "if it's get, return the value"
+     7 "if it's put, return ""OK"""
+
+var receive = function (message) {
+   var parsedMessage = parse (message);
+
+   if (parsedMessage.error) return alert (parsedMessage.error);
+
+   var result;
+
+   if (parsedMessage.get) result = get (parsedMessage.get);
+   if (parsedMessage.put) result = put (parsedMessage.put);
+
+   return result;
+}
+
+// Simplifying assumptions:
+// 1. Single line messages
+// 2. No quotes
+
+js: ' a\t  b '.trim ().split (/\s+/)
+
+@ split by "/\s+/"
+        what @ trim " a\t  b "
+
+1 @ split by "/\s+/"
+          what " a\t  b "
+2 @ trim @ 1
+
+var parse = function (message) {
+   message = message.trim ().split (/\s/);
+
+   if (message.length === 0) return {error: 'Message is empty'};
+
+   if (message [0] [0] !== '@') return {error: 'Call must start with "@"'};
+
+   if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
+
+}
+
+var get = function (message) {
+}
+
+var put = function (message) {
+}
+
+
+
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+   localStorage.setItem ('cell', updatedDataspace);
+
+
+
+   // Send the call to actual cell
+
+}
