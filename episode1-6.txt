@@ -1,4 +1,4 @@
-Fifth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! A bit more of javascript, and me identifying as at least partially Confucian. Today, I play the Grim Fandango OST (at zero volume to avoid copyright infringement...).
+Sixth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! A bit more of javascript, and me identifying as at least partially Confucian. Today, I play the Grim Fandango OST (at zero volume to avoid copyright infringement...).
 
 Fun fact: it looks like you can paste anything into a Youtube video description except for angle brackets.
 

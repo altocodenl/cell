@@ -1,0 +1,99 @@
+Seventh episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Some rambling on the nature of bootstrapping and what not to copy from javascript. Today, I play TMBG's John Henry (at zero volume to avoid copyright infringement...).
+
+Bootstrapping is representative of most interesting programming.
+
+Bootstrapping is bridging the gap between what is already implemented and what you want to use yourself.
+
+var escapeForRegex = function (text) {
+   var toEscape = ['-', '[', ']', '{', '}', '(', ')', '|', '+', '*', '?', '.', '/', '\\', '^', '$'];
+   return text.replace (new RegExp ('[' + toEscape.join ('\\') + ']', 'g'), '\\$&');
+}
+
+var receive = function (message) {
+   var parsedMessage = parse (message);
+
+   if (parsedMessage.error) return alert (parsedMessage.error);
+
+   var result;
+
+   // {get: [...]}
+   if (parsedMessage.get) result = get (parsedMessage.get);
+   // {put: [...]}
+   if (parsedMessage.put) result = put (parsedMessage.put);
+
+   return result;
+}
+
+// It validates and it parses
+var parse = function (message) {
+   message = message.trim ().split (/\s/);
+
+   if (message.length === 0) return {error: 'Message is empty'};
+
+   if (message [0] [0] !== '@') return {error: 'Call must start with "@"'};
+
+   if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
+
+   if (message [1] === 'get') return {get: message.slice (2)};
+
+   if (message [1] === 'put') return {put: message.slice (2)};
+}
+
+var get = function (message) {
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+
+   if (message.length === 0) return dataspace;
+
+   message = message.join (' ');
+
+   var output = [];
+
+   var matchFound = false;
+
+   dataspace.split ('\n').forEach (function (line) {
+      if (line.match (new RegExp ('^' + escapeForRegex (output)))) {
+         matchFound = true;
+         return output.push (line.replace (message + ' ', ''));
+      }
+      if (matchFound) {
+         var indent = Array (message.length + 1).fill ().map (function () {return ' '});
+         if (line.match (new RegExp ('^' + indent))) return output.push (line.replace (indent, ''));
+      }
+      matchFound = false;
+   });
+
+   return output.join ('\n');
+}
+
+```
+foo bar
+
+{foo: 'bar'}
+```
+
+```
+foo bar 1
+    opa 2
+
+{foo: {bar: 1, opa: 2}}
+```
+
+```
+foo bar
+    opa
+
+{foo: {bar: '', opa: ''}}
+```
+
+```
+foo bar 1
+    opa
+
+{foo: {bar: 1, opa: ''}}
+```
+
+var put = function (message) {
+   // localStorage.setItem ('cell', updatedDataspace);
+   if (message.length === 0)
+}
