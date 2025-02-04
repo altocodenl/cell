@@ -1,0 +1,139 @@
+Eight episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping!  Today, I play Streets of Fury 2's OST (at zero volume to avoid copyright infringement...).
+
+github.com/altocodenl/cell
+
+var escapeForRegex = function (text) {
+   var toEscape = ['-', '[', ']', '{', '}', '(', ')', '|', '+', '*', '?', '.', '/', '\\', '^', '$'];
+   return text.replace (new RegExp ('[' + toEscape.join ('\\') + ']', 'g'), '\\$&');
+}
+
+var receive = function (message) {
+   var parsedMessage = parse (message);
+
+   if (parsedMessage.error) return alert (parsedMessage.error);
+
+   var result;
+
+   // {get: [...]}
+   if (parsedMessage.get) result = get (parsedMessage.get);
+   // {put: [...]}
+   if (parsedMessage.put) result = put (parsedMessage.put);
+
+   return result;
+}
+
+// It validates and it parses
+var parse = function (message) {
+   message = message.trim ().split (/\s/);
+
+   if (message.length === 0) return {error: 'Message is empty'};
+
+   if (message [0] [0] !== '@') return {error: 'Call must start with "@"'};
+
+   if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
+
+   if (message [1] === 'get') return {get: message.slice (2)};
+
+   if (message [1] === 'put') return {put: message.slice (2)};
+}
+
+var get = function (message) {
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+
+   if (message.length === 0) return dataspace;
+
+   message = message.join (' ');
+
+   var output = [];
+
+   var matchFound = false;
+
+   dataspace.split ('\n').forEach (function (line) {
+      if (line.match (new RegExp ('^' + escapeForRegex (message)))) {
+         matchFound = true;
+         return output.push (line.replace (message + ' ', ''));
+      }
+      if (matchFound) {
+         var indent = Array (message.length + 1).fill ().map (function () {return ' '});
+         if (line.match (new RegExp ('^' + indent))) return output.push (line.replace (indent, ''));
+      }
+      matchFound = false;
+   });
+
+   return output.join ('\n');
+}
+
+For the case where there will be a match
+
+1 "find the line that starts with the first element of the message"
+2 "see how many elements that line has to its right that matches the elements in your message; cancel them out"
+3 "keep on going through the lines finding something that matches a bunch of spaces that replaces the elements already found in your message plus the next unmatched message"
+4 "when you find it, go back to 2 until you run out of elements in the message; that's your starting line for the match"
+
+
+dataspace "foo bar some thing else"
+message "foo bar some zz top"
+
+
+var put = function (message) {
+
+   if (message.length === 0) {
+      localStorage.setItem ('cell', '');
+      return 'OK';
+   }
+
+   // TODO: sort insertions alphabetically
+
+   if (message.length === 1) {
+      var match = get (message [0]);
+      if (match === '') localStorage.setItem ('cell', get () + message + '\n');
+      else {
+         get ().replace (new RegExp ('^' + escapeForRegex (match)), message.join (' ') + '\n');
+      }
+   }
+
+   // TODO: sheer replacement won't do, you need to find the actual place.
+   // Implement `find`, which gives you the line number at which your data is
+
+   // localStorage.setItem ('cell', updatedDataspace);
+   if (message.length === 0)
+}
+
+
+''
+@ put foo
+
+```
+foo
+```
+
+{foo: ''}
+
+```
+foo bar
+```
+
+```
+foo
+```
+
+```
+foo bar whatever
+    here too
+```
+
+
+                               2 message "@ put foo"
+                                 = "set foo to empty text"
+                               3 message "@ put foo bar"
+                                 = "set foo to bar"
+
+foo bar
+    jip
+
+foo bar
+foo jip
+
+
+@ put foo jip something

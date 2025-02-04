@@ -1,278 +1,107 @@
 // *** SETUP ***
 
-var dale = window.dale, teishi = window.teishi, lith = window.lith, c = window.c, B = window.B;
-var type = teishi.type, clog = teishi.clog, eq = teishi.eq, last = teishi.last, inc = teishi.inc, media = lith.css.media, style = lith.css.style;
+var B = window.B;
 
-// *** HELPERS ***
+// *** MAIN FUNCTIONS ***
 
-var isNumber = function (v) {
-   return inc (['integer', 'float'], type (v));
+var escapeForRegex = function (text) {
+   var toEscape = ['-', '[', ']', '{', '}', '(', ')', '|', '+', '*', '?', '.', '/', '\\', '^', '$'];
+   return text.replace (new RegExp ('[' + toEscape.join ('\\') + ']', 'g'), '\\$&');
 }
 
-var toFourData = function (v) {
-   var Type = type (v);
-   if (inc (['integer', 'float', 'string'], Type)) return v;
-   if (Type === 'array') return dale.go (v, toFourData);
-   if (Type === 'object') return dale.obj (v, function (v, k) {
-      return [k, toFourData (v)];
-   });
-   if (Type === 'boolean') return v ? 1 : 0;
-   if (Type === 'date') return v.getTime ();
-   if (Type === 'regex') return v.toString ();
-   if (Type === 'function') return v.toString ().slice (0, 1000);
+var receive = function (message) {
+   var parsedMessage = parse (message);
 
-   // Invalid values (nan, infinity, null, undefined) are returned as empty strings
-   return '';
+   if (parsedMessage.error) return alert (parsedMessage.error);
+
+   var result;
+
+   // {get: [...]}
+   if (parsedMessage.get) result = get (parsedMessage.get);
+   // {put: [...]}
+   if (parsedMessage.put) result = put (parsedMessage.put);
+
+   return result;
 }
 
-// data is fourdata
-// stringify: number-like texts (either values or keys in objects), values with spaces or values with double quotes, or empty strings
-// increment list keys by 1
-// sort object keys alphabetically
-// returns all paths with no abbreviations
-var pather = function (data, query, path, output) {
+// It validates and it parses
+var parse = function (message) {
+   // Check it out, a one line lexer!
+   message = message.trim ().split (/\s/);
 
-   data = toFourData (data);
+   if (message.length === 0) return {error: 'Message is empty'};
 
-   var text = function (t) {
-      return (t.length === 0 || t.match (/[\s"]/) || t.match (/^-?\d/)) ? JSON.stringify (t) : t;
-   }
+   if (message [0] [0] !== '@') return {error: 'Call must start with "@"'};
 
-   if (! output) output = [];
-   if (! path) path = [];
+   if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
 
-   if (teishi.simple (data)) {
-      var line = [...path, type (data) === 'string' ? text (data) : data + ''];
-      if (query !== undefined) {
-         if (! JSON.stringify (line).match (new RegExp (query, 'i'))) return;
-      }
-      output.push (line);
-   }
-   else {
-      if (type (data) === 'object') data = dale.obj (dale.keys (data).sort (), function (k) {
-         return [k, data [k]];
-      });
-      dale.go (data, function (v, k) {
-         if (type (data) === 'object') k = text (k);
-         else k = k + 1;
-         pather (v, query, [...path, k + ''], output);
-      });
-   }
-   return output;
+   if (message [1] === 'get') return {get: message.slice (2)};
+
+   if (message [1] === 'put') return {put: message.slice (2)};
 }
 
-// only print nonrepeated
-var apather = function (data, dotMode, query) {
-   var lastPrinted = [];
+var get = function (message) {
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+
+   if (message.length === 0) return dataspace;
+
+   var matchedElements = 0;
+   var matchFound = false;
+
    var output = [];
-   dale.go (pather (data, query), function (path) {
-      // Chop off extra length in lastPrinted
-      lastPrinted = lastPrinted.slice (0, path.length);
 
-      var toPrint = [];
-      dale.go (path, function (v, k) {
-         if (lastPrinted [k] === v) return toPrint [k] = dale.go (dale.times (v.length), function () {return ' '}).join ('');
-         lastPrinted [k] = v;
-         if (! dotMode) toPrint [k] = v;
-         else {
-            toPrint [k] = v.match (/^\d+$/) && k + 1 < path.length ? '.' : v;
+   dale.stop (dataspace.split ('\n'), false, function (line) {
+      if (matchFound) {
+         var indent = Array (message.join (' ').length + 1).fill ().map (function () {return ' '});
+         if (line.match (new RegExp ('^' + indent))) output.push (line.replace (indent, ''));
+         return false;
+      }
+
+      if (! matchFound) {
+         line = line.trim ().split (/\s/);
+
+         dale.stop (line, false, function (v, k) {
+            if (v !== message [k]) return false;
+            matchedElements++;
+         });
+         if (matchedElements === message.length) {
+            matchFound = true;
+            output.push (line.replace (new RegExp ('^' + message.join (' '), '')));
          }
-         lastPrinted = lastPrinted.slice (0, k + 1); // Reprint things from the first difference.
-      });
-      output.push (toPrint.join (' '));
+      }
    });
-   return output;
+
+   return output.join ('\n');
 }
 
-// *** LISTENERS ***
+// *** RESPONDERS ***
 
 B.mrespond ([
-
-   // *** GENERAL LISTENERS ***
-
-   ['initialize', [], {burn: true}, function (x) {
-      B.call (x, 'load', []);
-      B.call (x, 'set', 'dotMode', true);
-      B.mount ('body', views.base);
-   }],
-
-   // *** PERSISTENCE ***
-
-   ['load', [], function (x) {
-      B.call (x, 'set', 'data', teishi.parse (localStorage.getItem ('cell')) || {});
-   }],
-
-   ['save', [], function (x) {
-      localStorage.setItem ('cell', JSON.stringify (B.get ('data')));
-   }],
-
-   ['change', 'data', {match: B.changeResponder}, function (x) {
-      B.call (x, 'save', []);
-   }],
-
-   ['reset', [], function (x) {
-      B.call (x, 'set', 'data', {});
-   }],
-
-   ['call', [], function (x) {
-      B.call.apply (teishi.copy (arguments));
-   }],
-
-   ['input', 'data', function (x, data) {
-      // eval is necessary if we're pasting JS literals that are not JSON
-      B.call ('set', 'data', teishi.parse (data) || eval (data));
+   ['initialize', [], function () {
+      var dataspace = localStorage.getItem ('cell');
+      if (dataspace === null) {
+         dataspace = [
+            'foo bar 1',
+            '    jip 2',
+            '    soda wey',
+            'something else'
+         ].join ('\n');
+         localStorage.setItem ('cell', dataspace);
+      }
+      B.call ('set', 'dataspace', dataspace);
    }],
 ]);
 
-// *** VIEWS ***
-
-var views = {};
-
-// *** CSS ***
-
-views.css = ['style', [
-   ['body', {
-      'font-size': '16px',
-   }],
-   ['table', {
-      width: 1,
-      'border-collapse': 'collapse',
-      'font-family': 'monospace',
-   }],
-   ['th, td', {
-      'padding': '8px 12px',
-      'border': '1px solid #ddd',
-      'text-align': 'left'
-   }],
-   ['th', {
-      'font-weight': 'bold',
-      'background-color': '#f2f2f2',
-   }],
-   ['tr:nth-child(even)', {
-      'background-color': '#f9f9f9',
-   }],
-   ['tr:hover', {
-      'background-color': '#f1f1f1'
-   }],
-   ['.number', {
-      color: 'dodgerblue'
-   }],
-   ['.pointer', {
-      cursor: 'pointer'
-   }],
-   ['.left', {
-      float: 'left',
-      'margin-left': 30,
-      width: '40vw',
-   }],
-   ['textarea.output', {
-      width: '98vw',
-      'white-space': 'nowrap',
-      height: '80vh',
-      'background-color': '#1e1e1e',
-      color: '#ffffff',
-      border: 'none',
-      padding: 10,
-      'font-family': 'monospace',
-      resize: 'none'
-   }],
-]];
-
-// *** BASE VIEW ***
-
-views.base = function () {
-   return ['div', [
-      views.css,
-      views.cell (),
-      views.input (),
-      views.query (),
-   ]];
-}
-
-// *** VIEWS ***
-
-views.cell = function () {
-   return B.view ([['data'], ['dotMode'], ['query']], function (data, dotMode, query) {
-      var value = apather (data, dotMode, query).join ('\n');
+var view = function () {
+   return B.view ('dataspace', function (dataspace) {
       return ['div', [
-         ['textarea', {
-            class: 'output',
-            value: value
-         }, value]
+         ['h1', 'Cell'],
+         ['pre', dataspace]
       ]];
    });
 }
-
-views.query = function () {
-   return B.view ([['query'], ['dotMode']], function (query, dotMode) {
-      if (query === undefined) query = '';
-      return ['div', {class: 'left'}, [
-         ['h3', 'Query'],
-         ['textarea', {
-            oninput: B.ev ('set', 'query'),
-            onchange: B.ev ('set', 'query'),
-            value: query
-         }],
-         ['input', {
-            type: 'checkbox',
-            checked: 0,
-            onclick: B.ev ('set', 'dotMode', ! dotMode)
-         }],
-         ['label', ' dot mode']
-      ]];
-   });
-}
-
-views.input = function () {
-   return B.view ('rawData', function (rawData) {
-      return ['div', {class: 'left'}, [
-         ['h3', 'Input'],
-         ['textarea', {
-            onchange: B.ev ('input', 'data'),
-         }]
-      ]];
-   });
-}
-
-views.cellTable = function () {
-   var alwaysRight = false;
-
-   // data is fourdata
-   var cell = function (data, path, rightOrDown) {
-
-      var Type = type (data);
-      if (teishi.inc (['integer', 'float'], Type)) return ['span', {class: 'number'}, data];
-      if (Type === 'string') return ['span', {class: 'text'}, data];
-      var columns = dale.keys (data);
-      if (rightOrDown === 'right') return ['table', [
-         ['tr', dale.go (dale.keys (data), function (key) {
-            return ['th', {
-               class: 'pointer',
-               onclick: B.ev ('set', 'currentPath', [...path, key]),
-            }, cell (Type === 'array' ? key + 1 : key, [...path, key], alwaysRight ? 'right' : 'down')];
-         })],
-         ['tr', dale.go (data, function (value, key) {
-            return ['td', cell (value, [...path, key], alwaysRight ? 'right' : 'down')];
-         })],
-      ]];
-      if (rightOrDown === 'down') return ['table', dale.go (data, function (value, key) {
-         return ['tr', [
-            ['th', {
-               class: 'pointer',
-               onclick: B.ev ('set', 'currentPath', [...path, key]),
-            }, cell (Type === 'array' ? key + 1 : key, [...path, key], 'right')],
-            ['td', cell (value, [...path, key], 'right')],
-         ]];
-      })];
-   }
-
-   return B.view ([['data'], ['currentPath']], function (data, currentPath) {
-      currentPath = currentPath || [];
-      var data = B.get (['data', ...currentPath]);
-      return cell (data, [], 'right');
-   });
-}
-
-// *** INITIALIZATION ***
 
 B.call ('initialize', []);
+
+B.mount ('body', view);
