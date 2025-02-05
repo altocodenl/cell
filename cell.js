@@ -2,6 +2,8 @@
 
 var B = window.B;
 
+var clog = console.log;
+
 // *** MAIN FUNCTIONS ***
 
 var escapeForRegex = function (text) {
@@ -12,22 +14,18 @@ var escapeForRegex = function (text) {
 var receive = function (message) {
    var parsedMessage = parse (message);
 
-   if (parsedMessage.error) return alert (parsedMessage.error);
-
-   var result;
+   if (parsedMessage.error) return 'error "' + parsedMessage.error + '"';
 
    // {get: [...]}
-   if (parsedMessage.get) result = get (parsedMessage.get);
+   if (parsedMessage.get) return get (parsedMessage.get);
    // {put: [...]}
-   if (parsedMessage.put) result = put (parsedMessage.put);
-
-   return result;
+   if (parsedMessage.put) return put (parsedMessage.put);
 }
 
 // It validates and it parses
 var parse = function (message) {
    // Check it out, a one line lexer!
-   message = message.trim ().split (/\s/);
+   message = message.trim ().replace (/\s+/, ' ').split (/\s/);
 
    if (message.length === 0) return {error: 'Message is empty'};
 
@@ -35,9 +33,10 @@ var parse = function (message) {
 
    if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
 
-   if (message [1] === 'get') return {get: message.slice (2)};
-
    if (message [1] === 'put') return {put: message.slice (2)};
+
+   // If it's not a put, it is a get
+   return {get: message.slice (1)};
 }
 
 var get = function (message) {
@@ -52,24 +51,28 @@ var get = function (message) {
    var output = [];
 
    dale.stop (dataspace.split ('\n'), false, function (line) {
-      if (matchFound) {
-         var indent = Array (message.join (' ').length + 1).fill ().map (function () {return ' '});
-         if (line.match (new RegExp ('^' + indent))) output.push (line.replace (indent, ''));
-         return false;
-      }
 
       if (! matchFound) {
-         line = line.trim ().split (/\s/);
 
-         dale.stop (line, false, function (v, k) {
-            if (v !== message [k]) return false;
+         var matchedElementsBeforeLine = matchedElements;
+
+         dale.stop (line.trim ().split (/\s/), false, function (v, k) {
+            if (v !== message [k + matchedElementsBeforeLine]) return false;
             matchedElements++;
          });
          if (matchedElements === message.length) {
             matchFound = true;
-            output.push (line.replace (new RegExp ('^' + message.join (' '), '')));
+            output.push (line.slice (message.join (' ').length + 1));
          }
+         return;
       }
+
+      if (matchFound) {
+         var indent = Array (message.join (' ').length + 1).fill ().join (' ') + ' ';
+         if (line.match (new RegExp ('^' + indent))) output.push (line.replace (indent, ''));
+         else return false;
+      }
+
    });
 
    return output.join ('\n');

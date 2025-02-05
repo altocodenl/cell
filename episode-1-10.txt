@@ -1,0 +1,18 @@
+Tenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! More rambling and quite excited about seeing how the interface could be like. We get "get" to work. Today, I play a Stock Trading Synthwave/Retrowave/Retro Electro Mix by Retro Player One (https://www.youtube.com/watch?v=6hJemZ1151s) at zero volume to avoid copyright infringement...).
+
+- A view on the dataspace
+   - Can pick a path to show
+   - Can show/hide parts of the path if it's too much
+   - Wouldn't this be a get?
+- Write a part of the dataspace directly? Or instead, write straight and then implement it as puts? Actually, neither. We can just do calls to modify things straight up. Now, that would be interesting. You only need an editor on the preparation of the text of the call itself. No direct text editing, because it cannot be expressed as calls except as a general overwrite, and normally you don't want that.
+
+wait, a view of the dataspace is a @! And if I want to set a path on a window, I can do @ show foo, or just @ show, and it can go and see all the existing windows, and if none is shown, it adds one. and @ unshow removes it. all idempotent.
+it's a shell, and I am writing commands. I wonder if I want to keep a list of used commands. Sure, why not? Let's also put them in the dataspace.
+I'm getting the point of raw and clobber, and how you want to prevent the user from screwing up their environment. there has to be a restore. but for now, happy to let it get screwed.
+and make the entire view read the entire dataspace and draw from it, we draw from doing get calls to the dataspace!
+where do we show the result in the shell? there should be no enter? but then you get intermediate results. and why not? I could put a hardcoded @ next to the textarea, and a hardcoded = next to the result. and those show things in the dataspace, both the call and the response.
+never mind, "@ put" (when you want to write "@ put foo bar") would already delete the whole thing, which is unwise. so we have to send the call with a button.
+
+https://www.fourmilab.ch/autofile/
+
+https://paulgraham.com/bel.html
