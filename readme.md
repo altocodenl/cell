@@ -7,6 +7,8 @@ cell is a programming system that intends to make programming **as effective as 
 
 cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis).
 
+I'm currently recording myself building cell. You can check it out [here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
+
 cell is four things:
 
 1. A programming language: allows to express sequences of data transformations.
