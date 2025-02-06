@@ -1,0 +1,8 @@
+Eleventh episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today there was a technical glitch and my code wasn't visible for most of the episode. But I'm leaving the episode in for the sake of completeness (and apologizing that I don't have the moral fortitude to re-record it). We have a broken but somewhat working put. Today, I play Second Coming from The Stone Roses (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Shopping list
+- Fix put
+- Allow multiline calls
+- Add show/unshow calls (also change the dataspace)

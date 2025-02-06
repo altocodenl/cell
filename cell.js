@@ -4,6 +4,12 @@ var B = window.B;
 
 var clog = console.log;
 
+// *** STYLE ***
+
+var css = [
+   ['body', {'padding-left': 30}]
+];
+
 // *** MAIN FUNCTIONS ***
 
 var escapeForRegex = function (text) {
@@ -14,12 +20,18 @@ var escapeForRegex = function (text) {
 var receive = function (message) {
    var parsedMessage = parse (message);
 
-   if (parsedMessage.error) return 'error "' + parsedMessage.error + '"';
+   var result;
+
+   if (parsedMessage.error) result = 'error "' + parsedMessage.error + '"';
 
    // {get: [...]}
-   if (parsedMessage.get) return get (parsedMessage.get);
+   if (parsedMessage.get) result = get (parsedMessage.get);
    // {put: [...]}
-   if (parsedMessage.put) return put (parsedMessage.put);
+   if (parsedMessage.put) result = put (parsedMessage.put);
+
+   clog ('receive', message, result);
+   put (['lastcall', ...message]);
+   put (['lastres', ...result]);
 }
 
 // It validates and it parses
@@ -78,6 +90,23 @@ var get = function (message) {
    return output.join ('\n');
 }
 
+// For now: 1) single line calls; 2) no quotes!
+var put = function (message) {
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+   if (message.length === 0) dataspace = ''
+   else {
+      var existingLines = get (message).split ('\n');
+      if (! existingLines.length) dataspace += '\n' + message.join (' ');
+      else                        dataspace = dataspace.replace (existingLines, message.join (' '));
+   }
+
+   localStorage.setItem ('cell', dataspace);
+   B.call ('set', 'dataspace', dataspace);
+
+   return 'OK';
+}
+
 // *** RESPONDERS ***
 
 B.mrespond ([
@@ -94,17 +123,39 @@ B.mrespond ([
       }
       B.call ('set', 'dataspace', dataspace);
    }],
+   ['send', 'call', function (x, call) {
+      receive (call);
+   }],
 ]);
 
-var view = function () {
-   return B.view ('dataspace', function (dataspace) {
+var views = {};
+
+views.main = function () {
+   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
+      call = call || '';
       return ['div', [
-         ['h1', 'Cell'],
-         ['pre', dataspace]
+         ['style', css],
+         views.cell (''),
+         ['textarea', {
+            onchange: B.ev ('set', 'call'),
+            oninput: B.ev ('set', 'call'),
+            value: call,
+         }],
+         ['button', {onclick: B.ev (['send', 'call', call])}, 'Submit'],
+      ]];
+   });
+}
+
+views.cell = function (path) {
+   return B.view ('dataspace', function (dataspace) {
+      var response = get (path);
+      return ['div', [
+         ['h3', JSON.stringify (path)],
+         ['pre', response]
       ]];
    });
 }
 
 B.call ('initialize', []);
 
-B.mount ('body', view);
+B.mount ('body', views.main);
