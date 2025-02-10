@@ -1,13 +1,15 @@
 # cell
 
-cell is a programming system that intends to make programming **as effective as possible**. cell does this through two things:
+cell is a programming system that intends to make programming **as effective as possible**. The purpose of cell is to empower you to create new [digital information systems and understand existing ones](https://github.com/altocodenl/todis). cell allows you to do two things:
 
-1. Making programming as simple as possible.
-2. Without losing expressive power.
+1. See what is going on inside your system.
+2. Control what happens inside your system.
+
+Cell can be perhaps be described as [Schopenhauerian](https://en.wikipedia.org/wiki/The_World_as_Will_and_Representation), in that it only strives to give you a good *representation* of your system (what you see) and allow your *will* to freely control the system. In short, cell is useful because it provides you with a good way to see what's going on, and not getting in your way of changing it.
 
 cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis).
 
-I'm currently recording myself building cell. You can check it out [here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
+I'm currently recording myself building cell. You can check it out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
 cell is four things:
 

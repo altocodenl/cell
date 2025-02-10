@@ -1,0 +1,54 @@
+Twelfth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today we do more put, we're nowhere near finishing it but we learned where my brain was implicitly separating the left hand and the right hand of an expression. Today, I play Pills, Thrills and Bellyaches from Happy Mondays (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Music: https://www.youtube.com/watch?v=GAon1zRrAkw&list=PL1xm0HhIaKcFxrYNLtvcPZKezuUQMRrd0&index=1
+
+- fix put
+- sort alphabetically
+- quotes
+- multiline
+- better checks on fourdata: single representation!
+
+foo bar
+    hello
+
+{foo: {bar: '', hello: ''}}
+
+
+
+
+@ put hello foo
+= replace all lines with hello
+
+@ put hello
+= delete all lines with hello
+
+@ put hello foo 1
+            bar 2
+= replace all lines with hello
+
+
+hello foo 1
+      bar 2
+      jip 3
+
+@ put hello foo 1
+            bar 2
+
+hello 1 foo
+      2 jip
+
+@ put hello 1 bar
+
+
+foo = bar;
+foo.bar = jip;
+
+
+@ put hello foo 1
+            bar 2
+      |---| |---|
+      path  value
+
+foo.jip.bar = bem

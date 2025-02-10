@@ -20,18 +20,20 @@ var escapeForRegex = function (text) {
 var receive = function (message) {
    var parsedMessage = parse (message);
 
-   var result;
+   var response;
 
-   if (parsedMessage.error) result = 'error "' + parsedMessage.error + '"';
+   if (parsedMessage.error) response = 'error "' + parsedMessage.error + '"';
 
    // {get: [...]}
-   if (parsedMessage.get) result = get (parsedMessage.get);
+   if (parsedMessage.get) response = get (parsedMessage.get);
    // {put: [...]}
-   if (parsedMessage.put) result = put (parsedMessage.put);
+   if (parsedMessage.put) response = put (parsedMessage.put);
 
-   clog ('receive', message, result);
-   put (['lastcall', ...message]);
-   put (['lastres', ...result]);
+   clog ('call', message);
+   clog ('response');
+   clog (response);
+   //put (['lastcall', ...message]);
+   //put (['lastres', ...response]);
 }
 
 // It validates and it parses
@@ -92,35 +94,53 @@ var get = function (message) {
 
 // For now: 1) single line calls; 2) no quotes!
 var put = function (message) {
-   var dataspace = localStorage.getItem ('cell');
-   if (dataspace === null) dataspace = '';
-   if (message.length === 0) dataspace = ''
-   else {
-      var existingLines = get (message).split ('\n');
-      if (! existingLines.length) dataspace += '\n' + message.join (' ');
-      else                        dataspace = dataspace.replace (existingLines, message.join (' '));
+   var done = function (dataspace) {
+      localStorage.setItem ('cell', dataspace);
+      B.call ('set', 'dataspace', dataspace);
+      return 'OK';
    }
 
-   localStorage.setItem ('cell', dataspace);
-   B.call ('set', 'dataspace', dataspace);
+   var dataspace = localStorage.getItem ('cell');
+   if (dataspace === null) dataspace = '';
+   if (message.length === 0) return done ('');
 
-   return 'OK';
+   // TODO: handle message of length 1 as a delete
+   if (message.length === 1) message.push ('');
+
+   // Three cases: no entry (append), entry (overwrite) or part of the path already exists
+   var existingLines = get (message.slice (0, -1));
+   // Match just before the "equal sign" (TODO: change detection of "equal sign" later to first fork)
+   if (existingLines !== '') return done (dataspace.replace (existingLines, message.join (' ')));
+
+   dale.stop (dale.times (length - 2), true, function (v) {
+      existingLines (get (message.slice (0, -1 - v)));
+      return existingLines !== '';
+   });
+
+   if (existingLines) {
+      // TODO: insertion respecting what's there, alphabetical sort
+   }
+
+   // Append, also mind alphabetical sort
+   dataspace += '\n' + message.join (' ');
 }
 
 // *** RESPONDERS ***
 
 B.mrespond ([
-   ['initialize', [], function () {
+   ['reset', [], function () {
+      var dataspace = [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey',
+         'something else'
+      ].join ('\n');
+      localStorage.setItem ('cell', dataspace);
+      B.call ('set', 'dataspace', dataspace);
+   }],
+   ['initialize', [], function (x) {
       var dataspace = localStorage.getItem ('cell');
-      if (dataspace === null) {
-         dataspace = [
-            'foo bar 1',
-            '    jip 2',
-            '    soda wey',
-            'something else'
-         ].join ('\n');
-         localStorage.setItem ('cell', dataspace);
-      }
+      if (dataspace === null) B.call (x, 'reset', []);
       B.call ('set', 'dataspace', dataspace);
    }],
    ['send', 'call', function (x, call) {
