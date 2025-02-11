@@ -53,6 +53,22 @@ var parse = function (message) {
    return {get: message.slice (1)};
 }
 
+var spaces = function (n) {
+   return Array (n).fill (' ').join ('');
+}
+
+var prepend = function (prefix, lines) {
+
+   lines = lines.split ('\n');
+
+   dale.go (lines, function (v, k) {
+      var linePrefix = k === 0 ? (prefix + ' ') : spaces (prefix.length + 1);
+      lines [k] = linePrefix + v;
+   });
+
+   return lines.join ('\n');
+}
+
 var get = function (message) {
    var dataspace = localStorage.getItem ('cell');
    if (dataspace === null) dataspace = '';
@@ -82,12 +98,15 @@ var get = function (message) {
       }
 
       if (matchFound) {
-         var indent = Array (message.join (' ').length + 1).fill ().join (' ') + ' ';
+         var indent = spaces (message.join (' ').length + 1);
          if (line.match (new RegExp ('^' + indent))) output.push (line.replace (indent, ''));
          else return false;
       }
 
    });
+
+   clog ('end get');
+   clog (output);
 
    return output.join ('\n');
 }
@@ -104,20 +123,28 @@ var put = function (message) {
    if (dataspace === null) dataspace = '';
    if (message.length === 0) return done ('');
 
-   // TODO: handle message of length 1 as a delete
-   if (message.length === 1) message.push ('');
+   // message of length 1 is considered as a delete
+   if (message.length === 1) {
+      clog ('here', message);
+      return done (dataspace.replace (prepend (message [0], get (message)) + '\n', ''));
+   }
+
+   // TODO: @ put something
 
    // Three cases: no entry (append), entry (overwrite) or part of the path already exists
-   var existingLines = get (message.slice (0, -1));
+   var existing = get (message.slice (0, -1));
    // Match just before the "equal sign" (TODO: change detection of "equal sign" later to first fork)
-   if (existingLines !== '') return done (dataspace.replace (existingLines, message.join (' ')));
+   if (existing !== '') {
+      existing = prepend (message.slice (0, -1).join (' '), existing);
+      return done (dataspace.replace (existing, message.join (' ')));
+   }
 
    dale.stop (dale.times (length - 2), true, function (v) {
-      existingLines (get (message.slice (0, -1 - v)));
-      return existingLines !== '';
+      existing (get (message.slice (0, -1 - v)));
+      return existing !== '';
    });
 
-   if (existingLines) {
+   if (existing) {
       // TODO: insertion respecting what's there, alphabetical sort
    }
 
