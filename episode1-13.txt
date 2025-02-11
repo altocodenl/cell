@@ -1,0 +1,7 @@
+Thirteenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today we do yet more put, fixing some cases and finally getting some prefixes right. Today, I play Moving Waves from Focus (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Music: https://www.youtube.com/watch?v=MV0F_XiR48Q&list=PL4-oCE2y-CrHPTmRi8xuKHaLkMElegz4v&index=1
+
+https://github.com/nornagon/jonesforth/blob/master/jonesforth.S
