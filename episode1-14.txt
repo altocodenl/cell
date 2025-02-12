@@ -1,0 +1,8 @@
+Fourteenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today I do what I should have done six episodes ago, write a test suite. We "prove" `get` is working. Today, I play Salary Man Simulator from Mitch Murder (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Music:
+https://www.youtube.com/watch?v=VRqjwAe5XYM
+https://www.youtube.com/watch?v=it31HsIQaZo
+https://www.youtube.com/watch?v=iEvViSZ7t5g

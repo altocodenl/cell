@@ -29,23 +29,21 @@ var receive = function (message) {
    // {put: [...]}
    if (parsedMessage.put) response = put (parsedMessage.put);
 
-   clog ('call', message);
-   clog ('response');
-   clog (response);
    //put (['lastcall', ...message]);
    //put (['lastres', ...response]);
+   return response;
 }
 
 // It validates and it parses
 var parse = function (message) {
    // Check it out, a one line lexer!
-   message = message.trim ().replace (/\s+/, ' ').split (/\s/);
+   message = dale.fil (message.trim ().replace (/\s+/, ' ').split (/\s/), '', function (v) {return v});
 
    if (message.length === 0) return {error: 'Message is empty'};
 
-   if (message [0] [0] !== '@') return {error: 'Call must start with "@"'};
+   if (message [0] [0] !== '@') return {error: 'Call must start with `@`'};
 
-   if (message [0] !== '@') return {error: 'Call must start with "@" and have a space after it'};
+   if (message [0] !== '@') return {error: 'Call must start with `@` and have a space after it'};
 
    if (message [1] === 'put') return {put: message.slice (2)};
 
@@ -105,9 +103,6 @@ var get = function (message) {
 
    });
 
-   clog ('end get');
-   clog (output);
-
    return output.join ('\n');
 }
 
@@ -125,7 +120,6 @@ var put = function (message) {
 
    // message of length 1 is considered as a delete
    if (message.length === 1) {
-      clog ('here', message);
       return done (dataspace.replace (prepend (message [0], get (message)) + '\n', ''));
    }
 
@@ -206,3 +200,59 @@ views.cell = function (path) {
 B.call ('initialize', []);
 
 B.mount ('body', views.main);
+
+// *** TESTS ***
+
+var test = function () {
+   var original = localStorage.getItem ('cell');
+   if (original === null) original = '';
+
+   var dataspace = [
+      'foo bar 1 jip',
+      '        2 joo',
+      '    soda wey',
+      'something else'
+   ].join ('\n');
+   localStorage.setItem ('cell', dataspace);
+
+   var errorFound = false === dale.stop ([
+      {call: '', expected: 'error "Message is empty"'},
+      {call: ' ', expected: 'error "Message is empty"'},
+      {call: '?', expected: 'error "Call must start with `@`"'},
+      {call: '@foo', expected: 'error "Call must start with `@` and have a space after it"'},
+      {call: '@', expected: [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey',
+         'something else'
+      ]},
+      {call: '@ foo', expected: [
+         'bar 1 jip',
+         '    2 joo',
+         'soda wey',
+      ]},
+      {call: '@ foo bar', expected: [
+         '1 jip',
+         '2 joo',
+      ]},
+      {call: '@ foo bar 1', expected: 'jip'},
+      {call: '@ foo bar 1 jip', expected: ''},
+      {call: '@ no such thing', expected: ''},
+      {call: '@ foo soda', expected: 'wey'},
+      {call: '@ something', expected: 'else'},
+      {call: '@ something else', expected: ''},
+   ], false, function (test) {
+      var result = receive (test.call);
+      if (teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
+      if (result === test.expected) return true;
+      clog ('Test mismatch', {expected: test.expected, obtained: result});
+      return false;
+   });
+   if (errorFound) clog ('A test did not pass');
+   else clog ('All tests successful');
+
+   localStorage.setItem ('cell', original);
+   B.call ('set', 'dataspace', original);
+}
+
+test ();
