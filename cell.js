@@ -119,19 +119,21 @@ var put = function (message) {
    if (message.length === 0) return done ('');
 
    // message of length 1 is considered as a delete
-   if (message.length === 1) {
-      return done (dataspace.replace (prepend (message [0], get (message)) + '\n', ''));
-   }
-
-   // TODO: @ put something
+   if (message.length === 1) return done (dataspace.replace (prepend (message [0], get (message)), ''));
 
    // Three cases: no entry (append), entry (overwrite) or part of the path already exists
-   var existing = get (message.slice (0, -1));
+
    // Match just before the "equal sign" (TODO: change detection of "equal sign" later to first fork)
+   var existing = get (message.slice (0, -1));
    if (existing !== '') {
       existing = prepend (message.slice (0, -1).join (' '), existing);
       return done (dataspace.replace (existing, message.join (' ')));
    }
+
+   // If there is not something existing with the full path before the equal sign, do two things:
+   // 1) find where to put it
+   // 2) figure out how much space to prepend it with (the space will be proportional to the amount of leftmost elements of the message that already exist). No, wait, if it's the first line, then it will be the one that starts with foo, and the previous line that started with foo will get moved down and have a space.
+   // Also an interesting problem: mixing lists and hashes. Let's forbid it.
 
    dale.stop (dale.times (length - 2), true, function (v) {
       existing (get (message.slice (0, -1 - v)));
@@ -149,20 +151,21 @@ var put = function (message) {
 // *** RESPONDERS ***
 
 B.mrespond ([
-   ['reset', [], function () {
-      var dataspace = [
+   ['reset', [], function (x, dataspace) {
+      if (! dataspace) dataspace = [
          'foo bar 1 jip',
          '        2 joo',
          '    soda wey',
          'something else'
       ].join ('\n');
+      else dataspace = dataspace.join ('\n');
+
       localStorage.setItem ('cell', dataspace);
       B.call ('set', 'dataspace', dataspace);
    }],
    ['initialize', [], function (x) {
       var dataspace = localStorage.getItem ('cell');
       if (dataspace === null) B.call (x, 'reset', []);
-      B.call ('set', 'dataspace', dataspace);
    }],
    ['send', 'call', function (x, call) {
       receive (call);
@@ -205,15 +208,13 @@ B.mount ('body', views.main);
 
 var test = function () {
    var original = localStorage.getItem ('cell');
-   if (original === null) original = '';
 
-   var dataspace = [
+   B.call ('reset', [], [
       'foo bar 1 jip',
       '        2 joo',
       '    soda wey',
       'something else'
-   ].join ('\n');
-   localStorage.setItem ('cell', dataspace);
+   ]);
 
    var errorFound = false === dale.stop ([
       {call: '', expected: 'error "Message is empty"'},
@@ -241,7 +242,51 @@ var test = function () {
       {call: '@ foo soda', expected: 'wey'},
       {call: '@ something', expected: 'else'},
       {call: '@ something else', expected: ''},
+      {reset: [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey'
+      ]},
+      {call: '@ put foo bar hey', expected: 'OK'},
+      {call: '@ foo bar', expected: 'hey'},
+      {call: '@ foo', expected: ['bar hey', 'soda wey']},
+      {reset: [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey'
+      ]},
+      {call: '@ put foo', expected: 'OK'},
+      {call: '@ foo', expected: ''},
+      {call: '@', expected: ''},
+      {reset: [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey'
+      ]},
+      {call: '@ put', expected: 'OK'},
+      {call: '@', expected: ''},
+      {reset: [
+         'foo bar 1 jip',
+         '        2 joo',
+         '    soda wey'
+      ]},
+      {call: '@ put foo jup yea', expected: 'OK'},
+      {call: '@ foo', expected: [
+         'bar 1 jip',
+         'bar 2 joo',
+         'jup yea',
+         'soda wey'
+      ]},
+      // TODO: multiline
+      {call: '@ put foo bar yes sir', expected: 'OK'},
+      {call: [
+         '@ put foo bar yes sir',
+         '              no sir'
+      ]},
+      {call: '@ foo bar', expected: ['1 jip', '2 joo', '3 yes']}
    ], false, function (test) {
+      if (test.reset) return B.call ('reset', [], test.reset);
+
       var result = receive (test.call);
       if (teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
       if (result === test.expected) return true;
@@ -251,8 +296,7 @@ var test = function () {
    if (errorFound) clog ('A test did not pass');
    else clog ('All tests successful');
 
-   localStorage.setItem ('cell', original);
-   B.call ('set', 'dataspace', original);
+   B.call ('reset', [], [original]);
 }
 
 test ();

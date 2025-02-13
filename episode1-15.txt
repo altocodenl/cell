@@ -1,0 +1,3 @@
+Fifteenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! I'm so stumped and tired that I resort to TDD, don't tell anyone. Today, I play Running in the Family from Level 42 (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
