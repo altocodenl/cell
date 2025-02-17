@@ -1,15 +1,19 @@
 # cell
 
-cell is a programming system that intends to make programming **as effective as possible**. The purpose of cell is to empower you to create new [digital information systems and understand existing ones](https://github.com/altocodenl/todis). cell allows you to do two things:
+## Introduction
+
+Cell is a programming system that intends to make programming **as effective as possible**. The purpose of cell is to empower you to create new [digital information systems and understand existing ones](https://github.com/altocodenl/todis).
+
+Cell allows you to do two things:
 
 1. See what is going on inside your system.
 2. Control what happens inside your system.
 
-Cell can be perhaps be described as [Schopenhauerian](https://en.wikipedia.org/wiki/The_World_as_Will_and_Representation), in that it only strives to give you a good *representation* of your system (what you see) and allow your *will* to freely control the system. In short, cell is useful because it provides you with a good way to see what's going on, and not getting in your way of changing it.
+Cell can be perhaps be described as [Schopenhauerian](https://en.wikipedia.org/wiki/The_World_as_Will_and_Representation), in that it only strives to give you a good *representation* of your system (what you see) and allow your *will* to freely control the system. In short, cell is useful because it provides you with 1) a good way to see what's going on, and 2) not getting in your way of changing it.
 
 cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis).
 
-I'm currently recording myself building cell. You can check it out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
+I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
 cell is four things:
 
@@ -34,9 +38,33 @@ What can cell be used for?
 3. Create interfaces for a system.
 4. Test a system.
 
-The intention of cell, much like Forth or Lisp, is to be adaptable to any programming context.
+The intention of cell, much like [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)) or [Lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)), is to be adaptable to any programming context.
 
-**DEAR READER: this system is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
+## Relationship to the spreadsheet
+
+Cell is very much inspired by the [electronic spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
+
+In essence, a spreadsheet is inmensely powerful because it has two properties:
+
+1. All of its data is contained in cells, each of them with an address.
+2. A cell can reference another cell.
+3. When a cell changes, all of the cells depending on it change as well.
+
+Cell wants to go further in this direction. In cell:
+
+1. Every piece of data has a path to it (its address).
+2. Any piece of data can reference another one by path.
+3. When a piece of data changes, all the pieces of data depending on it also change.
+
+Cell intends to go beyond the spreadsheet in the following ways:
+
+- Cells can be nested.
+- The equivalent of the formula and the value of a cell can be seen at the same time.
+- Cell can also be a service, a database and an interface maker.
+
+These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
+
+**DEAR READER: cell is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
 
 ## The data representation: `fourdata`
 
