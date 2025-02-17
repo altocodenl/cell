@@ -44,7 +44,7 @@ The intention of cell, much like [Forth](https://en.wikipedia.org/wiki/Forth_(pr
 
 Cell is very much inspired by the [electronic spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
 
-In essence, a spreadsheet is inmensely powerful because it has three properties:
+In essence, a spreadsheet is immensely powerful because it has three properties:
 
 1. All of its data is contained in cells, each of them with an address.
 2. A cell can reference another cell.
