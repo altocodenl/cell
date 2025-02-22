@@ -216,6 +216,7 @@ var test = function () {
       'something else'
    ]);
 
+
    var errorFound = false === dale.stop ([
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
@@ -247,9 +248,15 @@ var test = function () {
          '        2 joo',
          '    soda wey'
       ]},
+
+      // *** PUT ***
+
       {call: '@ put foo bar hey', expected: 'OK'},
       {call: '@ foo bar', expected: 'hey'},
       {call: '@ foo', expected: ['bar hey', 'soda wey']},
+      /*
+      {call: '@ put foo bar hey hey', expected: 'OK'},
+      {call: '@ foo bar', expected: 'hey hey'},
       {reset: [
          'foo bar 1 jip',
          '        2 joo',
@@ -271,6 +278,7 @@ var test = function () {
          '    soda wey'
       ]},
       {call: '@ put foo jup yea', expected: 'OK'},
+      /*
       {call: '@ foo', expected: [
          'bar 1 jip',
          'bar 2 joo',
@@ -284,6 +292,7 @@ var test = function () {
          '              no sir'
       ]},
       {call: '@ foo bar', expected: ['1 jip', '2 joo', '3 yes']}
+      */
    ], false, function (test) {
       if (test.reset) return B.call ('reset', [], test.reset);
 

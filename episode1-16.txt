@@ -1,0 +1,110 @@
+Sixteenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today I am on a plane, so the noise makes it impossible to speak. This is a silent episode. I'll write my way through it.
+
+Note: the video recorder stopped capturing the screen correctly after a couple of minutes. A shame, since I recorded an hour and it was very productive. The notes are at https://github.com/altocodenl/cell/blob/master/episode1-16.txt
+
+====
+
+We need to fix put. Let's grab the bull by the horns.
+
+So far, we've covered the case of wholesale replacement. What does that mean?
+
+Wholesale replacement means that whatever exists before our "equal sign" (so far, the entire line of the message minus the last element) already exists. By existing, do we mean that it points to a value? What if it's just the terminal value itself?
+
+Let's say, you have
+```
+foo bar
+```
+
+and you put
+``
+foo bar jip
+```
+
+will it work? Let's try it.
+
+Nope, that didn't work either! We found a bug in a case that previously was thought to work.
+
+In that case, getting "" is correct, but we are incorrect in assuming that there's "no such line".
+
+This hints at merging the cases in a general algorithm.
+
+The general put algorithm:
+- Have the message already split as a list.
+- Determine where's your "equal sign" index. For now, when we have single line messages (and this is independent of multiline quotes, because those don't really count as multiline messages in the sense of hashes and lists), that's going to be message length - 1.
+- Create a list to keep track of how deeply you've matched the message already in the lines that you're looking at. The list starts empty.
+- Start iterating the lines.
+- When seeing a line, split it into a list. Later, when supporting quotes and multiline quotes, this logic will be contained in the splitter.
+- Iterate the splitted line or the message up to the equal sign, whatever is shorter. (yes, this was correct). But start iterating from the nth element, where n is one more than the list of already matched elements in the list where you see how much of a match you already had.
+- If an element is equal, push it to the list that keeps track.
+- Whenever you find an inequality or hit the end of the message before the equal sign, stop.
+- If you're at the end of the message before the equal sign, we need to do a *replacement*. The problem with this is that we lost information: we don't know how many spaces there were at the beginning of the line. We actually had to keep track of this in get, it was the last bug we fixed there. So we need to note this in a variable with scope of the iteration on the line itself.
+- Replacement:
+   - Do an insertion (see below). This will also work for multiline messages later.
+   - Remove the old lines until the match is gone. If a line has less than the amount of spaces when you made the match, you lost the match. In the meantime, delete that line.
+   - Once you removed the last line with a match, exit, you're done!
+- Have a sorting function that tells you what goes first and what goes next.
+- If the sorting function tells you that you are *before* (the ith element of the message comes before than the ith element of the line), then you have to do an insertion right there!
+   - Insertion: take the message, replace the elements that come before the ith with spaces that match the number of characters, and put the new line right there. But no, be careful, look at the amount of spaces that were there before you started matching the line with the message. That's the amount of spaces you need to use to prepend. That's it, you're done, exit all the loops!
+- If the sorting function tells you that you are *after*, move on to the next line. If there's no next line, make an insertion with the exact same logic as you did for the insertion before. (Very cool that the code/logic is really the same!)
+
+On the sorting function, what makes sense?
+- Let's break convention. I don't want uppercase and lowercase sorted separately. So aAbBcC? Or AaBbCc? I'm thinkingn of what'd be more practical to "send things to the top", since cell doesn't allow you to sort things non-lexicographically. Let's go with aAbBcC, the more naked and real lowercase variables at the top, the corporate OOP-ish Class Names That Use Uppercase at the bottom.
+- What about numbers and letters? Numbers first. So 0123456789, then aAbB. But numbers should be sorted by value, not lexicographically.
+
+Now, we need to test it, but it looks pretty good.
+
+Now, for the harder things we wanted to implement:
+- Quotes: this has to be delegated to the splitter function. We could just call it "split". That one will receive text and respond with a list of texts. Some of those texts might even be multiline quotes!
+- Multiline message (basically, setting something to a list or hash): you determine the equal sign to be wherever you see indentation. You first pass the whole thing to the splitter. Hey, the splitter also has to split things in lines, you cannot just go with \n because you might have a multiline text. So the splitter gives you lines and then the lines as lists. You give it text, it gives you *a list of lists*.
+- So, you give it to the splitter, then you get zero or more lines, lists of lists. Then, if you have two or more lines, you compare the number of equal elements (the lists are unabridged fourdata, see below) and that tells you the position of the equal sign. The rest of it is a value that, when setting, you jsut prepend with text and you're done.
+
+Validation:
+- Let's forbid having an empty text ("") being a valid key to a hash. Why? Because how else am I going to represent an indentation on the splitter? Nah, think harder. What if the splitter gives unabridged representations? Like:
+```
+foo bar 1
+    jep 2
+```
+would become: foo bar a and foo jep 2. Then the comparison above could be done by number of equalities. Yeah, that will always work. Let's do that. Then the splitter has that into account, it converts spaces out of quotes into unabridged fourdata.
+
+- When forking, you need to have two elements on the lines.
+```
+foo bar
+    jip
+```
+Is not properly formed fourdata
+- And you cannot mix types:
+
+```
+foo bar jip
+    2 jep
+```
+
+The non-mixing check is done when you have two lines that have a prefix that is the same but then at the nth point they have a different type.
+
+We also need to sort the incoming message! To require it to be sorted by hand is just too much. We'll do it in the splitter.
+
+Pipeline: splitter -> validation -> sorting -> the actual put
+
+OK, the splitter (that sticks more than calling it the split):
+- Split per newlines.
+- Iterate the lines.
+- Split the line by quotes (") that don't come in pairs. (the way to escape (or rather, write a literal quote) is to write "" (this comes from CSV, I think). If you have an even number, you don't have a multiline quote.
+- I need to induce from something:
+- No, don't split by quote. You want to mark the beginning and the end. What's before the beginning of a quote can be splitted by spaces, like we did before. When you enter a quote zone, you don't split by spaces until you're done by finding the closing quote. That's the way to see it. So, rather than split, we could just iterate the characters on the string and split in that way.
+- Note: would we do trimming of double+ spaces? Yes, but between characters, because indentations have to be precise.
+- If you end the line and you have a dangling quote, you then move to the next line and keep on adding to the text you're building (you're always building a text and when you're done, you push it to the splitted line) until you close the quote.
+- If you didn't close the quote and you hit the end of the last line, report an error.
+
+
+OK, I think we covered more than enough during this silent session. Thanks for watching!!
+
+
+== some notes ==
+
+(wait, let me check how I do it in get; yeah, I do something similar. I have matchedElements, which "keeps the place" (a phrase I stole from Turing's paper, or perhaps Petzold's annotation of it). We might redefine get later in view of what we learned with put. For now, let's implement put without get. It will be more straightforward.
+
+(sorry about that, there's some turbulence and I had to get my seatbelt on).
+
+(I cannot just have the position matched, I also need to keep track of the elements of the line that I'm iterating that are currently replaced by spaces). OK, I have it, let's replace the position variable with a list with a variable number of elements, which are what is matched in the current line from the message.
+
+Random note: i need feedback from vim when I'm searching backwards vs forwards, to remind myself which I am using.
