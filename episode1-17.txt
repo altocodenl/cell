@@ -1,0 +1,56 @@
+Seventeenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping!
+
+
+Today I am on a plane, so the noise makes it impossible to record audio. As in the previous episode, I'll write my way through it.
+
+We left off on episode 16, where I tackled a lot of the difficulties head on: multiline text (with quotes), multiline lists & hashes. I'll review now and take the gist to this episode.
+
+OK, we have a general algorithm for put almost without corner cases.
+
+Here's the gist of what we need to implement now:
+- The splitter, that takes the message (as text) and gives you a list of lists. The splitter has to validate that the indentations are correct.
+- The validator, which checks that 1) you are not mixing hashes with lists; 2) whenever you have a fork onto a list or hash, the keys have values. I think that's it for now.
+- The sorter, to find out what comes first and what comes next.
+- Rewrite the actual put.
+- Perhaps we will rewrite get.
+
+The two "advanced features" (I'm tiring of thinking about them separately) can be handled mostly by the splitter, and only matter for the put in terms of determining where the "equal sign" is. That's it :).
+
+OK, let's implement the splitter.
+
+The splitter will replace the parse function, I think. I'll write it alongside it, for now.
+
+Just noticed that the splitter needs to determine whether something's a number or not. Interesting. We need that at least to distinguish keys for lists from keys to hashes (side note: I'm not sure whether calling them "keys" is what I want; but next-to-last element of the path is even worse. Yes, let's go with "keys", as the key being something that points to a value, whether that value is the rightmost part of a path or not).
+
+So much for my scorning of unit tests, I'm going to write them now for the splitter...
+
+(Time for a vim macro!)
+
+OK, we cannot just trim the line, we might have spaces in a multiline text at the end of the line, so no. Lower level than I thought.
+
+Hmmm, how do we do the splitter again?
+
+Yeah, I see it now, we have to do a two pass thing. Hmmm, nope, not sure yet. No, I think it will still be one pass, first dealing with the quotes. Now, when you dealt with the quotes, what do you have? You have a text to which you keep on appending.
+
+Also one more thing: "foo" should become just foo, I believe. I need to think about it.
+
+Wait, we should not tolerate double spaces on the text. What's the point of something like
+
+foo  bar 1
+     hey 2
+
+Let's go with the tighter case first and, if we need to, we can relax it if we seed the need arise in practice/usability.
+
+I wonder: is stopping at the first error always best? The thing is, if things are malformed, it's perhaps impossible or very difficult to parse what comes next. So let's go with the simpler and easier stopping at the first error.
+
+So, I am unabridging the lines now.
+
+Notes for TODIS:
+- A path has *elements*.
+- A value is any number of contiguous elements from a point to the right of that line and any lines below it that fork. (Should I talk about "forking"?)
+- A key is the element immediately before a value, that is, to its left. The path to the value is the path from the root to the key (the entire path left of the value).
+
+
+
+
+Pipeline: splitter -> validation -> sorting -> the actual put
