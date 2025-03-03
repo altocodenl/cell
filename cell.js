@@ -34,6 +34,11 @@ var receive = function (message) {
    return response;
 }
 
+var toNumberIfNumber = function (v) {
+   if (v.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (v);
+   return v;
+}
+
 // The splitter takes a message that's text, and returns a list of lists: each of them a line of unabridged fourdata, inside JS arrays.
 // For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
 /*
@@ -49,44 +54,67 @@ var splitter = function (message) {
    var buffer = '';
    var insideQuotedText = false;
 
+   if (message === '') return [];
+
    // We stop at the first error.
    var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
-      var nextQuoteIndex = line.indexOf ('"');
-      // The easy case, no quotes.
-      if (nextQuoteIndex === -1) {
-         // We take the line and convert all whitespace to a single space.
-         line = line.replace (/\s/g, ' ');
-         // We need to take into account the indentation, seeing the previous line.
-         var previousLine = teishi.last (lines);
-         // Line starts with indentation (indentation must be treated separately)
-         // In the case where there's no error, this "deabridges" the line: `    jip 2` becomes ['foo']
-         if (line [0] === ' ') {
-            if (! previousLine) return 'The first line of the message cannot be indented';
-            var indentSize = line [0].match (/ +/) [0].length;
-            var matchedSoFar = 0;
-            // previousLine always is nonzero in length, so there's no zero corner case
-            var matchUpTo = dale.stopNot (previousLine, undefined, function (v, k) {
-               // Converting v to text in case it is a number
-               matchedSoFar += (v + '').length;
-               if (matchedSoFar === indentSize) return k;
-               if (matchedSoFar > indentSize) return {error: 'The indent of the line "' + line + '" does not match that of the previous line.'};
-               // If we haven't hit the indentSize, keep on going.
-            });
-            if (matchUpTo === undefined) return {error: 'The indent of the line "' + line + '" does not match that of the previous line.'};
-            if (matchUpTo.error) return matchUpTo;
-            // We store the "deabridged" part of the line as the last element of `lines`
-            lines.push (previousLine.slice (0, matchUpTo + 1));
-         }
 
+      var deabridged = [];
 
-         if (previousLine
+      var previousLine = teishi.last (lines);
+
+      if (line [0] === ' ') {
+         if (! previousLine) return 'The first line of the message cannot be indented';
+         var indentSize = line.match (/^ +/g) [0].length;
+         var matchedSpaces = 0;
+         // previousLine always is nonzero in length, so there's no zero corner case
+         var matchUpTo = dale.stopNot (previousLine, undefined, function (v, k) {
+            // Converting v to text in case it is a number
+            matchedSpaces += (v + '').length + 1;
+            if (matchedSpaces === indentSize) return k;
+            if (matchedSpaces > indentSize) return {error: 'The indent of the line "' + line + '" does not match that of the previous line.'};
+            // If we haven't hit the indentSize, keep on going.
+         });
+         if (matchUpTo === undefined) return 'The indent of the line "' + line + '" does not match that of the previous line.';
+         if (matchUpTo.error) return matchUpTo.error;
+         // We store the "deabridged" part of the line as the last element of `lines`
+         deabridged = previousLine.slice (0, matchUpTo + 1);
+         line = line.slice (matchedSpaces);
       }
+
+      // no quotes for now
+      if (line.match (/\s{2,}/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
+
+      // forbid ""? No, but we need to represent it as "".
+      // what about quoting things that don't have to be quoted? Give an error.
+      //
+      // found a quote. make sure it's not a literal quote: forward slash and quote.
+      // foo ""
+      // this is a double quote:    //"hello//"
+      line = line.split (' ');
+
+      if (line.length === 0) return 'The line "' + line + '" has no data besides whitespace';
+
+      deabridged = deabridged.concat (dale.go (line, toNumberIfNumber));
+
+      lines.push (deabridged);
+
+
+      // bar whatever
+
+      //var nextQuoteIndex = line.indexOf ('"');
    });
 
    if (error) return {error: error};
    return lines;
 }
 
+var validator = function (unabridgedLines) {
+   // check that there's no mixture of hashes and lists
+   // check that lists use only consecutive integers starting at 1
+   // dot notation, modify unabridgedLines
+   // check that there are no repeated keys in hashes or lists
+}
 
 
 // It validates and it parses
@@ -274,11 +302,15 @@ var test = function () {
 
    var errorFound = false === dale.stop ([
       {splitter: ['', []]},
-      {splitter: [' ', []]},
-      {splitter: ['\t ', []},
-      {splitter: ['a', {error: 'Key "a" has no value'}]},
-      {splitter: ['foo bar 1\n   jip 2', {error: 'line "   jip 2" has an indentation that doesn\'t match the previous line "foo bar 1"'}]},
+      {splitter: [' ', {error: 'The first line of the message cannot be indented'}]},
+      {splitter: ['\t ', {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}]},
+      {splitter: ['a b\nc', [['a', 'b'], ['c']]]},
+      {splitter: ['foo bar 1\n   jip 2', {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}]},
+      {splitter: ['foo bar 1\n                        jip 2', {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}]},
+      {splitter: ['foo bar 1\n    jip  2', {error: 'The line "jip  2" contains two or more consecutive spaces to separate elements.'}]},
       {splitter: ['foo bar 1\n    jip 2', [['foo', 'bar', 1], ['foo', 'jip', 2]]]},
+      {splitter: ['foo bar 0.1\n    jip 2.75', [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]]},
+      {splitter: ['foo 1 hey\n    2 yo', [['foo', 1, 'hey'], ['foo', 2, 'yo']]]},
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
       {call: '?', expected: 'error "Call must start with `@`"'},
@@ -359,8 +391,8 @@ var test = function () {
 
       if (test.splitter) {
          var result = splitter (test.splitter [0]);
-         if (teishi.eq (test.splitter [0], test.splitter [1])) return true;
-         clog ('Test mismatch', {expected: test.expected, obtained: result});
+         if (teishi.eq (result, test.splitter [1])) return true;
+         clog ('Test mismatch', {expected: test.splitter [1], obtained: result});
       }
       else {
          var result = receive (test.call);

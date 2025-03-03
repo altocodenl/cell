@@ -1,7 +1,8 @@
 Seventeenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping!
 
-
 Today I am on a plane, so the noise makes it impossible to record audio. As in the previous episode, I'll write my way through it.
+
+=====
 
 We left off on episode 16, where I tackled a lot of the difficulties head on: multiline text (with quotes), multiline lists & hashes. I'll review now and take the gist to this episode.
 
