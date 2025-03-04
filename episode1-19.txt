@@ -1,0 +1,5 @@
+Nineteenth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Inching our way forward in splitter, our alternative to lexing/parsing. Today, I play From Here To Eternity from Giorgio Moroder (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+It could be interesting to have a functional while loop that takes a function to execute.

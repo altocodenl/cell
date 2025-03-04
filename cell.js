@@ -49,9 +49,9 @@ var toNumberIfNumber = function (v) {
 - If you end the line and you have a dangling quote, you then move to the next line and keep on adding to the text you're building (you're always building a text and when you're done, you push it to the splitted line) until you close the quote.
 - If you didn't close the quote and you hit the end of the last line, report an error.
 */
+// TODO; escape quotes
 var splitter = function (message) {
    var lines = [];
-   var buffer = '';
    var insideQuotedText = false;
 
    if (message === '') return [];
@@ -59,9 +59,19 @@ var splitter = function (message) {
    // We stop at the first error.
    var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
 
-      var deabridged = [];
+      var output = [], lineCopy = line;
 
       var previousLine = teishi.last (lines);
+
+      if (insideQuotedText) {
+         var nextQuoteIndex = line.indexOf ('"');
+         if (nextQuoteIndex === -1) return previousLine [previousLine.length - 1] += line;
+         previousLine += line.slice (0, nextQuoteIndex);
+         line = line.slice (nextQuoteIndex);
+         // TODO: keep on processing
+      }
+
+      if (line.length === 0) return;
 
       if (line [0] === ' ') {
          if (! previousLine) return 'The first line of the message cannot be indented';
@@ -78,8 +88,30 @@ var splitter = function (message) {
          if (matchUpTo === undefined) return 'The indent of the line "' + line + '" does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
          // We store the "deabridged" part of the line as the last element of `lines`
-         deabridged = previousLine.slice (0, matchUpTo + 1);
+         output = previousLine.slice (0, matchUpTo + 1);
          line = line.slice (matchedSpaces);
+      }
+
+      if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
+
+      var next;
+      while (line.length) {
+         if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating an element.';
+
+         if (line [0] !== '"') {
+            next = line.slice (0, line.indexOf (' '));
+            output.push (toNumberIfNumber (next));
+            line = line.slice (next.length + 1);
+         }
+         else {
+            var nextQuoteIndex = line.slice (1).indexOf ('"');
+            lines.push (output);
+            if (nextQuoteIndex === -1) {
+               insideQuotedText = true;
+               buffer = line.slice (1);
+               return;
+            }
+         }
       }
 
       // no quotes for now
@@ -91,9 +123,8 @@ var splitter = function (message) {
       // found a quote. make sure it's not a literal quote: forward slash and quote.
       // foo ""
       // this is a double quote:    //"hello//"
-      line = line.split (' ');
 
-      if (line.length === 0) return 'The line "' + line + '" has no data besides whitespace';
+      line = line.split (' ');
 
       deabridged = deabridged.concat (dale.go (line, toNumberIfNumber));
 
@@ -311,6 +342,8 @@ var test = function () {
       {splitter: ['foo bar 1\n    jip 2', [['foo', 'bar', 1], ['foo', 'jip', 2]]]},
       {splitter: ['foo bar 0.1\n    jip 2.75', [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]]},
       {splitter: ['foo 1 hey\n    2 yo', [['foo', 1, 'hey'], ['foo', 2, 'yo']]]},
+      {splitter: ['something"foo" 1', {error: 'Unescaped quotes can only be at the beginning of an element, see line: "something"foo" 1"'}]},
+      {splitter: ['"foo bar" 1', [['foo bar', 1]]]},
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
       {call: '?', expected: 'error "Call must start with `@`"'},
