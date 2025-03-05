@@ -1,0 +1,12 @@
+Twentieth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! We are still inching our way forward in splitter, despite me cheating and doing 20 minutes of thinking on the code outside of camera. But our tests look better! Today, I play Heavy Petting Zoo from NOFX (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+
+
+
+
+foo "bar
+i am on a new line but I am still the same text" 1
+
+['foo', 'bar\ni am on a new line but I am still the same text', 1]

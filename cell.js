@@ -51,7 +51,7 @@ var toNumberIfNumber = function (v) {
 */
 // TODO; escape quotes
 var splitter = function (message) {
-   var lines = [];
+   var parsedLines = [];
    var insideQuotedText = false;
 
    if (message === '') return [];
@@ -59,21 +59,12 @@ var splitter = function (message) {
    // We stop at the first error.
    var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
 
-      var output = [], lineCopy = line;
+      var newLine = [], originalLine = line;
+      var previousLine = teishi.last (parsedLines);
 
-      var previousLine = teishi.last (lines);
+      if (line.length === 0 && ! insideQuotedText) return;
 
-      if (insideQuotedText) {
-         var nextQuoteIndex = line.indexOf ('"');
-         if (nextQuoteIndex === -1) return previousLine [previousLine.length - 1] += line;
-         previousLine += line.slice (0, nextQuoteIndex);
-         line = line.slice (nextQuoteIndex);
-         // TODO: keep on processing
-      }
-
-      if (line.length === 0) return;
-
-      if (line [0] === ' ') {
+      if (line [0] === ' ' && ! insideQuotedText) {
          if (! previousLine) return 'The first line of the message cannot be indented';
          var indentSize = line.match (/^ +/g) [0].length;
          var matchedSpaces = 0;
@@ -87,12 +78,55 @@ var splitter = function (message) {
          });
          if (matchUpTo === undefined) return 'The indent of the line "' + line + '" does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
-         // We store the "deabridged" part of the line as the last element of `lines`
-         output = previousLine.slice (0, matchUpTo + 1);
+         // We store the "deabridged" part of the line, taking it from the last element of `parsedLines`
+         newLine = previousLine.slice (0, matchUpTo + 1);
          line = line.slice (matchedSpaces);
+
+         if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
       }
 
-      if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
+      var dequoter = function (text, insideQuotedText) {
+         var firstQuote, secondQuote;
+
+         if (text [0] === '"') firstQuote = 0;
+         else {
+            var match = text.match (/(?:[^/])"/);
+            if (match) firstQuote = match.index;
+            else       firstQuote = -1;
+         }
+
+         if (firstQuote === undefined) return {text: text, start: -1};
+         if (insideQuotedText) return {text: text.slice (0, firstQuote).replace (/\/"/g, '"'), end: firstQuote};
+
+         match = text.slice (firstQuote).match (/(?:[^/])"/);
+         if (match) secondQuote = match.index;
+         else       secondQuote = -1;
+
+         return {text: text, start: start, end: end};
+      }
+
+      if (insideQuotedText) {
+         if (line.length === 0) return previousLine [previousLine.length - 1] += '\n';
+
+         // Get me the next unescaped quote
+         // Give me the resulting matched text, with the escaped quotes as normal quotes and without the slashes
+
+         // Only for unescaped quote
+         var quoteIndex;
+         if (line [0] === '"') quoteIndex = 0;
+         else {
+            var match = line.match (/(?:[^/])"/);
+            if (match) quoteIndex = match.index;
+         }
+
+         // Escaped quote is /"
+
+         var nextQuoteIndex = line.indexOf ('"');
+         if (nextQuoteIndex === -1) return previousLine [previousLine.length - 1] += line;
+         previousLine += line.slice (0, nextQuoteIndex);
+         line = line.slice (nextQuoteIndex);
+         // TODO: keep on processing
+      }
 
       var next;
       while (line.length) {
@@ -100,12 +134,12 @@ var splitter = function (message) {
 
          if (line [0] !== '"') {
             next = line.slice (0, line.indexOf (' '));
-            output.push (toNumberIfNumber (next));
+            newLine.push (toNumberIfNumber (next));
             line = line.slice (next.length + 1);
          }
          else {
             var nextQuoteIndex = line.slice (1).indexOf ('"');
-            lines.push (output);
+            lines.push (newLine);
             if (nextQuoteIndex === -1) {
                insideQuotedText = true;
                buffer = line.slice (1);
@@ -332,18 +366,21 @@ var test = function () {
 
 
    var errorFound = false === dale.stop ([
-      {splitter: ['', []]},
-      {splitter: [' ', {error: 'The first line of the message cannot be indented'}]},
-      {splitter: ['\t ', {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}]},
-      {splitter: ['a b\nc', [['a', 'b'], ['c']]]},
-      {splitter: ['foo bar 1\n   jip 2', {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}]},
-      {splitter: ['foo bar 1\n                        jip 2', {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}]},
-      {splitter: ['foo bar 1\n    jip  2', {error: 'The line "jip  2" contains two or more consecutive spaces to separate elements.'}]},
-      {splitter: ['foo bar 1\n    jip 2', [['foo', 'bar', 1], ['foo', 'jip', 2]]]},
-      {splitter: ['foo bar 0.1\n    jip 2.75', [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]]},
-      {splitter: ['foo 1 hey\n    2 yo', [['foo', 1, 'hey'], ['foo', 2, 'yo']]]},
-      {splitter: ['something"foo" 1', {error: 'Unescaped quotes can only be at the beginning of an element, see line: "something"foo" 1"'}]},
-      {splitter: ['"foo bar" 1', [['foo bar', 1]]]},
+      {splitter: '', expected: []},
+      {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
+      {splitter: '\t ', expected: {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}},
+      // ['foo', 'bar\ni am on a new line but I am still the same text', 1]
+
+      /*
+      {splitter: 'a b\nc', expected: [['a', 'b'], ['c']]},
+      {splitter: 'foo bar 1\n   jip 2', expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
+      {splitter: 'foo bar 1\n                        jip 2', expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
+      {splitter: 'foo bar 1\n    jip  2', expected: {error: 'The line "jip  2" contains two or more consecutive spaces to separate elements.'}},
+      {splitter: 'foo bar 1\n    jip 2', expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
+      {splitter: 'foo bar 0.1\n    jip 2.75', expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
+      {splitter: 'foo 1 hey\n    2 yo', expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
+      {splitter: 'something"foo" 1', expected: {error: 'Unescaped quotes can only be at the beginning of an element, see line: "something"foo" 1"'}},
+      {splitter: '"foo bar" 1', expected: [['foo bar', 1]]},
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
       {call: '?', expected: 'error "Call must start with `@`"'},
@@ -422,17 +459,11 @@ var test = function () {
    ], false, function (test) {
       if (test.reset) return B.call ('reset', [], test.reset);
 
-      if (test.splitter) {
-         var result = splitter (test.splitter [0]);
-         if (teishi.eq (result, test.splitter [1])) return true;
-         clog ('Test mismatch', {expected: test.splitter [1], obtained: result});
-      }
-      else {
-         var result = receive (test.call);
-         if (teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
-         if (result === test.expected) return true;
-         clog ('Test mismatch', {expected: test.expected, obtained: result});
-      }
+      var result = test.call ? receive (test.call) : splitter (test.splitter);
+      if (test.call && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
+      if (teishi.eq (result, test.expected)) return true;
+      clog ('Test mismatch', {expected: test.expected, obtained: result});
+
       return false;
    });
    if (errorFound) clog ('A test did not pass');
