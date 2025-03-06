@@ -1,0 +1,3 @@
+Twenty-first episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! We are still (still!) inching our way forward in splitter, but we might have entered the debugging phase. I want to believe we don't need no lexer or parser. Today, I play Mending Wall from Angst (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell

@@ -85,7 +85,7 @@ var splitter = function (message) {
          if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
       }
 
-      var dequoter = function (text, insideQuotedText) {
+      var dequoter = function (text) {
          var firstQuote, secondQuote;
 
          if (text [0] === '"') firstQuote = 0;
@@ -106,72 +106,49 @@ var splitter = function (message) {
       }
 
       if (insideQuotedText) {
-         if (line.length === 0) return previousLine [previousLine.length - 1] += '\n';
-
-         // Get me the next unescaped quote
-         // Give me the resulting matched text, with the escaped quotes as normal quotes and without the slashes
-
-         // Only for unescaped quote
-         var quoteIndex;
-         if (line [0] === '"') quoteIndex = 0;
+         var dequoted = dequoter (line);
+         if (dequoted.start === undefined) return previousLine [previousLine.length - 1] += line + '\n';
          else {
-            var match = line.match (/(?:[^/])"/);
-            if (match) quoteIndex = match.index;
+            previousLine [previousLine.length - 1] + dequoted.text;
+            line = line.slice (dequoted.start + 1);
+            insideQuotedText = false;
          }
-
-         // Escaped quote is /"
-
-         var nextQuoteIndex = line.indexOf ('"');
-         if (nextQuoteIndex === -1) return previousLine [previousLine.length - 1] += line;
-         previousLine += line.slice (0, nextQuoteIndex);
-         line = line.slice (nextQuoteIndex);
-         // TODO: keep on processing
       }
 
       var next;
       while (line.length) {
          if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating an element.';
 
+         // No quote
+         // Start but no end -> go to insideQuotedText
+         // Start and end
+
          if (line [0] !== '"') {
+            if (line [0].match (/\s/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
+
             next = line.slice (0, line.indexOf (' '));
             newLine.push (toNumberIfNumber (next));
             line = line.slice (next.length + 1);
          }
          else {
-            var nextQuoteIndex = line.slice (1).indexOf ('"');
-            lines.push (newLine);
-            if (nextQuoteIndex === -1) {
+            var dequoted = dequoter (line);
+            if (dequoted.end) {
+               newLine.push (dequoted.text);
+               line = line.slice (dequoted.end + 1);
+            }
+            else {
                insideQuotedText = true;
-               buffer = line.slice (1);
-               return;
+               newLine.push (dequoted.text + '\n');
+               return parsedLines.push (newLine);
             }
          }
       }
-
-      // no quotes for now
-      if (line.match (/\s{2,}/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
-
-      // forbid ""? No, but we need to represent it as "".
-      // what about quoting things that don't have to be quoted? Give an error.
-      //
-      // found a quote. make sure it's not a literal quote: forward slash and quote.
-      // foo ""
-      // this is a double quote:    //"hello//"
-
-      line = line.split (' ');
-
-      deabridged = deabridged.concat (dale.go (line, toNumberIfNumber));
-
-      lines.push (deabridged);
-
-
-      // bar whatever
-
-      //var nextQuoteIndex = line.indexOf ('"');
+      parsedLines.push (newLine);
    });
 
    if (error) return {error: error};
-   return lines;
+   if (insideQuotedText) return {error: 'Multiline text not closed: "' + teishi.last (teishi.last (parsedLines)) + '"'};
+   return parsedLines;
 }
 
 var validator = function (unabridgedLines) {
@@ -369,10 +346,8 @@ var test = function () {
       {splitter: '', expected: []},
       {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
       {splitter: '\t ', expected: {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}},
-      // ['foo', 'bar\ni am on a new line but I am still the same text', 1]
-
-      /*
       {splitter: 'a b\nc', expected: [['a', 'b'], ['c']]},
+      /*
       {splitter: 'foo bar 1\n   jip 2', expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
       {splitter: 'foo bar 1\n                        jip 2', expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
       {splitter: 'foo bar 1\n    jip  2', expected: {error: 'The line "jip  2" contains two or more consecutive spaces to separate elements.'}},
@@ -381,6 +356,7 @@ var test = function () {
       {splitter: 'foo 1 hey\n    2 yo', expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
       {splitter: 'something"foo" 1', expected: {error: 'Unescaped quotes can only be at the beginning of an element, see line: "something"foo" 1"'}},
       {splitter: '"foo bar" 1', expected: [['foo bar', 1]]},
+      // ['foo', 'bar\ni am on a new line but I am still the same text', 1]
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
       {call: '?', expected: 'error "Call must start with `@`"'},
