@@ -50,6 +50,12 @@ In essence, a spreadsheet is immensely powerful because it has three properties:
 2. A cell can reference another cell.
 3. When a cell changes, all of the cells depending on it change as well.
 
+These properties carry the following advantages:
+
+1. Because each piece of data is in a cell, it's immediately addressable by any other part of the program. Then you don't have to build labyrinths to access parts of your state.
+2. You can compose data and logic, like if they were legos.
+3. You don't have to re-run everything all the time. The state is always fresh, always consistent. You get constant feedback for free.
+
 Cell wants to go further in this direction. In cell:
 
 1. Every piece of data has a path to it (its address).
@@ -58,6 +64,7 @@ Cell wants to go further in this direction. In cell:
 
 Cell intends to go beyond the spreadsheet in the following ways:
 
+- Cells can be named meaningfully.
 - Cells can be nested.
 - The equivalent of the formula and the value of a cell can be seen at the same time.
 - Cell can also be a service, a database and an interface maker.
@@ -65,6 +72,17 @@ Cell intends to go beyond the spreadsheet in the following ways:
 These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
 
 **DEAR READER: cell is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
+
+## The cell interface
+
+- The *main*: a main window that contains *cells*: smaller windows that show either text (fourdata) or graphical components.
+- The *dialogue*: a dialogue window that combines the concept of a terminal with that of an LLM prompt, enabling a dialogue between the user, an LLM and cell. Any message starting with @, whether it comes from the user or the LLM, is understood as a call to cell. Any message sent by the user that is not starting with a @ is sent to the LLM, which will then respond with other messages and possibly calls to cell. Calls to cell will control the interface as well as put data in the dataspace (actually, the interface is simply an interpretation of part of the dataspace, but we mention it as an important special case). cell won't output anything on the dialogue, its results will be seen (optionally) in the main window.
+
+In desktop, the main window will be 70% of the width of the screen, to 30% of the vertical stream of messages between user, LLM and cell.
+
+In mobile, the interface will be modal, showing either the main or the dialog.
+
+The LLM can be provided through an API token or offered as a service, but in the end, it doesn't really matter. What matters are the twin intelligences of user and LLM used to paint a picture of data in cell.
 
 ## The data representation: `fourdata`
 
