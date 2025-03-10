@@ -39,7 +39,7 @@ var toNumberIfNumber = function (v) {
    return v;
 }
 
-// The splitter takes a message that's text, and returns a list of lists: each of them a line of unabridged fourdata, inside JS arrays.
+// The splitter takes a message that's text, presumably formatted as fourdata, and returns a list of lists: each of them a line of unabridged fourdata, inside JS arrays.
 // For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
 /*
 - Split the line by quotes (") that don't come in pairs. (the way to escape (or rather, write a literal quote) is to write "" (this comes from CSV, I think). If you have an even number, you don't have a multiline quote.
@@ -51,25 +51,25 @@ var toNumberIfNumber = function (v) {
 */
 // TODO; escape quotes
 var splitter = function (message) {
-   var parsedLines = [];
-   var insideQuotedText = false;
 
-   if (message === '') return [];
+   var paths = [];
+   var insideMultilineText = false;
+
+   if (message === '') return paths;
 
    // We stop at the first error.
    var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
 
-      var newLine = [], originalLine = line;
-      var previousLine = teishi.last (parsedLines);
+      var path = [], originalLine = line, lastPath = teishi.last (paths);
 
-      if (line.length === 0 && ! insideQuotedText) return;
+      if (line.length === 0 && ! insideMultilineText) return;
 
-      if (line [0] === ' ' && ! insideQuotedText) {
-         if (! previousLine) return 'The first line of the message cannot be indented';
+      if (line [0] === ' ' && ! insideMultilineText) {
+         if (! lastPath) return 'The first line of the message cannot be indented';
          var indentSize = line.match (/^ +/g) [0].length;
          var matchedSpaces = 0;
-         // previousLine always is nonzero in length, so there's no zero corner case
-         var matchUpTo = dale.stopNot (previousLine, undefined, function (v, k) {
+         // lastPath always is nonzero in length, so there's no zero corner case
+         var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
             // Converting v to text in case it is a number
             matchedSpaces += (v + '').length + 1;
             if (matchedSpaces === indentSize) return k;
@@ -78,8 +78,8 @@ var splitter = function (message) {
          });
          if (matchUpTo === undefined) return 'The indent of the line "' + line + '" does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
-         // We store the "deabridged" part of the line, taking it from the last element of `parsedLines`
-         newLine = previousLine.slice (0, matchUpTo + 1);
+         // We store the "deabridged" part of the line, taking it from the last element of `paths`
+         path = lastPath.slice (0, matchUpTo + 1);
          line = line.slice (matchedSpaces);
 
          if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
@@ -88,67 +88,73 @@ var splitter = function (message) {
       var dequoter = function (text) {
          var firstQuote, secondQuote;
 
+         var unescapedQuoteRegex = /(?:[^/])"/;
+
          if (text [0] === '"') firstQuote = 0;
          else {
-            var match = text.match (/(?:[^/])"/);
+            var match = text.match (unescapedQuoteRegex);
             if (match) firstQuote = match.index;
             else       firstQuote = -1;
          }
 
+         // TODO: terminate multiline quote
          if (firstQuote === undefined) return {text: text, start: -1};
-         if (insideQuotedText) return {text: text.slice (0, firstQuote).replace (/\/"/g, '"'), end: firstQuote};
+         if (insideMultilineText) return {text: text.slice (0, firstQuote).replace (/\/"/g, '"'), end: firstQuote};
 
-         match = text.slice (firstQuote).match (/(?:[^/])"/);
+         match = text.slice (firstQuote).match (unescapedQuoteRegex);
          if (match) secondQuote = match.index;
          else       secondQuote = -1;
 
-         return {text: text, start: start, end: end};
+         return {text: text, start: firstQuote, end: secondQuote};
       }
 
-      if (insideQuotedText) {
+      clog ('debug', line, insideMultilineText);
+
+      if (insideMultilineText) {
          var dequoted = dequoter (line);
-         if (dequoted.start === undefined) return previousLine [previousLine.length - 1] += line + '\n';
+         clog ('dequoted', dequoted);
+         if (dequoted.end === -1) return lastPath [lastPath.length - 1] += line + '\n';
          else {
-            previousLine [previousLine.length - 1] + dequoted.text;
+            lastPath [lastPath.length - 1] += dequoted.text;
             line = line.slice (dequoted.start + 1);
-            insideQuotedText = false;
+            clog ('line is now', line);
+            path = lastPath;
+            insideMultilineText = false;
          }
       }
 
-      var next;
       while (line.length) {
          if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating an element.';
 
-         // No quote
-         // Start but no end -> go to insideQuotedText
-         // Start and end
-
-         if (line [0] !== '"') {
-            if (line [0].match (/\s/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
-
-            next = line.slice (0, line.indexOf (' '));
-            newLine.push (toNumberIfNumber (next));
-            line = line.slice (next.length + 1);
-         }
-         else {
+         if (line [0] === '"') {
             var dequoted = dequoter (line);
-            if (dequoted.end) {
-               newLine.push (dequoted.text);
+            if (dequoted.end !== -1) {
+               path.push (dequoted.text);
                line = line.slice (dequoted.end + 1);
             }
             else {
-               insideQuotedText = true;
-               newLine.push (dequoted.text + '\n');
-               return parsedLines.push (newLine);
+               insideMultilineText = true;
+               path.push (dequoted.text + '\n');
+               line = '';
             }
+            continue;
          }
+
+         if (line.match (/"/)) return 'Unescaped quote in the middle of an element: "' + originalLine + '"';
+         if (line.match (/\s/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
+
+         var element = line.split (' ') [0];
+         line = line.slice (element.length + 1);
+         path.push (toNumberIfNumber (element));
       }
-      parsedLines.push (newLine);
+
+      // This will be true if we just closed a multiline text on this line
+      if (! paths.includes (path)) paths.push (path);
    });
 
    if (error) return {error: error};
-   if (insideQuotedText) return {error: 'Multiline text not closed: "' + teishi.last (teishi.last (parsedLines)) + '"'};
-   return parsedLines;
+   if (insideMultilineText) return {error: 'Multiline text not closed: "' + teishi.last (teishi.last (paths)) + '"'};
+   return paths;
 }
 
 var validator = function (unabridgedLines) {
@@ -346,6 +352,9 @@ var test = function () {
       {splitter: '', expected: []},
       {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
       {splitter: '\t ', expected: {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}},
+      {splitter: 'holding"out', expected: {error: 'Unescaped quote in the middle of an element: "holding"out"'}},
+      {splitter: '"multiline\ntrickery" some 2 "calm\nanimal"', expected: ['multiline\ntrickery', 'some', 2, 'calm\nanimal']},
+      /*
       {splitter: 'a b\nc', expected: [['a', 'b'], ['c']]},
       /*
       {splitter: 'foo bar 1\n   jip 2', expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},

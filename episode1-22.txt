@@ -1,0 +1,3 @@
+Twenty-second episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, an almost breakthrough on the splitter, but the dequoter is still giving me trouble. I think one more session should close the splitter and we can move on to the validator! Today, I play a bit of the Chameleons' Live In Toronto, then switch to The Fixx's Calm Animals (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
