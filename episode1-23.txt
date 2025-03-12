@@ -1,0 +1,5 @@
+Twenty-third episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Very short video today, but we make some progress with the quotes. Today, I play some Deadmau5 (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+https://github.com/altocodenl/TODIS

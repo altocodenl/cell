@@ -93,31 +93,30 @@ var splitter = function (message) {
          if (text [0] === '"') firstQuote = 0;
          else {
             var match = text.match (unescapedQuoteRegex);
-            if (match) firstQuote = match.index;
+            if (match) firstQuote = match.index + 1;
             else       firstQuote = -1;
          }
 
-         // TODO: terminate multiline quote
          if (firstQuote === undefined) return {text: text, start: -1};
          if (insideMultilineText) return {text: text.slice (0, firstQuote).replace (/\/"/g, '"'), end: firstQuote};
 
-         match = text.slice (firstQuote).match (unescapedQuoteRegex);
+         match = text.slice (firstQuote + 1).match (unescapedQuoteRegex);
          if (match) secondQuote = match.index;
          else       secondQuote = -1;
 
-         return {text: text, start: firstQuote, end: secondQuote};
+         return {text: text.slice (firstQuote + 1, secondQuote).replace (/\/"/g, '"'), start: firstQuote, end: secondQuote};
       }
-
-      clog ('debug', line, insideMultilineText);
+      /*
+       insideMultilineText === false, '"multiline' -> {firstQuote: 0, text: 'multiline'}
+       insideMultilineText === true,  'trickery"' -> {firstQuote: 8, text: 'trickery'}
+      */
 
       if (insideMultilineText) {
          var dequoted = dequoter (line);
-         clog ('dequoted', dequoted);
          if (dequoted.end === -1) return lastPath [lastPath.length - 1] += line + '\n';
          else {
             lastPath [lastPath.length - 1] += dequoted.text;
-            line = line.slice (dequoted.start + 1);
-            clog ('line is now', line);
+            line = line.slice (dequoted.end + 2); // Remove the quote and the space after it
             path = lastPath;
             insideMultilineText = false;
          }
@@ -140,10 +139,11 @@ var splitter = function (message) {
             continue;
          }
 
-         if (line.match (/"/)) return 'Unescaped quote in the middle of an element: "' + originalLine + '"';
-         if (line.match (/\s/)) return 'The line "' + line + '" contains two or more consecutive spaces to separate elements.';
-
          var element = line.split (' ') [0];
+         if (element.match (/\s/)) return 'The line "' + line + '" contains a space that is not contained within quotes.';
+         if (element.match (/"/)) return 'The line "' + line + '" has an unescaped quote.';
+
+
          line = line.slice (element.length + 1);
          path.push (toNumberIfNumber (element));
       }
@@ -351,8 +351,8 @@ var test = function () {
    var errorFound = false === dale.stop ([
       {splitter: '', expected: []},
       {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
-      {splitter: '\t ', expected: {error: 'The line "\t " contains two or more consecutive spaces to separate elements.'}},
-      {splitter: 'holding"out', expected: {error: 'Unescaped quote in the middle of an element: "holding"out"'}},
+      {splitter: '\t ', expected: {error: 'The line "\t " contains a space that is not contained within quotes.'}},
+      {splitter: 'holding"out', expected: {error: 'The line "holding"out" has an unescaped quote.'}},
       {splitter: '"multiline\ntrickery" some 2 "calm\nanimal"', expected: ['multiline\ntrickery', 'some', 2, 'calm\nanimal']},
       /*
       {splitter: 'a b\nc', expected: [['a', 'b'], ['c']]},
