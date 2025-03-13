@@ -86,50 +86,56 @@ var splitter = function (message) {
       }
 
       var dequoter = function (text) {
-         var firstQuote, secondQuote;
+         var output = {start: -1, end: -1};
 
-         var unescapedQuoteRegex = /(?:[^/])"/;
-
-         if (text [0] === '"') firstQuote = 0;
-         else {
-            var match = text.match (unescapedQuoteRegex);
-            if (match) firstQuote = match.index + 1;
-            else       firstQuote = -1;
+         var unescapeQuotes = function (text) {
+            return text.replace (/\/"/g, '"');
          }
 
-         if (firstQuote === undefined) return {text: text, start: -1};
-         if (insideMultilineText) return {text: text.slice (0, firstQuote).replace (/\/"/g, '"'), end: firstQuote};
+         var findUnescapedQuote = /(?:[^/])"/;
 
-         match = text.slice (firstQuote + 1).match (unescapedQuoteRegex);
-         if (match) secondQuote = match.index;
-         else       secondQuote = -1;
+         if (text [0] === '"') output.start = 0;
+         else {
+            var match = text.match (findUnescapedQuote);
+            if (match) output.start = match.index + 1;
+         }
 
-         return {text: text.slice (firstQuote + 1, secondQuote).replace (/\/"/g, '"'), start: firstQuote, end: secondQuote};
+         if (insideMultilineText) {
+            if (output.start === -1) output.text = unescapeQuotes (text);
+            if (output.start === 0) output.text = '';
+            if (output.start > 0) output.text = unescapeQuotes (text.slice (0, output.start));
+         }
+
+         else if (output.start === -1) output.text = text;
+         else {
+            match = text.slice (output.start + 1).match (findUnescapedQuote);
+            if (match) output.end = match.index + output.start + 1;
+
+            output.text = unescapeQuotes (text.slice (output.start + 1, output.end === -1 ? Infinity : (output.end + 1)))
+         }
+
+         return output;
       }
-      /*
-       insideMultilineText === false, '"multiline' -> {firstQuote: 0, text: 'multiline'}
-       insideMultilineText === true,  'trickery"' -> {firstQuote: 8, text: 'trickery'}
-      */
 
       if (insideMultilineText) {
          var dequoted = dequoter (line);
-         if (dequoted.end === -1) return lastPath [lastPath.length - 1] += line + '\n';
+         if (dequoted.start === -1) return lastPath [lastPath.length - 1] += line + '\n';
          else {
             lastPath [lastPath.length - 1] += dequoted.text;
-            line = line.slice (dequoted.end + 2); // Remove the quote and the space after it
+            line = line.slice (dequoted.start + 2); // Remove the quote and the space after the quote
             path = lastPath;
             insideMultilineText = false;
          }
       }
 
       while (line.length) {
-         if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating an element.';
+         if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating two elements.';
 
          if (line [0] === '"') {
             var dequoted = dequoter (line);
             if (dequoted.end !== -1) {
                path.push (dequoted.text);
-               line = line.slice (dequoted.end + 1);
+               line = line.slice (1, dequoted.end + 1);
             }
             else {
                insideMultilineText = true;
@@ -142,7 +148,6 @@ var splitter = function (message) {
          var element = line.split (' ') [0];
          if (element.match (/\s/)) return 'The line "' + line + '" contains a space that is not contained within quotes.';
          if (element.match (/"/)) return 'The line "' + line + '" has an unescaped quote.';
-
 
          line = line.slice (element.length + 1);
          path.push (toNumberIfNumber (element));
@@ -353,18 +358,17 @@ var test = function () {
       {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
       {splitter: '\t ', expected: {error: 'The line "\t " contains a space that is not contained within quotes.'}},
       {splitter: 'holding"out', expected: {error: 'The line "holding"out" has an unescaped quote.'}},
-      {splitter: '"multiline\ntrickery" some 2 "calm\nanimal"', expected: ['multiline\ntrickery', 'some', 2, 'calm\nanimal']},
-      /*
-      {splitter: 'a b\nc', expected: [['a', 'b'], ['c']]},
-      /*
-      {splitter: 'foo bar 1\n   jip 2', expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
-      {splitter: 'foo bar 1\n                        jip 2', expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
-      {splitter: 'foo bar 1\n    jip  2', expected: {error: 'The line "jip  2" contains two or more consecutive spaces to separate elements.'}},
-      {splitter: 'foo bar 1\n    jip 2', expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
-      {splitter: 'foo bar 0.1\n    jip 2.75', expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
-      {splitter: 'foo 1 hey\n    2 yo', expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
-      {splitter: 'something"foo" 1', expected: {error: 'Unescaped quotes can only be at the beginning of an element, see line: "something"foo" 1"'}},
+      {splitter: ['"multiline', 'trickery" some 2 "calm', 'animal"'], expected: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
+      {splitter: ['a b', 'c'], expected: [['a', 'b'], ['c']]},
+      {splitter: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
+      {splitter: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
+      {splitter: ['foo bar 1', '    jip  2'], expected: {error: 'The line "    jip  2" has at least two spaces separating two elements.'}},
+      {splitter: ['foo bar 1', '    jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
+      {splitter: ['foo bar 0.1', '    jip 2.75'], expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
+      {splitter: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
+      {splitter: 'something"foo" 1', expected: {error: 'The line "something"foo" 1" has an unescaped quote.'}},
       {splitter: '"foo bar" 1', expected: [['foo bar', 1]]},
+      /*
       // ['foo', 'bar\ni am on a new line but I am still the same text', 1]
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
@@ -444,7 +448,7 @@ var test = function () {
    ], false, function (test) {
       if (test.reset) return B.call ('reset', [], test.reset);
 
-      var result = test.call ? receive (test.call) : splitter (test.splitter);
+      var result = test.call ? receive (test.call) : splitter (teishi.type (test.splitter) === 'array' ? test.splitter.join ('\n') : test.splitter);
       if (test.call && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {expected: test.expected, obtained: result});

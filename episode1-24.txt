@@ -1,0 +1,25 @@
+Hello! Silent episode today, at least the first part. I'm on a very noisy train.
+
+If you want to know what this is about, please go to https://github.com/altocodenl/cell, or to episode 1.
+
+We are fixing `dequoter`, within `splitter`.
+
+How does insideMultilineText affect our desired interface? When that is true, we don't care about the second quote at all.
+
+It was correct! The output is a list of paths.
+
+This is where I get cocky and remove all the logs, only to find an error before 90 seconds.
+
+I'm back, with a couple of beers on me. Let's see what happens...
+
+I'm going to change the format of lines in the test cases a bit, to make it more readable.
+
+I can't wait to do this in fourdata.
+
+Just a thought: what's more important? The code, or the tests that set the constraints on it? I'm inclined towards the latter. It really feels like, if data is the actual painting, we want to focus on the actual possibilities on data, and from there change the code to allow the data express itself like we want it to. Beer #2 talking.
+
+I'm not "biting" enough when there's a dequoted.end
+
+I am so tired of debugging without seeing the expansions at every step. That alone is enough fuel to get this done.
+
+Be back in a bit.
