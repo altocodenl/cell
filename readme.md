@@ -1,5 +1,7 @@
 # cell
 
+> Let your ideas run free.
+
 ## Introduction
 
 Cell is a programming system that intends to make programming **as effective as possible**. The purpose of cell is to empower you to create new [digital information systems and understand existing ones](https://github.com/altocodenl/todis).
