@@ -1,0 +1,50 @@
+Another mute episode! Still on the same plane. I split the episode to make it a bit more "palatable"...
+
+If you want to know what this is about, please go to https://github.com/altocodenl/cell, or to episode 1.
+
+OK, onto the validation!!
+
+Wait, I saw a good corner case in episode 16.
+
+Yep, the splitter is a toughie.
+
+Note for later: sorting might come before validating, so we can do it more efficiently.
+
+See how difficult it is to track calls and responses when you don't see intermediate results? If we had that, things would be much easier, even on 4-5 hours of sleep.
+
+The problem is inside dequoter.
+
+Yep, that regex makes us write the special case for quote being element 0, also inside there.
+
+I almost have it. I'm slicing too much with the case of "".
+
+Where would we be without our test cases? Nowhere, certainly.
+
+Alrite! It feels like splitter is converging to something good. Those test cases are, essentially, our specification. Let me do one more pass over splitter.
+
+Yeah, let's write that sorter, first.
+
+Just curious if toUpperCase/toLowerCase works for cyrillic. Yep, it does! It probably works for a few alphabets. I just thought of a nice trick.
+
+OK, we're landing... I need to stop. But this is taking shape!
+
+sorter, then validator
+
+The validator will do this:
+
+- When forking, you need to have two elements on the lines that are forked.
+```
+foo bar
+    jip
+```
+Is not properly formed fourdata
+- And you cannot mix types:
+
+```
+foo bar jip
+    2 jep
+```
+
+Anything else? No, I think that's it. Then, both things map to JSON, or rather, to our intuitive understanding of what a hash and a list are.
+
+OK, see you in the next episode!

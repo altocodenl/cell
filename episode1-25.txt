@@ -1,0 +1,34 @@
+Hi! Silent episode today as well. I'm on a plane! A lot of travelling, this week.
+
+If you want to know what this is about, please go to https://github.com/altocodenl/cell, or to episode 1.
+
+Last episode we were getting close to the end of splitter. Let's see where we are.
+
+Before we do that, let's take a quick step out and see the roadmap:
+
+- Season 1: get and put (that's it!)
+- Season 2: the core language (reference, sequence, conditional).
+
+Alright, let's get season 1 finished!
+
+OK, this test fails, this is the case where there's a non-multiline quote.
+
+Yeah, that logic is completely wrong. I need to slice from the second quote.
+
+It's great to have all the previous tests passing. This is how we can approximate things to a certain level of correctness.
+
+Wow, could we be done with it?
+
+I think that we can move on to the validator now. We might add further test cases to splitter, but for now, all the cases I can think of are covered. Actually, let me give it one more pass, looking at the code.
+
+Yep, we are not properly adding multiple newlines in quoted texts. How could this be?
+
+The corner case for empty lines is covered already.
+
+OK, that return of a value was interpreted as error. Fixed. Now for the other new test case.
+
+I think it's OK to convert foo "bar" into foo bar. Remove the unnecessary quotes.
+
+Looking for our original sequence of work.
+
+Pipeline: splitter -> validation -> sorting -> the actual put

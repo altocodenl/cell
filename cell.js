@@ -94,6 +94,8 @@ var splitter = function (message) {
 
          var findUnescapedQuote = /(?:[^/])"/;
 
+         if (text [0] === '"' && text [1] === '"') return {start: 0, end: 1, text: ''};
+
          if (text [0] === '"') output.start = 0;
          else {
             var match = text.match (findUnescapedQuote);
@@ -119,7 +121,10 @@ var splitter = function (message) {
 
       if (insideMultilineText) {
          var dequoted = dequoter (line);
-         if (dequoted.start === -1) return lastPath [lastPath.length - 1] += line + '\n';
+         if (dequoted.start === -1) {
+            lastPath [lastPath.length - 1] += line + '\n';
+            return;
+         }
          else {
             lastPath [lastPath.length - 1] += dequoted.text;
             line = line.slice (dequoted.start + 2); // Remove the quote and the space after the quote
@@ -135,7 +140,10 @@ var splitter = function (message) {
             var dequoted = dequoter (line);
             if (dequoted.end !== -1) {
                path.push (dequoted.text);
-               line = line.slice (1, dequoted.end + 1);
+               line = line.slice (dequoted.end + (dequoted.text === '' ? 1 : 2)); // Remove the quote. There's a special case for when the text is empty, because we are removing the second quote.
+               // Check that the first element is a space, then remove it
+               if (line.length && line [0] !== ' ') return 'No space after a quote in line "' + originalLine + '"';
+               line = line.slice (1);
             }
             else {
                insideMultilineText = true;
@@ -149,7 +157,7 @@ var splitter = function (message) {
          if (element.match (/\s/)) return 'The line "' + line + '" contains a space that is not contained within quotes.';
          if (element.match (/"/)) return 'The line "' + line + '" has an unescaped quote.';
 
-         line = line.slice (element.length + 1);
+         line = line.slice (element.length + 1); // Here we don't need to check that the last character sliced is a space, because we used spaces to split the line
          path.push (toNumberIfNumber (element));
       }
 
@@ -161,6 +169,19 @@ var splitter = function (message) {
    if (insideMultilineText) return {error: 'Multiline text not closed: "' + teishi.last (teishi.last (paths)) + '"'};
    return paths;
 }
+
+var sorter = function (unabridgedLines) {
+
+   // sort by length 1, then by length 2, then by length 3, until you are done.
+   // the problem is that JS sorting is not stable!
+   // the trick for uppercase or lowercase: take each char and make it uppercase and lowercase, compare to see if it's equal or not to the original, to determine if it is lowercase.
+
+   // Sort uppercase and lowercase separately: aA bB cC. Lowercase goes up.
+   // Numbers first.
+}
+
+- Let's break convention. I don't want uppercase and lowercase sorted separately. So aAbBcC? Or AaBbCc? I'm thinkingn of what'd be more practical to "send things to the top", since cell doesn't allow you to sort things non-lexicographically. Let's go with aAbBcC, the more naked and real lowercase variables at the top, the corporate OOP-ish Class Names That Use Uppercase at the bottom.
+- What about numbers and letters? Numbers first. So 0123456789, then aAbB. But numbers should be sorted by value, not lexicographically.
 
 var validator = function (unabridgedLines) {
    // check that there's no mixture of hashes and lists
@@ -368,8 +389,15 @@ var test = function () {
       {splitter: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
       {splitter: 'something"foo" 1', expected: {error: 'The line "something"foo" 1" has an unescaped quote.'}},
       {splitter: '"foo bar" 1', expected: [['foo bar', 1]]},
+      {splitter: '"foo bar"x1', expected: {error: 'No space after a quote in line ""foo bar"x1"'}},
+      {splitter: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
+      {splitter: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
+      {splitter: ['"i am text', '', '', 'yep"'], expected: [['i am text\n\n\nyep']]},
+      {splitter: 'foo "bar"', expected: [['foo', 'bar']]},
+      {splitter: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
+      {splitter: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
+      {splitter: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
       /*
-      // ['foo', 'bar\ni am on a new line but I am still the same text', 1]
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
       {call: '?', expected: 'error "Call must start with `@`"'},
