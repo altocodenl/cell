@@ -1,0 +1,9 @@
+Twenty-seventh episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! This one is a "talkie". I write the dedotter and the sorter. I outline the validator somewhat. Today, I play some Deadmau5 (at zero volume to avoid copyright infringement...).
+
+List with dots:
+
+. first
+. second
+
+1 first
+2 second

@@ -170,26 +170,79 @@ var splitter = function (message) {
    return paths;
 }
 
+var dedotter = function (unabridgedLines) {
+   dale.go (unabridgedLines, function (v, k) {
+      dale.go (v, function (v2, k2) {
+         if (v2 !== '.') return;
+         var lastLine = unabridgedLines [k - 1];
+         var continuing;
+         if (lastLine === undefined) continuing = false;
+         else continuing = teishi.eq (lastLine.slice (0, k2), v.slice (0, k2)) && teishi.type (lastLine [k2]) !== 'string';
+
+         if (! continuing) unabridgedLines [k] [k2] = 1;
+         else              unabridgedLines [k] [k2] = lastLine [k2] + 1;
+      });
+   });
+   return unabridgedLines;
+}
+
 var sorter = function (unabridgedLines) {
 
-   // sort by length 1, then by length 2, then by length 3, until you are done.
-   // the problem is that JS sorting is not stable!
-   // the trick for uppercase or lowercase: take each char and make it uppercase and lowercase, compare to see if it's equal or not to the original, to determine if it is lowercase.
+   var compare = function (v1, v2) {
+      var types = [teishi.type (v1) === 'string' ? 'text' : 'number', teishi.type (v2) === 'string' ? 'text' : 'number'];
+      // Numbers first.
+      if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
+      if (types [0] === 'number') return v1 - v2;
 
-   // Sort uppercase and lowercase separately: aA bB cC. Lowercase goes up.
-   // Numbers first.
+      // Sort uppercase and lowercase separately: aA bB cC. Lowercase goes up.
+      return dale.stopNot (dale.times (Math.max (v1.length, v2.length), 0), 0, function (k) {
+         var chars = [
+            v1 [k] === undefined ? ' ' : v1 [k],
+            v2 [k] === undefined ? ' ' : v2 [k]
+         ];
+         var cases = [
+            chars [0] === chars [0].toUpperCase () ? 'upper' : 'lower',
+            chars [1] === chars [1].toUpperCase () ? 'upper' : 'lower'
+         ];
+         if (cases [0] !== cases [1]) return cases [1] === 'upper' ? -1 : 1;
+         return chars [0].charCodeAt (0) - chars [1].charCodeAt (0);
+      }) || 0;
+
+   }
+
+   return unabridgedLines.sort (function (a, b) {
+      return dale.stopNot (dale.times (Math.max (a.length, b.length), 0), 0, function (k) {
+         var elements = [
+            a [k] === undefined ? '' : a [k],
+            b [k] === undefined ? '' : b [k],
+         ];
+         return compare (elements [0], elements [1]);
+      });
+   });
 }
-
-- Let's break convention. I don't want uppercase and lowercase sorted separately. So aAbBcC? Or AaBbCc? I'm thinkingn of what'd be more practical to "send things to the top", since cell doesn't allow you to sort things non-lexicographically. Let's go with aAbBcC, the more naked and real lowercase variables at the top, the corporate OOP-ish Class Names That Use Uppercase at the bottom.
-- What about numbers and letters? Numbers first. So 0123456789, then aAbB. But numbers should be sorted by value, not lexicographically.
 
 var validator = function (unabridgedLines) {
+
+   // check that lists use only integers as keys. sparse lists are OK, so in that case you need to check for duplicates across multiple lines.
+   var error = dale.go (unabridgedLines, function (v) {
+      var error = dale.stopNot (v, undefined, function (v2, k2) {
+         if (type (v2) === 'float' && k2 + 1 < v.length) return v2;
+      });
+      if (error !== undefined) return 'A float can only be a final value, but line "' + v.join (' ') + '" uses it as a key.';
+   });
+   if (error) return error;
+   return true;
+
+   /*
+    foo bar jip
+    foo bar yet something
+    foo 1 1
+   */
+
+   // fork points cannot be values. no mixture of single and multiple data types.
    // check that there's no mixture of hashes and lists
-   // check that lists use only consecutive integers starting at 1
-   // dot notation, modify unabridgedLines
    // check that there are no repeated keys in hashes or lists
 }
-
 
 // It validates and it parses
 var parse = function (message) {
@@ -375,28 +428,45 @@ var test = function () {
 
 
    var errorFound = false === dale.stop ([
-      {splitter: '', expected: []},
-      {splitter: ' ', expected: {error: 'The first line of the message cannot be indented'}},
-      {splitter: '\t ', expected: {error: 'The line "\t " contains a space that is not contained within quotes.'}},
-      {splitter: 'holding"out', expected: {error: 'The line "holding"out" has an unescaped quote.'}},
-      {splitter: ['"multiline', 'trickery" some 2 "calm', 'animal"'], expected: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
-      {splitter: ['a b', 'c'], expected: [['a', 'b'], ['c']]},
-      {splitter: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
-      {splitter: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
-      {splitter: ['foo bar 1', '    jip  2'], expected: {error: 'The line "    jip  2" has at least two spaces separating two elements.'}},
-      {splitter: ['foo bar 1', '    jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
-      {splitter: ['foo bar 0.1', '    jip 2.75'], expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
-      {splitter: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
-      {splitter: 'something"foo" 1', expected: {error: 'The line "something"foo" 1" has an unescaped quote.'}},
-      {splitter: '"foo bar" 1', expected: [['foo bar', 1]]},
-      {splitter: '"foo bar"x1', expected: {error: 'No space after a quote in line ""foo bar"x1"'}},
-      {splitter: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
-      {splitter: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
-      {splitter: ['"i am text', '', '', 'yep"'], expected: [['i am text\n\n\nyep']]},
-      {splitter: 'foo "bar"', expected: [['foo', 'bar']]},
-      {splitter: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
-      {splitter: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
-      {splitter: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
+      {f: splitter, input: '', expected: []},
+      {f: splitter, input: ' ', expected: {error: 'The first line of the message cannot be indented'}},
+      {f: splitter, input: '\t ', expected: {error: 'The line "\t " contains a space that is not contained within quotes.'}},
+      {f: splitter, input: 'holding"out', expected: {error: 'The line "holding"out" has an unescaped quote.'}},
+      {f: splitter, input: ['"multiline', 'trickery" some 2 "calm', 'animal"'], expected: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
+      {f: splitter, input: ['a b', 'c'], expected: [['a', 'b'], ['c']]},
+      {f: splitter, input: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
+      {f: splitter, input: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
+      {f: splitter, input: ['foo bar 1', '    jip  2'], expected: {error: 'The line "    jip  2" has at least two spaces separating two elements.'}},
+      {f: splitter, input: ['foo bar 1', '    jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
+      {f: splitter, input: ['foo bar 0.1', '    jip 2.75'], expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
+      {f: splitter, input: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
+      {f: splitter, input: 'something"foo" 1', expected: {error: 'The line "something"foo" 1" has an unescaped quote.'}},
+      {f: splitter, input: '"foo bar" 1', expected: [['foo bar', 1]]},
+      {f: splitter, input: '"foo bar"x1', expected: {error: 'No space after a quote in line ""foo bar"x1"'}},
+      {f: splitter, input: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
+      {f: splitter, input: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
+      {f: splitter, input: ['"i am text', '', '', 'yep"'], expected: [['i am text\n\n\nyep']]},
+      {f: splitter, input: 'foo "bar"', expected: [['foo', 'bar']]},
+      {f: splitter, input: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
+      {f: splitter, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
+      {f: splitter, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
+      {f: dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
+      {f: dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
+      {f: dedotter, input: [['foo', 'klank', 'first'], ['foo', '.', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
+      {f: dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second'], ['foo', '.', 'third']], expected: [['foo', 1, 'first'], ['foo', 2, 'second'], ['foo', 3, 'third']]},
+      {f: sorter, input: [['foo', 'bar', 1], ['foo', 'bar', 2]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
+      {f: sorter, input: [['foo', 'bar', 2], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
+      {f: sorter, input: [['foo', 'jip', 1], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'jip', 1]]},
+      {f: sorter, input: [['foo', 'jip', 1], ['Foo', 'jip', 1]], expected: [['foo', 'jip', 1], ['Foo', 'jip', 1]]},
+      {f: sorter, input: [['Foo', 'jip', 1], ['foo', 'jip', 1]], expected: [['foo', 'jip', 1], ['Foo', 'jip', 1]]},
+      {f: sorter, input: [['foo', 'jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'jip', 1]]},
+      {f: sorter, input: [['foo', 'Jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'Jip', 1]]},
+      {f: validator, input: [['foo', 'jip']], expected: true},
+      {f: validator, input: [['foo', 'bar', 1]], expected: true},
+      {f: validator, input: [['foo', 'jip'], ['foo', 'bar', 1]], expected: {error: 'The path "foo" is both a single value ("jip") and a hash, but it can only be one of those.'}},
+      {f: validator, input: [['foo', 'mau5', 'jip'], ['foo', 'mau5', 'bar', 1]], expected: {error: 'The path "foo mau5" is both a single value ("jip") and a hash, but it can only be one of those.'}},
+      {f: validator, input: [['foo', 'jip', 1], ['foo', 2, 2]], expected: {error: 'The path "foo" is both a hash and a list, but it can only be one of those.'}},
+      {f: validator, input: [['foo', 'mau5', 'jip', 1], ['foo', 'mau5', 2, 2]], expected: {error: 'The path "foo mau5" is both a hash and a list, but it can only be one of those.'}},
       /*
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
@@ -474,6 +544,16 @@ var test = function () {
       {call: '@ foo bar', expected: ['1 jip', '2 joo', '3 yes']}
       */
    ], false, function (test) {
+
+      if (test.f === splitter && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
+
+      var result = test.f (test.input);
+
+      if (teishi.eq (result, test.expected)) return true;
+      clog ('Test mismatch', {expected: test.expected, obtained: result});
+      return false;
+
+      /*
       if (test.reset) return B.call ('reset', [], test.reset);
 
       var result = test.call ? receive (test.call) : splitter (teishi.type (test.splitter) === 'array' ? test.splitter.join ('\n') : test.splitter);
@@ -482,6 +562,7 @@ var test = function () {
       clog ('Test mismatch', {expected: test.expected, obtained: result});
 
       return false;
+      */
    });
    if (errorFound) clog ('A test did not pass');
    else clog ('All tests successful');
