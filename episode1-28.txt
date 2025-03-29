@@ -1,0 +1,45 @@
+Twenty-eight episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, solid progress. We finish the validator and we finally have an entire parser ready. We also figure out how to use the parser for the purposes of implementing calls, for both get and put. Today, I play some Soda Stereo & The Fixx (at zero volume to avoid copyright infringement...).
+
+If you want to know what this is about, please go to https://github.com/altocodenl/cell, or to episode 1.
+
+the type of the nth element is determined by the n+1 element of the path! if n+1 is the last element of the path, then n will be either text or number. If n+1 is *not* the last element of the path, then n will be either a hash or a list.
+
+ah, build a hash for each prefix with the types, then check each of the prefixes per line (up to n-1), if you see an inconsistency, flag it.
+
+foo bar
+    jip
+this wouldn't be a hash, it'd be just two texts, overwriting one with the other.
+
+also check '', the base.
+
+request headers Accept application/json
+request headers User-Agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+request host example.com
+
+ars longa vita brevis
+
+The internal representation of fourdata inside cell is going to be a list of paths.
+
+parser: fourdata text: pather: dedotter: sorter: validator: paths OR a validation error
+
+We now have a sufficient parser!
+
+What do we need to (re)implement?
+1) get
+2) put
+
+The message (messages are always incoming) gets parsed. Then, we check whether @ is the first element of the first path. If it's not, we give an error. Otherwise, we check if the second element of the first path is "put". If it is, we call put. Otherwise, we call get.
+
+Let's store the paths in JS memory, not just the text in localstorage. Then, both get and put operate on the paths already in the dataspace, plus the parsed message.
+
+get and put are like js cell macros, in that they operate on paths.
+
+get:
+- go through all the paths in the dataspace, and filter out those whose first n elements are equal to the n elements of the single path received as the message.
+- call the texter on the output and return that
+
+put:
+- overwrite at the fork point
+- return OK
+
+Implement texter (paths to text)

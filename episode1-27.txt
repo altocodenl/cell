@@ -1,5 +1,7 @@
 Twenty-seventh episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! This one is a "talkie". I write the dedotter and the sorter. I outline the validator somewhat. Today, I play some Deadmau5 (at zero volume to avoid copyright infringement...).
 
+If you want to know what this is about, please go to https://github.com/altocodenl/cell, or to episode 1.
+
 List with dots:
 
 . first
