@@ -1,0 +1,113 @@
+Twenty-ninth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, solid progress again. We test the parser and write and test the texter as well. Today, I play some Makeout Videotape & Talk Talk (at zero volume to avoid copyright infringement...).
+
+Hello Earth! Another episode from a plane, so this one's not a "talkie".
+
+We are going to continue where we left off. We now have a proper ("proper") parser function. Let's test what we wrote at the end of last episode.
+
+I was loathing the thought of starting to write tests. Two minutes in, I'm having fun. How weird the brain is.
+
+Island Groovies is an unbelievably good song.
+
+Notice how disjoint the process still is? Looking at the source code above, coming up with test cases below. What I want to see are the test cases flowering/expanding right there in the executed definition/expansion. How much more natural would this be? I can't wait!
+
+Oh boy, = comes before @. Do I change sorter or do I find a different symbol? I'd have to do quite some refactoring in TODIS. But the real reason is that @ and = really look good. I should also see where ":" lands.
+
+Not sure about this restriction on put. What am I trying to prevent?
+
+@ put foo yes
+      something else
+
+Yes, those would be two calls in one. Let's prevent that. But the check should be done at the third element.
+
+Wait, it'd be great to do n puts in one. But how would the expansions look? Well, it'd be just OK anyway. Nah, I'd see what it was before and what it is now. Or just what it was before, perhaps even in terms of path (not just value). But no, I'm going to make it strict, for now, and if I need to redefine it, I will. Onwards.
+
+I wonder if call should respond with text, rather than with a JS object/hash of the shape {error: ...}.
+
+How would we use it?
+
+We have two parts of the screen (well, we *will* have): the main and the dialogue. The main is where you see the state of the information system. The right is where you interact with the LLM and with cell.
+
+As I see it, something that looks like a cell call, whether it comes from the user, or from the LLM, if it looks like a cell command, it should be sent to cell. Otherwise, it is just dialogue between the user and the LLM. Then, we'll be parsing (or using call) on single messages all the time, if we don't get an error, we will send it to cell.
+
+This might generate situations where the message is sent to the llm when we want it to go to cell and get back the error that tells us what to do. Then, it's up to the llm to tell us where the error is, or even also correct it.
+
+Also, there should be an "off" mode, if there's no LLM. There, it makes sense to see the rrors or the responses; well, actually, the errors are responses, that's one of the main ways in which you don't leave the dataspace and stay closed and fluent.
+
+Yeah, some way or other, we need to print errors. And we need to print paths.
+
+What we can do is already to return errors as paths from the outermost level, on the "call" function.
+
+We need vi-like macros in cell. Although perhaps it'd be easier to execute things at the path level and modify it as such, like lisp macros. We'll see. Exciting prospects.
+
+Coming back to where I was, we need something that can take paths and make it back into fourdata text, abridged. Yep, we called that "texter", last episode.;
+
+Thinking about get, we can start writing the "lexical" get by also passing a path that says where you are.
+
+get:
+- go through all the paths in the dataspace, and filter out those whose first n elements are equal to the n elements of the single path received as the message.
+- call the texter on the output and return that
+
+get with semilexical scope:
+- outer loop: iterate the "context" path, starting with the whole thing, then removing elements one by one from the end.
+- inner loop: go through all the paths in the dataspace that match the context path, and chop off the context. then, find what you're looking for.
+- call the texter on the output and return that
+
+put:
+- overwrite at the fork point
+- return OK
+
+put with semilexical scope:
+- find where you should write it (with the semilexical scope outer loop). when you find it, write it.
+- if you cannot find it, write it outside?
+
+Hmmm, that feels almost too powerful (read: error prone).
+
+dialogue: get a single text. if it starts with @, send it to call. Otherwise, send it to the LLM. If there's no LLM, just send it and nothing else. Or, better said: always append it. If it starts with @, send it to call. If it doesn't, and there is an LLM, send it to the LLM.
+
+Implement texter (paths to text).
+
+Not sure if it is procrastination or not, but I want to see how these things will fit in the overall scheme.
+
+every message sent to the dialogue is sent to call. if an error is responded, it is sent to the LLM? That still seems silly. Maybe we can draw the line at the "@". If the message starts with "@", then it is a call, and the relevant error (or response) is responded. But wait, because I am not planning on the responses being there ont he dialog? I didn't think about it before. I just thought or imagined that the effects of the calls would be seen there at the main. And I want to go with that, because it pulls us out of a limiting aspect of the command line, which is the inline-ness of the command line itself. To bring an analogy concerning feel, if there's three elements, rather than two, it feels like pushing on the earth, having action/counteraction and that allowing you to pull a cart. That interaction among three starts to feel like a dynamo.
+
+alright, let's write the texter. I wrote this function before, or something similar (because it worked on text, not on paths) but I'm going to do it again, without looking at it.
+
+the texter has to operate at two levels:
+- outer, path level
+- inner, element level
+
+at the inner level, we just need to put quotes around things whenever necessary. That means two cases:
+- Texts that look like numbers must have double quotes around them.
+- Texts that need quotes (because there is a whitespace (\s, since it could be a newline) or a double quote in it) must be quoted, and the quotes escaped.
+
+per path, a line comes out (or multiple lines, if there are multilines in the text).
+
+Sorry, I was just daydreaming that I could write musical instruments in cell, recording the keystrokes and the time and emitting synthetized audios. It feels like a long way from the text back and forth and something that could be so powerful and dynamic, but if we trust the vision, the gap will be much much shorter than what we've experienced so far in computing.
+
+The combination of a slash and a quote cannot be written literally. I will probably have to do something about this, but later. I need an escape path for escapes, but only in that context.
+
+The common prefix or last path has to do with the spaces for abridging paths.
+
+Thinking of style in cell: perhaps, t can always serve as a placeholder for text, as well as n for number, h for hash and l for list. And, for either number or text, we could use v? Not sure about that last one. Perhaps it's better to use s for single and m for multiple.
+
+Note that we use the quoted version of the elements of the path to count the number of spaces, so that the lines will match.
+
+Looking just now at the old code for "get" and "put". We've come a long way. The crucial insight of the bootstrapping was that we will use an internal representation of paths, rather than just work with text. Using paths allows us to have multiline text, text with quotes, and still be able to use it anywhere.
+
+More than ever, I believe in sequence. The sequence of definition of calls can read like a story. It should read like a story. It builds up. Sometimes, the threads are not immediately connected, at least not in the reader's view. But, at some point, it all comes together. If cell is at all successful, it will be so because it will bring programming much, much closer to good writing.
+
+Thinking of the test for the texter. Because the texter works on paths , and those paths come from the dataspace and are already validated, there's no error handling in the texter. There should be none.
+
+I'm taking the tests that don't yield error from the pather and inverting the input and the expected.
+
+Heh.
+
+Double heh.
+
+My, are test cases valuable.
+
+OK, next episode we will change the receive function to take text and do the "@" conditional. And also, write get and put, making use of the path representation. Interesting to see the duality between text and path representation of fourdata, the path one being a list of lists, with those second level lists containing only text and numbers (plus some other constraints added by the validator).
+
+Also, we will hold the path representation in memory, and only load from localStorage on startup.
+
+See you next time!

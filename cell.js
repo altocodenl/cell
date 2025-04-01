@@ -12,33 +12,6 @@ var css = [
 
 // *** MAIN FUNCTIONS ***
 
-var escapeForRegex = function (text) {
-   var toEscape = ['-', '[', ']', '{', '}', '(', ')', '|', '+', '*', '?', '.', '/', '\\', '^', '$'];
-   return text.replace (new RegExp ('[' + toEscape.join ('\\') + ']', 'g'), '\\$&');
-}
-
-var receive = function (message) {
-   var parsedMessage = parse (message);
-
-   var response;
-
-   if (parsedMessage.error) response = 'error "' + parsedMessage.error + '"';
-
-   // {get: [...]}
-   if (parsedMessage.get) response = get (parsedMessage.get);
-   // {put: [...]}
-   if (parsedMessage.put) response = put (parsedMessage.put);
-
-   //put (['lastcall', ...message]);
-   //put (['lastres', ...response]);
-   return response;
-}
-
-var toNumberIfNumber = function (v) {
-   if (v.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (v);
-   return v;
-}
-
 // The pather takes text, presumably formatted as fourdata, and returns a list of paths.
 // For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
 var pather = function (message) {
@@ -249,36 +222,99 @@ var parser = function (message) {
 var call = function (message) {
 
    var paths = parser (message);
-   if (paths.error) return paths;
+   if (paths.error) return ['error', paths.error];
 
    if (! paths.length) return '';
 
-   if (paths [0] [0] !== '@') return {error: 'The call must start with `@`'};
+   if (paths [0] [0] !== '@') return ['error', 'The call must start with "@" but instead starts with "' + paths [0] [0] + '"'];
    var extraKey = dale.stopNot (paths, undefined, function (path) {
       if (path [0] !== '@') return path [0];
    });
-   if (extraKey !== undefined) return {error: 'The call must not have extra keys, but it has a key "' + extraKey + '"'};
+   if (extraKey !== undefined) return ['error', 'The call must not have extra keys besides "@", but it has a key "' + extraKey + '"'];
 
    if (paths [0] [1] === 'put') {
-      var extraKey = dale.stopNot (paths, undefined, function (path) {
-         if (path [1] !== 'put') return path [1];
-      });
-      if (extraKey !== undefined) return {error: 'A `put` call must not have extra keys, but it has a key "' + extraKey + '"'};
       return put (dale.go (paths, function (path) {
          return path.slice (2);
       }));
    }
 
-   if (paths.length > 1) return {error: 'A `get` call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"'};
+   if (paths.length > 1) return ['error', 'A get call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"'];
 
    return get (dale.go (paths, function (path) {
       return path.slice (1);
    }));
 }
 
-var spaces = function (n) {
-   return Array (n).fill (' ').join ('');
+var texter = function (paths) {
+
+   var quoter = function (text) {
+      if (text.match (/^-?(\d+\.)?\d+/) !== null) return '"' + text + '"';
+      if (text.match ('"') || text.match (/\s/)) return '"' + text.replace (/"/g, /\"/) + '"';
+      if (text.length === 0) return '""';
+      return text;
+   }
+
+   var spaces = function (n) {
+      return Array (n).fill (' ').join ('');
+   }
+
+   var output = [];
+
+   var pathToText = function (path) {
+      return dale.go (path, function (v) {
+         return teishi.type (v) === 'string' ? quoter (v) : (v + '');
+      }).join (' ');
+   }
+
+   dale.go (paths, function (path, k) {
+      var commonPrefix = [];
+      if (k > 0) dale.stop (paths [k - 1], false, function (v, k) {
+         if (v === path [k]) commonPrefix.push (v);
+         return false;
+      });
+      path = path.slice (commonPrefix.length);
+      var indent = spaces (pathToText (commonPrefix).length);
+      output.push (indent + (indent.length > 0 ? ' ' : '') + pathToText (path));
+   });
+
+   return output.join ('\n');
 }
+
+
+
+
+
+
+
+
+
+
+
+
+var receive = function (message) {
+   var parsedMessage = parse (message);
+
+   var response;
+
+   if (parsedMessage.error) response = 'error "' + parsedMessage.error + '"';
+
+   // {get: [...]}
+   if (parsedMessage.get) response = get (parsedMessage.get);
+   // {put: [...]}
+   if (parsedMessage.put) response = put (parsedMessage.put);
+
+   //put (['lastcall', ...message]);
+   //put (['lastres', ...response]);
+   return response;
+}
+
+var toNumberIfNumber = function (text) {
+   if (text.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (text);
+   return text;
+}
+
+
+
 
 var prepend = function (prefix, lines) {
 
@@ -487,6 +523,32 @@ var test = function () {
       {f: validator, input: [], expected: true},
       {f: validator, input: [['foo'], [1]], expected: {error: 'The path "1" is setting a number but there is already a text at path ""'}},
       {f: validator, input: [['foo', 'bar'], ['foo', 'jip']], expected: {error: 'The path "foo jip" is repeated.'}},
+      {f: parser, input: 1, expected: {error: 'The message must be text but instead is integer'}},
+      {f: parser, input: 'foo bar', expected: [['foo', 'bar']]},
+      {f: parser, input: 'foo 1', expected: [['foo', 1]]},
+      {f: parser, input: '. foo\n. bar', expected: [[1, 'foo'], [2, 'bar']]},
+      {f: parser, input: '1 foo\n1 jip', expected: {error: 'The path "1 jip" is repeated.'}},
+      {f: call, input: 1, expected: ['error', 'The message must be text but instead is integer']},
+      {f: call, input: '', expected: ''},
+      {f: call, input: 'foo bar', expected: ['error', 'The call must start with "@" but instead starts with "foo"']},
+      {f: call, input: '@ foo bar\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
+      {f: call, input: '@ put something\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
+      {f: call, input: '@ something is\n  another thing', expected: ['error', 'A get call cannot have multiple paths, but it has a path "@ something is"']},
+      // For texter, we use all the non-error test cases of pather, but switching input with expected.
+      {f: texter, expected: '', input: []},
+      {f: texter, expected: ['"multiline', 'trickery" some 2 "calm', 'animal"'], input: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
+      {f: texter, expected: ['a b', 'c'], input: [['a', 'b'], ['c']]},
+      {f: texter, expected: ['foo bar 1', '    jip 2'], input: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
+      {f: texter, expected: ['foo bar 0.1', '    jip 2.75'], input: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
+      {f: texter, expected: ['foo 1 hey', '    2 yo'], input: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
+      {f: texter, expected: '"foo bar" 1', input: [['foo bar', 1]]},
+      {f: texter, expected: ['foo "bar', 'i am on a new line but I am still the same text" 1'], input: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
+      {f: texter, expected: 'foo "1" bar', input: [['foo', '1', 'bar']]},
+      {f: texter, expected: ['"i am text', '', '', 'yep"'], input: [['i am text\n\n\nyep']]},
+      {f: texter, expected: 'foo bar', input: [['foo', 'bar']]},
+      {f: texter, expected: 'foo "bar yep"', input: [['foo', 'bar yep']]},
+      {f: texter, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
+      {f: texter, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       /*
       {call: '', expected: 'error "Message is empty"'},
       {call: ' ', expected: 'error "Message is empty"'},
@@ -566,6 +628,7 @@ var test = function () {
    ], false, function (test) {
 
       if (test.f === pather && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
+      if (test.f === texter && teishi.type (test.expected) === 'array') test.expected= test.expected.join ('\n');
 
       var result = test.f (test.input);
 
