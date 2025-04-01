@@ -1,0 +1,23 @@
+Thirtieth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, good progress. We rework how we store the dataspace and rewrite the reset function, as well as write load and save. We also start testing get through receive and make great progress. We write a simple version of get that works very well almost immediately. Today, I play Rumours from Fleetwood Mac (at zero volume to avoid copyright infringement...).
+
+What to do now:
+
+- Rewrite get and put using the functions we defined already.
+- Integrate with the UI.
+
+Unparsed dataspace: fourdata text
+Parsed dataspace: fourdata paths
+
+- onload: get localstorage and put it in D
+- onsave: put it in D and update localstorage
+
+load: takes you from unparsed dataspace (text) to parsed dataspace (paths)
+save: takes you from parsed dataspace (paths) to unparsed datspace (text)
+
+get should return paths, not text
+
+get:
+- go through all the paths in the dataspace, and filter out those whose first n elements are equal to the n elements of the single path received as the message.
+- call the texter on the output and return that
+
+When you get a full path that exists, you get no matching paths.

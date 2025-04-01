@@ -4,17 +4,31 @@ var B = window.B;
 
 var clog = console.log;
 
-// *** STYLE ***
+// *** DATASPACE ***
 
-var css = [
-   ['body', {'padding-left': 30}]
-];
+B.call ('set', 'dataspace', []);
+
+var load = function () {
+   var text = localStorage.getItem ('cell');
+   if (text === null) text = '';
+   B.call ('set', 'dataspace', parser (text));
+}
+
+var save = function () {
+   localStorage.setItem ('cell', texter (B.get ('dataspace')));
+}
 
 // *** MAIN FUNCTIONS ***
 
 // The pather takes text, presumably formatted as fourdata, and returns a list of paths.
 // For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
+
 var pather = function (message) {
+
+   var toNumberIfNumber = function (text) {
+      if (text.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (text);
+      return text;
+   }
 
    var paths = [];
    var insideMultilineText = false;
@@ -219,32 +233,6 @@ var parser = function (message) {
    return paths;
 }
 
-var call = function (message) {
-
-   var paths = parser (message);
-   if (paths.error) return ['error', paths.error];
-
-   if (! paths.length) return '';
-
-   if (paths [0] [0] !== '@') return ['error', 'The call must start with "@" but instead starts with "' + paths [0] [0] + '"'];
-   var extraKey = dale.stopNot (paths, undefined, function (path) {
-      if (path [0] !== '@') return path [0];
-   });
-   if (extraKey !== undefined) return ['error', 'The call must not have extra keys besides "@", but it has a key "' + extraKey + '"'];
-
-   if (paths [0] [1] === 'put') {
-      return put (dale.go (paths, function (path) {
-         return path.slice (2);
-      }));
-   }
-
-   if (paths.length > 1) return ['error', 'A get call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"'];
-
-   return get (dale.go (paths, function (path) {
-      return path.slice (1);
-   }));
-}
-
 var texter = function (paths) {
 
    var quoter = function (text) {
@@ -280,38 +268,39 @@ var texter = function (paths) {
    return output.join ('\n');
 }
 
-
-
-
-
-
-
-
-
-
-
-
 var receive = function (message) {
-   var parsedMessage = parse (message);
 
-   var response;
+   var paths = parser (message);
+   if (paths.error) return ['error', paths.error];
 
-   if (parsedMessage.error) response = 'error "' + parsedMessage.error + '"';
+   if (! paths.length) return '';
 
-   // {get: [...]}
-   if (parsedMessage.get) response = get (parsedMessage.get);
-   // {put: [...]}
-   if (parsedMessage.put) response = put (parsedMessage.put);
+   if (paths [0] [0] !== '@') return ['error', 'The call must start with "@" but instead starts with "' + paths [0] [0] + '"'];
+   var extraKey = dale.stopNot (paths, undefined, function (path) {
+      if (path [0] !== '@') return path [0];
+   });
+   if (extraKey !== undefined) return ['error', 'The call must not have extra keys besides "@", but it has a key "' + extraKey + '"'];
 
-   //put (['lastcall', ...message]);
-   //put (['lastres', ...response]);
-   return response;
+   if (paths [0] [1] === 'put') {
+      return put (dale.go (paths, function (path) {
+         return path.slice (2);
+      }));
+   }
+
+   if (paths.length > 1) return ['error', 'A get call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"'];
+
+   return get (paths [0].slice (1));
 }
 
-var toNumberIfNumber = function (text) {
-   if (text.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (text);
-   return text;
+var get = function (queryPath) {
+   var paths = B.get ('dataspace');
+
+   return dale.fil (paths, undefined, function (path) {
+      if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
+   });
 }
+
+
 
 
 
@@ -326,45 +315,6 @@ var prepend = function (prefix, lines) {
    });
 
    return lines.join ('\n');
-}
-
-var get = function (message) {
-   var dataspace = localStorage.getItem ('cell');
-   if (dataspace === null) dataspace = '';
-
-   if (message.length === 0) return dataspace;
-
-   var matchedElements = 0;
-   var matchFound = false;
-
-   var output = [];
-
-   dale.stop (dataspace.split ('\n'), false, function (line) {
-
-      if (! matchFound) {
-
-         var matchedElementsBeforeLine = matchedElements;
-
-         dale.stop (line.trim ().split (/\s/), false, function (v, k) {
-            if (v !== message [k + matchedElementsBeforeLine]) return false;
-            matchedElements++;
-         });
-         if (matchedElements === message.length) {
-            matchFound = true;
-            output.push (line.slice (message.join (' ').length + 1));
-         }
-         return;
-      }
-
-      if (matchFound) {
-         var indent = spaces (message.join (' ').length + 1);
-         if (line.match (new RegExp ('^' + indent))) output.push (line.replace (indent, ''));
-         else return false;
-      }
-
-   });
-
-   return output.join ('\n');
 }
 
 // For now: 1) single line calls; 2) no quotes!
@@ -409,74 +359,10 @@ var put = function (message) {
    dataspace += '\n' + message.join (' ');
 }
 
-// *** RESPONDERS ***
-
-B.mrespond ([
-   ['reset', [], function (x, dataspace) {
-      if (! dataspace) dataspace = [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey',
-         'something else'
-      ].join ('\n');
-      else dataspace = dataspace.join ('\n');
-
-      localStorage.setItem ('cell', dataspace);
-      B.call ('set', 'dataspace', dataspace);
-   }],
-   ['initialize', [], function (x) {
-      var dataspace = localStorage.getItem ('cell');
-      if (dataspace === null) B.call (x, 'reset', []);
-   }],
-   ['send', 'call', function (x, call) {
-      receive (call);
-   }],
-]);
-
-var views = {};
-
-views.main = function () {
-   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
-      call = call || '';
-      return ['div', [
-         ['style', css],
-         views.cell (''),
-         ['textarea', {
-            onchange: B.ev ('set', 'call'),
-            oninput: B.ev ('set', 'call'),
-            value: call,
-         }],
-         ['button', {onclick: B.ev (['send', 'call', call])}, 'Submit'],
-      ]];
-   });
-}
-
-views.cell = function (path) {
-   return B.view ('dataspace', function (dataspace) {
-      var response = get (path);
-      return ['div', [
-         ['h3', JSON.stringify (path)],
-         ['pre', response]
-      ]];
-   });
-}
-
-B.call ('initialize', []);
-
-B.mount ('body', views.main);
-
 // *** TESTS ***
 
 var test = function () {
-   var original = localStorage.getItem ('cell');
-
-   B.call ('reset', [], [
-      'foo bar 1 jip',
-      '        2 joo',
-      '    soda wey',
-      'something else'
-   ]);
-
+   var originalDataspace = teishi.copy (B.get ('dataspace'));
 
    var errorFound = false === dale.stop ([
       {f: pather, input: '', expected: []},
@@ -528,12 +414,6 @@ var test = function () {
       {f: parser, input: 'foo 1', expected: [['foo', 1]]},
       {f: parser, input: '. foo\n. bar', expected: [[1, 'foo'], [2, 'bar']]},
       {f: parser, input: '1 foo\n1 jip', expected: {error: 'The path "1 jip" is repeated.'}},
-      {f: call, input: 1, expected: ['error', 'The message must be text but instead is integer']},
-      {f: call, input: '', expected: ''},
-      {f: call, input: 'foo bar', expected: ['error', 'The call must start with "@" but instead starts with "foo"']},
-      {f: call, input: '@ foo bar\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
-      {f: call, input: '@ put something\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
-      {f: call, input: '@ something is\n  another thing', expected: ['error', 'A get call cannot have multiple paths, but it has a path "@ something is"']},
       // For texter, we use all the non-error test cases of pather, but switching input with expected.
       {f: texter, expected: '', input: []},
       {f: texter, expected: ['"multiline', 'trickery" some 2 "calm', 'animal"'], input: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
@@ -549,40 +429,57 @@ var test = function () {
       {f: texter, expected: 'foo "bar yep"', input: [['foo', 'bar yep']]},
       {f: texter, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: texter, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
-      /*
-      {call: '', expected: 'error "Message is empty"'},
-      {call: ' ', expected: 'error "Message is empty"'},
-      {call: '?', expected: 'error "Call must start with `@`"'},
-      {call: '@foo', expected: 'error "Call must start with `@` and have a space after it"'},
-      {call: '@', expected: [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey',
-         'something else'
-      ]},
-      {call: '@ foo', expected: [
-         'bar 1 jip',
-         '    2 joo',
-         'soda wey',
-      ]},
-      {call: '@ foo bar', expected: [
-         '1 jip',
-         '2 joo',
-      ]},
-      {call: '@ foo bar 1', expected: 'jip'},
-      {call: '@ foo bar 1 jip', expected: ''},
-      {call: '@ no such thing', expected: ''},
-      {call: '@ foo soda', expected: 'wey'},
-      {call: '@ something', expected: 'else'},
-      {call: '@ something else', expected: ''},
+      {f: receive, input: 1, expected: ['error', 'The message must be text but instead is integer']},
+      {f: receive, input: '', expected: ''},
+      {f: receive, input: 'foo bar', expected: ['error', 'The call must start with "@" but instead starts with "foo"']},
+      {f: receive, input: '@ foo bar\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
+      {f: receive, input: '@ put something\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
+      {f: receive, input: '@ something is\n  another thing', expected: ['error', 'A get call cannot have multiple paths, but it has a path "@ something is"']},
       {reset: [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey'
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+         ['something', 'else']
+      ]},
+      {f: receive, input: '@', expected: [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+         ['something', 'else']
+      ]},
+      {f: receive, input: '@ foo', expected: [
+         ['bar', 1, 'jip'],
+         ['bar', 2, 'joo'],
+         ['soda', 'wey'],
+      ]},
+      {f: receive, input: '@ foo bar', expected: [
+         [1, 'jip'],
+         [2, 'joo'],
+      ]},
+      {f: receive, input: '@ foo bar 1', expected: [
+         ['jip'],
+      ]},
+      {f: receive, input: '@ foo bar 1 jip', expected: [
+      ]},
+      {f: receive, input: '@ no such thing', expected: [
+      ]},
+      {f: receive, input: '@ foo soda', expected: [
+         ['wey']
+      ]},
+      {f: receive, input: '@ something', expected: [
+         ['else']
+      ]},
+      {f: receive, input: '@ something else', expected: [
+      ]},
+      {reset: [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
       ]},
 
       // *** PUT ***
 
+      /*
       {call: '@ put foo bar hey', expected: 'OK'},
       {call: '@ foo bar', expected: 'hey'},
       {call: '@ foo', expected: ['bar hey', 'soda wey']},
@@ -590,24 +487,24 @@ var test = function () {
       {call: '@ put foo bar hey hey', expected: 'OK'},
       {call: '@ foo bar', expected: 'hey hey'},
       {reset: [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey'
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
       ]},
       {call: '@ put foo', expected: 'OK'},
       {call: '@ foo', expected: ''},
       {call: '@', expected: ''},
       {reset: [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey'
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
       ]},
       {call: '@ put', expected: 'OK'},
       {call: '@', expected: ''},
       {reset: [
-         'foo bar 1 jip',
-         '        2 joo',
-         '    soda wey'
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
       ]},
       {call: '@ put foo jup yea', expected: 'OK'},
       /*
@@ -627,6 +524,8 @@ var test = function () {
       */
    ], false, function (test) {
 
+      if (test.reset) return B.call ('set', 'dataspace', test.reset);
+
       if (test.f === pather && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
       if (test.f === texter && teishi.type (test.expected) === 'array') test.expected= test.expected.join ('\n');
 
@@ -637,7 +536,6 @@ var test = function () {
       return false;
 
       /*
-      if (test.reset) return B.call ('reset', [], test.reset);
 
       var result = test.call ? receive (test.call) : pather (teishi.type (test.pather) === 'array' ? test.pather.join ('\n') : test.pather);
       if (test.call && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
@@ -650,7 +548,65 @@ var test = function () {
    if (errorFound) clog ('A test did not pass');
    else clog ('All tests successful');
 
-   B.call ('reset', [], [original]);
+   B.call ('set', 'dataspace', originalDataspace);
 }
 
 test ();
+
+// *** RESPONDERS ***
+
+B.mrespond ([
+   ['change', 'dataspace', function (x) {
+      save ();
+   }],
+   ['initialize', [], function (x) {
+      load ();
+      if (B.get ('dataspace').length === 0) B.call (x, 'set', 'dataspace', [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+         ['something', 'else']
+      ]);
+   }],
+   ['send', 'call', function (x, call) {
+      receive (call);
+   }],
+]);
+
+// *** VIEWS ***
+
+var views = {};
+
+views.css = [
+   ['body', {'padding-left': 30}]
+];
+
+views.main = function () {
+   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
+      call = call || '';
+      return ['div', [
+         ['style', views.css],
+         views.cell (''),
+         ['textarea', {
+            onchange: B.ev ('set', 'call'),
+            oninput: B.ev ('set', 'call'),
+            value: call,
+         }],
+         ['button', {onclick: B.ev (['send', 'call', call])}, 'Submit'],
+      ]];
+   });
+}
+
+views.cell = function (path) {
+   return B.view ('dataspace', function (dataspace) {
+      var response = get (path);
+      return ['div', [
+         ['h3', JSON.stringify (path)],
+         ['pre', texter (response)]
+      ]];
+   });
+}
+
+B.call ('initialize', []);
+
+B.mount ('body', views.main);
