@@ -289,16 +289,55 @@ var receive = function (message) {
 
    if (paths.length > 1) return ['error', 'A get call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"'];
 
-   return get (paths [0].slice (1));
+   return get (paths [0].slice (1), []);
 }
 
-var get = function (queryPath) {
-   var paths = B.get ('dataspace');
+var get = function (queryPath, contextPath) {
+   var dataspace = B.get ('dataspace');
 
-   return dale.fil (paths, undefined, function (path) {
-      if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
-   });
+   return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
+
+      var matches = dale.fil (dataspace, undefined, function (path) {
+         if (contextPath.length && ! teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return;
+         path = path.slice (k);
+
+         if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
+      });
+
+      if (matches.length > 0) return matches;
+
+   }) || [];
 }
+
+var put = function (paths) {
+   var dataspace = B.get ('dataspace');
+
+   if (paths.length === 1) {
+
+      if (paths [0].length === 0) {
+         B.call ('set', 'dataspace', []);
+         return ['OK'];
+      }
+
+      var forkPoint = paths [0].slice (0, -1);
+      dataspace = dale.fil (dataspace, undefined, function (path) {
+         if (teishi.eq (paths [0].slice (0, -1), path.slice (0, paths [0].length - 1))) return;
+         return path;
+      }).concat (paths);
+
+      sorter (dataspace);
+
+      var validationError = validator (dataspace);
+      if (validationError !== true) return validationError;
+
+      B.call ('set', 'dataspace', dataspace);
+      return ['OK'];
+   }
+
+}
+
+
+
 
 
 
@@ -318,6 +357,7 @@ var prepend = function (prefix, lines) {
 }
 
 // For now: 1) single line calls; 2) no quotes!
+/*
 var put = function (message) {
    var done = function (dataspace) {
       localStorage.setItem ('cell', dataspace);
@@ -358,10 +398,13 @@ var put = function (message) {
    // Append, also mind alphabetical sort
    dataspace += '\n' + message.join (' ');
 }
+*/
 
 // *** TESTS ***
 
 var test = function () {
+   var start = teishi.time ();
+
    var originalDataspace = teishi.copy (B.get ('dataspace'));
 
    var errorFound = false === dale.stop ([
@@ -472,49 +515,70 @@ var test = function () {
       {f: receive, input: '@ something else', expected: [
       ]},
       {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
+         ['foo', 10],
+         ['inner', 'foo', 20],
+         ['inner', 'jip', 'foo', 30],
+      ]},
+      {f: get, query: ['foo'], context: [], expected: [
+         [10]
+      ]},
+      {f: get, query: ['foo'], context: ['foo'], expected: [
+         [10]
+      ]},
+      {f: get, query: ['bar'], context: ['foo'], expected: [
+      ]},
+      {f: get, query: ['foo'], context: ['inner'], expected: [
+         [20],
+      ]},
+      {f: get, query: ['foo'], context: ['inner', 'jip'], expected: [
+         [30],
+      ]},
+      {f: get, query: ['foo'], context: ['inner', 'jip', 'foo'], expected: [
+         [30],
       ]},
 
       // *** PUT ***
 
-      /*
-      {call: '@ put foo bar hey', expected: 'OK'},
-      {call: '@ foo bar', expected: 'hey'},
-      {call: '@ foo', expected: ['bar hey', 'soda wey']},
-      /*
-      {call: '@ put foo bar hey hey', expected: 'OK'},
-      {call: '@ foo bar', expected: 'hey hey'},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {call: '@ put foo', expected: 'OK'},
-      {call: '@ foo', expected: ''},
-      {call: '@', expected: ''},
+      {f: receive, input: '@ put foo bar hey', expected: ['OK']},
+      {f: receive, input: '@ foo bar', expected: [['hey']]},
+      {f: receive, input: '@ put foo 2 something', expected: {error: 'The path "foo bar hey" is setting a hash but there is already a list at path "foo"'}},
+      {f: receive, input: '@ foo', expected: [['bar', 'hey'], ['soda', 'wey']]},
+      {f: receive, input: '@ put foo bar hey hey', expected: ['OK']},
+      {f: receive, input: '@ foo bar', expected: [['hey', 'hey']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {call: '@ put', expected: 'OK'},
-      {call: '@', expected: ''},
+      {f: receive, input: '@ put foo', expected: ['OK']},
+      {f: receive, input: '@ foo', expected: []},
+      {f: receive, input: '@', expected: [['foo']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {call: '@ put foo jup yea', expected: 'OK'},
-      /*
-      {call: '@ foo', expected: [
-         'bar 1 jip',
-         'bar 2 joo',
-         'jup yea',
-         'soda wey'
+      {f: receive, input: '@ put', expected: ['OK']},
+      {f: receive, input: '@', expected: []},
+      {reset: [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+      ]},
+      {f: receive, input: '@ put foo jup yea', expected: ['OK']},
+      {f: receive, input: '@ foo', expected: [
+         ['bar', 1, 'jip'],
+         ['bar', 2, 'joo'],
+         ['jup', 'yea'],
+         ['soda', 'wey']
       ]},
       // TODO: multiline
+      /*
       {call: '@ put foo bar yes sir', expected: 'OK'},
       {call: [
          '@ put foo bar yes sir',
@@ -529,7 +593,8 @@ var test = function () {
       if (test.f === pather && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
       if (test.f === texter && teishi.type (test.expected) === 'array') test.expected= test.expected.join ('\n');
 
-      var result = test.f (test.input);
+      if (test.f === get) var result = get (test.query, test.context);
+      else                var result = test.f (test.input);
 
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {expected: test.expected, obtained: result});
@@ -546,7 +611,7 @@ var test = function () {
       */
    });
    if (errorFound) clog ('A test did not pass');
-   else clog ('All tests successful');
+   else clog ('All tests successful', (teishi.time () - start) + 'ms');
 
    B.call ('set', 'dataspace', originalDataspace);
 }
@@ -586,7 +651,7 @@ views.main = function () {
       call = call || '';
       return ['div', [
          ['style', views.css],
-         views.cell (''),
+         views.cell ([]),
          ['textarea', {
             onchange: B.ev ('set', 'call'),
             oninput: B.ev ('set', 'call'),
@@ -599,9 +664,9 @@ views.main = function () {
 
 views.cell = function (path) {
    return B.view ('dataspace', function (dataspace) {
-      var response = get (path);
+      var response = get (path, []);
       return ['div', [
-         ['h3', JSON.stringify (path)],
+         ['h3', 'Location: ' + (texter (path) || 'all')],
          ['pre', texter (response)]
       ]];
    });

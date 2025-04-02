@@ -1,0 +1,16 @@
+Thirty-first episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Today, I can't hide my happiness. It's coming together. We have now a contextual (not lexical) get, and we test it sufficiently. We move onto put and also make it work for some cases already, figuring out what we have left. Today, I play Dare from the Human League, as well as some The Kills (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+get: query path + context path
+
+It's not lexical reference. It is contextual reference. The part of the dataspace from which you are making the call is your context!
+
+dataspace paths
+destination + message paths
+
+existing paths + call paths
+
+Remaining work for put:
+- Make sure there's a single fork point? No, treat things separately. If you can update multiple parts of the dataspace at once, that'd give you some sort of transaction. Then, iterate through fork points.
+- Test multiline stuff just for fun.
