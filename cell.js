@@ -282,6 +282,11 @@ var receive = function (message) {
    if (extraKey !== undefined) return ['error', 'The call must not have extra keys besides "@", but it has a key "' + extraKey + '"'];
 
    if (paths [0] [1] === 'put') {
+      var extraKey = dale.stopNot (paths, undefined, function (path) {
+         if (path [1] !== 'put') return path [1];
+      });
+      if (extraKey !== undefined) return ['error', 'The call must not have a path besides "@ put", but it has a path "@ ' + extraKey + '"'];
+
       return put (dale.go (paths, function (path) {
          return path.slice (2);
       }));
@@ -312,28 +317,40 @@ var get = function (queryPath, contextPath) {
 var put = function (paths) {
    var dataspace = B.get ('dataspace');
 
-   if (paths.length === 1) {
+   if (teishi.type (paths [0] [0]) !== 'integer') return ['error', 'A put call can only receive a list.'];
+   if ((teishi.last (paths) [0] % 2) !== 0) return ['error', 'A put call can only receive a list with an even number of elements.'];
 
-      if (paths [0].length === 0) {
-         B.call ('set', 'dataspace', []);
-         return ['OK'];
+   var error = dale.stopNot (paths, undefined, function (path, k) {
+      if ((path [0] % 2) === 1 && paths [k + 1] && paths [k + 1] [0] === path [0]) return 'A target value can only be a single path, but there is a multiple target value "' + texter ([paths [k + 1]]) + '"';
+   });
+   if (error) return ['error', error];
+
+   var pairs = [];
+   dale.go (paths, function (path) {
+      if ((path [0] % 2) === 1) pairs.push ([path.slice (1), []]);
+      else {
+         teishi.last (pairs) [1].push (teishi.last (pairs) [0].concat (path.slice (1)));
       }
+   });
 
-      var forkPoint = paths [0].slice (0, -1);
+   dale.go (pairs, function (v) {
+      var leftSide = v [0];
+      var rightSide = v [1];
+
       dataspace = dale.fil (dataspace, undefined, function (path) {
-         if (teishi.eq (paths [0].slice (0, -1), path.slice (0, paths [0].length - 1))) return;
+         if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
          return path;
-      }).concat (paths);
+      }).concat (rightSide);
 
       sorter (dataspace);
 
       var validationError = validator (dataspace);
       if (validationError !== true) return validationError;
 
-      B.call ('set', 'dataspace', dataspace);
-      return ['OK'];
-   }
+   });
 
+   B.call ('set', 'dataspace', dataspace);
+   return ['OK'];
 }
 
 
@@ -476,8 +493,13 @@ var test = function () {
       {f: receive, input: '', expected: ''},
       {f: receive, input: 'foo bar', expected: ['error', 'The call must start with "@" but instead starts with "foo"']},
       {f: receive, input: '@ foo bar\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
-      {f: receive, input: '@ put something\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
       {f: receive, input: '@ something is\n  another thing', expected: ['error', 'A get call cannot have multiple paths, but it has a path "@ something is"']},
+      {f: receive, input: '@ put something\nGroovies jip', expected: ['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']},
+      {f: receive, input: '@ put something\n@ Groovies jip', expected: ['error', 'The call must not have a path besides "@ put", but it has a path "@ Groovies"']},
+      {f: receive, input: '@ put something\n@ Groovies jip', expected: ['error', 'The call must not have a path besides "@ put", but it has a path "@ Groovies"']},
+      {f: receive, input: '@ put foo bar 1\n@ put foo jip 2', expected: ['error', 'A put call can only receive a list.']},
+      {f: receive, input: '@ put 1 foo bar', expected: ['error', 'A put call can only receive a list with an even number of elements.']},
+      {f: receive, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: ['error', 'A target value can only be a single path, but there is a multiple target value "1 something else"']},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -542,11 +564,17 @@ var test = function () {
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
       ]},
-      {f: receive, input: '@ put foo bar hey', expected: ['OK']},
+      {f: receive, input: ['@ put . foo bar', '      . hey'], expected: ['OK']},
       {f: receive, input: '@ foo bar', expected: [['hey']]},
-      {f: receive, input: '@ put foo 2 something', expected: {error: 'The path "foo bar hey" is setting a hash but there is already a list at path "foo"'}},
+      {reset: [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+      ]},
+      {f: receive, input: ['@ put . foo', '      . bar hey'], expected: ['OK']},
+      {f: receive, input: '@ foo bar', expected: [['hey']]},
+      {f: receive, input: '@ put . foo 2\n@ put . something', expected: {error: 'The path "foo bar hey" is setting a hash but there is already a list at path "foo"'}},
+      /*
       {f: receive, input: '@ foo', expected: [['bar', 'hey'], ['soda', 'wey']]},
       {f: receive, input: '@ put foo bar hey hey', expected: ['OK']},
       {f: receive, input: '@ foo bar', expected: [['hey', 'hey']]},
@@ -577,21 +605,30 @@ var test = function () {
          ['jup', 'yea'],
          ['soda', 'wey']
       ]},
-      // TODO: multiline
+      {f: receive, input: '@ put foo bar yes sir', expected: {error: 'The path "foo bar yes sir" is setting a hash but there is already a list at path "foo bar"'}},
+      {f: receive, input: '@ foo', expected: [
+         ['bar', 1, 'jip'],
+         ['bar', 2, 'joo'],
+         ['jup', 'yea'],
+         ['soda', 'wey']
+      ]},
       /*
-      {call: '@ put foo bar yes sir', expected: 'OK'},
-      {call: [
+      {f: receive, input: ['@ put foo bar yes sir', '          no sir'], expected: ['OK']},
+      {f: receive, input: [
          '@ put foo bar yes sir',
          '              no sir'
       ]},
+      /*
       {call: '@ foo bar', expected: ['1 jip', '2 joo', '3 yes']}
+      TODO: multiline
       */
    ], false, function (test) {
 
       if (test.reset) return B.call ('set', 'dataspace', test.reset);
 
       if (test.f === pather && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
-      if (test.f === texter && teishi.type (test.expected) === 'array') test.expected= test.expected.join ('\n');
+      if (test.f === receive && teishi.type (test.input) === 'array') test.input = test.input.join ('\n');
+      if (test.f === texter && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
 
       if (test.f === get) var result = get (test.query, test.context);
       else                var result = test.f (test.input);

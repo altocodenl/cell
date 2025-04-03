@@ -1,0 +1,7 @@
+Thirty-second episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! I thought we were alllmost done, but I decided to change how put is used. I think using lists to separate destinations/targets from values is a sound idea. It almost works now. Today, I play some live concerts from Soda Stereo (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+- finish put with the new list interface
+- implement the UI with the main part and the dialogue
+- send get and put calls, have them work, see them in the dialogue and also the "side effects" on the main
