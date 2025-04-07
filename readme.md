@@ -88,6 +88,8 @@ The LLM can be provided through an API token or offered as a service, but in the
 
 The key insight carried from the [shell](https://en.wikipedia.org/wiki/Shell_(computing)) is that the the calls sent to cell, whether they originate from the LLM or from the user, are indistinguishable.
 
+An interesting development of this design is that programming becomes an act of communication with cell and the LLM. This taps into the social nature of language.
+
 ## The data representation: `fourdata`
 
 The starting point of any digital information system is information, or data. We program computers because they're able to store extremely large amounts of data, transform it extremely quickly and with extremely low error rates, and transmit data exceedingly quickly. Programming can and should only be concerned with data.
@@ -582,6 +584,12 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Other stuff
+
+### Ideas
+
+- files
+- automatic email by project
+- local vs remote reference
 
 ### departures of cell from lisp
 

@@ -1,0 +1,9 @@
+Thirty-third episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! put is working! We are almost about to have something that is working. Now for some UI, and we'll move on to season 2. Today, I play some Deadmau5 (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+TODO: implement the UI!
+
+- Split the screen 70%-30% for desktop, top-down for mobile. Main + dialogue.
+- Add dialogue on the right/bottom, send calls, get results, put them inside the dataspace.
+- Show dataspace on the left.
