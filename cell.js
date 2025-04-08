@@ -580,7 +580,22 @@ B.mrespond ([
       ]);
    }],
    ['send', 'call', function (x, call) {
-      receive (call);
+      var response = receive (call);
+      var dialogue = receive ('@ dialogue');
+      var length = 0;
+      if (dialogue.length) length = teishi.last (dialogue) [0];
+      put ([
+         [1, 'dialogue', length + 1, 'from'],
+         [2, 'user'],
+         [3, 'dialogue', length + 1, 'message'],
+         [4, call],
+         [5, 'dialogue', length + 2, 'from'],
+         [6, 'cell'],
+         [7, 'dialogue', length + 2, 'message'],
+         [8, texter (response)],
+      ]);
+
+      B.call (x, 'rem', [], 'call');
    }],
 ]);
 
@@ -589,21 +604,39 @@ B.mrespond ([
 var views = {};
 
 views.css = [
-   ['body', {'padding-left': 30}]
+   ['body', {'padding-left, padding-top': 30, height: 100}]
 ];
 
 views.main = function () {
+
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
+      var dialogue = [];
+      dale.go (get (['dialogue'], []), function (v) {
+         if (v [1] === 'from') dialogue.push ({from: v [2]});
+         else teishi.last (dialogue).message = v [2];
+      });
       call = call || '';
       return ['div', [
          ['style', views.css],
-         views.cell ([]),
-         ['textarea', {
-            onchange: B.ev ('set', 'call'),
-            oninput: B.ev ('set', 'call'),
-            value: call,
-         }],
-         ['button', {onclick: B.ev (['send', 'call', call])}, 'Submit'],
+         ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
+            views.cell ([]),
+         ]],
+         ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
+            dale.go (dialogue || [], function (item) {
+               var classes = 'code w-70 pa2 ba br3 mb2';
+               if (item.from === 'user') classes += ' fr';
+               else                      classes += ' fl bg-dark-green near-white';
+               return ['textarea', {class: classes, readonly: true, value: item.message, rows: item.message.split ('\n').length}, item.message];
+            }),
+            ['textarea', {
+               class: 'code w-70 pa2 ba br3 mb2 fr',
+               onchange: B.ev ('set', 'call'),
+               oninput: B.ev ('set', 'call'),
+               autofocus: true,
+               value: call,
+            }],
+            ['button', {class: 'w-100', onclick: B.ev (['send', 'call', call])}, 'Submit'],
+         ]],
       ]];
    });
 }
