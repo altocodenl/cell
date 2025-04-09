@@ -1,4 +1,4 @@
-Thirty-fourepisode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! We do some UI today. It really is coming together, at least for my standards. A few more problems to solve, but we could have something that works on a phone, next session. Today, I play Nonagon Infinity from King Gizzard & the Lizard Wizard (at zero volume to avoid copyright infringement...).
+Thirty-fourth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! We do some UI today. It really is coming together, at least for my standards. A few more problems to solve, but we could have something that works on a phone, next session. Today, I play Nonagon Infinity from King Gizzard & the Lizard Wizard (at zero volume to avoid copyright infringement...).
 
 https://github.com/altocodenl/cell
 

@@ -11,7 +11,9 @@ B.call ('set', 'dataspace', []);
 var load = function () {
    var text = localStorage.getItem ('cell');
    if (text === null) text = '';
-   B.call ('set', 'dataspace', parser (text));
+   var paths = parser (text);
+   if (paths.error) alert (paths.error);
+   else B.call ('set', 'dataspace', paths);
 }
 
 var save = function () {
@@ -51,16 +53,16 @@ var pather = function (message) {
             // Converting v to text in case it is a number
             matchedSpaces += (v + '').length + 1;
             if (matchedSpaces === indentSize) return k;
-            if (matchedSpaces > indentSize) return {error: 'The indent of the line "' + line + '" does not match that of the previous line.'};
+            if (matchedSpaces > indentSize) return {error: 'The indent of the line `' + line + '` does not match that of the previous line.'};
             // If we haven't hit the indentSize, keep on going.
          });
-         if (matchUpTo === undefined) return 'The indent of the line "' + line + '" does not match that of the previous line.';
+         if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
          // We store the "deabridged" part of the line, taking it from the last element of `paths`
          path = lastPath.slice (0, matchUpTo + 1);
          line = line.slice (matchedSpaces);
 
-         if (line.length === 0) return 'The line "' + originalLine + '" has no data besides whitespace';
+         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
       }
 
       var dequoter = function (text) {
@@ -112,7 +114,7 @@ var pather = function (message) {
       }
 
       while (line.length) {
-         if (line [0] === ' ') return 'The line "' + originalLine + '" has at least two spaces separating two elements.';
+         if (line [0] === ' ') return 'The line `' + originalLine + '` has at least two spaces separating two elements.';
 
          if (line [0] === '"') {
             var dequoted = dequoter (line);
@@ -120,7 +122,7 @@ var pather = function (message) {
                path.push (dequoted.text);
                line = line.slice (dequoted.end + (dequoted.text === '' ? 1 : 2)); // Remove the quote. There's a special case for when the text is empty, because we are removing the second quote.
                // Check that the first element is a space, then remove it
-               if (line.length && line [0] !== ' ') return 'No space after a quote in line "' + originalLine + '"';
+               if (line.length && line [0] !== ' ') return 'No space after a quote in line `' + originalLine + '`';
                line = line.slice (1);
             }
             else {
@@ -132,8 +134,8 @@ var pather = function (message) {
          }
 
          var element = line.split (' ') [0];
-         if (element.match (/\s/)) return 'The line "' + line + '" contains a space that is not contained within quotes.';
-         if (element.match (/"/)) return 'The line "' + line + '" has an unescaped quote.';
+         if (element.match (/\s/)) return 'The line `' + line + '` contains a space that is not contained within quotes.';
+         if (element.match (/"/)) return 'The line `' + line + '` has an unescaped quote.';
 
          line = line.slice (element.length + 1); // Here we don't need to check that the last character sliced is a space, because we used spaces to split the line
          path.push (toNumberIfNumber (element));
@@ -144,7 +146,7 @@ var pather = function (message) {
    });
 
    if (error) return {error: error};
-   if (insideMultilineText) return {error: 'Multiline text not closed: "' + teishi.last (teishi.last (paths)) + '"'};
+   if (insideMultilineText) return {error: 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`'};
    return paths;
 }
 
@@ -206,15 +208,15 @@ var validator = function (paths) {
    var error = dale.stopNot (paths, undefined, function (path) {
 
       return dale.stopNot (path, undefined, function (v, k) {
-         if (teishi.type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path "' + path.join (' ') + '" uses it as a key.';
+         if (teishi.type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + texter ([path]) + '` uses it as a key.';
 
          var type = teishi.type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
 
          var seenKey = JSON.stringify (path.slice (0, k));
          if (! seen [seenKey]) seen [seenKey] = type;
          else {
-            if (seen [seenKey] !== type) return 'The path "' + path.join (' ') + '" is setting a ' + type + ' but there is already a ' + seen [seenKey] + ' at path "' + path.slice (0, k).join (' ') + '"';
-            if (type === 'number' || type === 'text') return 'The path "' + path.join (' ') + '" is repeated.';
+            if (seen [seenKey] !== type) return 'The path `' + texter ([path]) + '` is setting a ' + type + ' but there is already a ' + seen [seenKey] + ' at path `' + texter ([path.slice (0, k)]) + '`';
+            if (type === 'number' || type === 'text') return 'The path `' + texter ([path]) + '` is repeated.';
          }
       });
    });
@@ -237,7 +239,7 @@ var texter = function (paths) {
 
    var quoter = function (text) {
       if (text.match (/^-?(\d+\.)?\d+/) !== null) return '"' + text + '"';
-      if (text.match ('"') || text.match (/\s/)) return '"' + text.replace (/"/g, /\"/) + '"';
+      if (text.match ('"') || text.match (/\s/)) return '"' + text.replace (/"/g, '/"') + '"';
       if (text.length === 0) return '""';
       return text;
    }
@@ -275,24 +277,24 @@ var receive = function (message) {
 
    if (! paths.length) return '';
 
-   if (paths [0] [0] !== '@') return [['error', 'The call must start with "@" but instead starts with "' + paths [0] [0] + '"']];
+   if (paths [0] [0] !== '@') return [['error', 'The call must start with `@` but instead starts with `' + paths [0] [0] + '`']];
    var extraKey = dale.stopNot (paths, undefined, function (path) {
       if (path [0] !== '@') return path [0];
    });
-   if (extraKey !== undefined) return [['error', 'The call must not have extra keys besides "@", but it has a key "' + extraKey + '"']];
+   if (extraKey !== undefined) return [['error', 'The call must not have extra keys besides `@`, but it has a key `' + extraKey + '`']];
 
    if (paths [0] [1] === 'put') {
       var extraKey = dale.stopNot (paths, undefined, function (path) {
          if (path [1] !== 'put') return path [1];
       });
-      if (extraKey !== undefined) return [['error', 'The call must not have a path besides "@ put", but it has a path "@ ' + extraKey + '"']];
+      if (extraKey !== undefined) return [['error', 'The call must not have a path besides `@ put`, but it has a path `@ ' + extraKey + '`']];
 
       return put (dale.go (paths, function (path) {
          return path.slice (2);
       }));
    }
 
-   if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path "' + paths [1].join (' ') + '"']];
+   if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']];
 
    return get (paths [0].slice (1), []);
 }
@@ -321,7 +323,7 @@ var put = function (paths) {
    if ((teishi.last (paths) [0] % 2) !== 0) return [['error', 'A put call can only receive a list with an even number of elements.']];
 
    var error = dale.stopNot (paths, undefined, function (path, k) {
-      if ((path [0] % 2) === 1 && paths [k + 1] && paths [k + 1] [0] === path [0]) return 'A target value can only be a single path, but there is a multiple target value "' + texter ([paths [k + 1]]) + '"';
+      if ((path [0] % 2) === 1 && paths [k + 1] && paths [k + 1] [0] === path [0]) return 'A target value can only be a single path, but there is a multiple target value `' + texter ([paths [k + 1]]) + '`';
    });
    if (error) return [['error', error]];
 
@@ -366,19 +368,19 @@ var test = function () {
    var errorFound = false === dale.stop ([
       {f: pather, input: '', expected: []},
       {f: pather, input: ' ', expected: {error: 'The first line of the message cannot be indented'}},
-      {f: pather, input: '\t ', expected: {error: 'The line "\t " contains a space that is not contained within quotes.'}},
-      {f: pather, input: 'holding"out', expected: {error: 'The line "holding"out" has an unescaped quote.'}},
+      {f: pather, input: '\t ', expected: {error: 'The line `\t ` contains a space that is not contained within quotes.'}},
+      {f: pather, input: 'holding"out', expected: {error: 'The line `holding"out` has an unescaped quote.'}},
       {f: pather, input: ['"multiline', 'trickery" some 2 "calm', 'animal"'], expected: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
       {f: pather, input: ['a b', 'c'], expected: [['a', 'b'], ['c']]},
-      {f: pather, input: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line "   jip 2" does not match that of the previous line.'}},
-      {f: pather, input: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line "                        jip 2" does not match that of the previous line.'}},
-      {f: pather, input: ['foo bar 1', '    jip  2'], expected: {error: 'The line "    jip  2" has at least two spaces separating two elements.'}},
+      {f: pather, input: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line `   jip 2` does not match that of the previous line.'}},
+      {f: pather, input: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line `                        jip 2` does not match that of the previous line.'}},
+      {f: pather, input: ['foo bar 1', '    jip  2'], expected: {error: 'The line `    jip  2` has at least two spaces separating two elements.'}},
       {f: pather, input: ['foo bar 1', '    jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
       {f: pather, input: ['foo bar 0.1', '    jip 2.75'], expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
       {f: pather, input: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
-      {f: pather, input: 'something"foo" 1', expected: {error: 'The line "something"foo" 1" has an unescaped quote.'}},
+      {f: pather, input: 'something"foo" 1', expected: {error: 'The line `something"foo" 1` has an unescaped quote.'}},
       {f: pather, input: '"foo bar" 1', expected: [['foo bar', 1]]},
-      {f: pather, input: '"foo bar"x1', expected: {error: 'No space after a quote in line ""foo bar"x1"'}},
+      {f: pather, input: '"foo bar"x1', expected: {error: 'No space after a quote in line `"foo bar"x1`'}},
       {f: pather, input: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
       {f: pather, input: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
       {f: pather, input: ['"i am text', '', '', 'yep"'], expected: [['i am text\n\n\nyep']]},
@@ -386,6 +388,7 @@ var test = function () {
       {f: pather, input: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
       {f: pather, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
       {f: pather, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
+      {f: pather, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
       {f: dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
       {f: dedotter, input: [['foo', 'klank', 'first'], ['foo', '.', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
@@ -399,20 +402,20 @@ var test = function () {
       {f: sorter, input: [['foo', 'Jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'Jip', 1]]},
       {f: validator, input: [['foo', 'jip']], expected: true},
       {f: validator, input: [['foo', 'bar', 1]], expected: true},
-      {f: validator, input: [['foo', 'jip'], ['foo', 'bar', 1]], expected: {error: 'The path "foo bar 1" is setting a hash but there is already a text at path "foo"'}},
-      {f: validator, input: [['foo', 'mau5', 'jip'], ['foo', 'mau5', 'bar', 1]], expected: {error: 'The path "foo mau5 bar 1" is setting a hash but there is already a text at path "foo mau5"'}},
-      {f: validator, input: [['foo', 'jip', 1], ['foo', 2, 2]], expected: {error: 'The path "foo 2 2" is setting a list but there is already a hash at path "foo"'}},
-      {f: validator, input: [['foo', 'mau5', 'jip', 1], ['foo', 'mau5', 2, 2]], expected: {error: 'The path "foo mau5 2 2" is setting a list but there is already a hash at path "foo mau5"'}},
+      {f: validator, input: [['foo', 'jip'], ['foo', 'bar', 1]], expected: {error: 'The path `foo bar 1` is setting a hash but there is already a text at path `foo`'}},
+      {f: validator, input: [['foo', 'mau5', 'jip'], ['foo', 'mau5', 'bar', 1]], expected: {error: 'The path `foo mau5 bar 1` is setting a hash but there is already a text at path `foo mau5`'}},
+      {f: validator, input: [['foo', 'jip', 1], ['foo', 2, 2]], expected: {error: 'The path `foo 2 2` is setting a list but there is already a hash at path `foo`'}},
+      {f: validator, input: [['foo', 'mau5', 'jip', 1], ['foo', 'mau5', 2, 2]], expected: {error: 'The path `foo mau5 2 2` is setting a list but there is already a hash at path `foo mau5`'}},
       {f: validator, input: [['foo']], expected: true},
       {f: validator, input: [[1]], expected: true},
       {f: validator, input: [], expected: true},
-      {f: validator, input: [['foo'], [1]], expected: {error: 'The path "1" is setting a number but there is already a text at path ""'}},
-      {f: validator, input: [['foo', 'bar'], ['foo', 'jip']], expected: {error: 'The path "foo jip" is repeated.'}},
+      {f: validator, input: [['foo'], [1]], expected: {error: 'The path `1` is setting a number but there is already a text at path ``'}},
+      {f: validator, input: [['foo', 'bar'], ['foo', 'jip']], expected: {error: 'The path `foo jip` is repeated.'}},
       {f: parser, input: 1, expected: {error: 'The message must be text but instead is integer'}},
       {f: parser, input: 'foo bar', expected: [['foo', 'bar']]},
       {f: parser, input: 'foo 1', expected: [['foo', 1]]},
       {f: parser, input: '. foo\n. bar', expected: [[1, 'foo'], [2, 'bar']]},
-      {f: parser, input: '1 foo\n1 jip', expected: {error: 'The path "1 jip" is repeated.'}},
+      {f: parser, input: '1 foo\n1 jip', expected: {error: 'The path `1 jip` is repeated.'}},
       // For texter, we use all the non-error test cases of pather, but switching input with expected.
       {f: texter, expected: '', input: []},
       {f: texter, expected: ['"multiline', 'trickery" some 2 "calm', 'animal"'], input: [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]},
@@ -426,19 +429,20 @@ var test = function () {
       {f: texter, expected: ['"i am text', '', '', 'yep"'], input: [['i am text\n\n\nyep']]},
       {f: texter, expected: 'foo bar', input: [['foo', 'bar']]},
       {f: texter, expected: 'foo "bar yep"', input: [['foo', 'bar yep']]},
+      {f: texter, expected: 'foo "bar yep"', input: [['foo', 'bar yep']]},
       {f: texter, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: texter, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       {f: receive, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: receive, input: '', expected: ''},
-      {f: receive, input: 'foo bar', expected: [['error', 'The call must start with "@" but instead starts with "foo"']]},
-      {f: receive, input: '@ foo bar\nGroovies jip', expected: [['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']]},
-      {f: receive, input: '@ something is\n  another thing', expected: [['error', 'A get call cannot have multiple paths, but it has a path "@ something is"']]},
-      {f: receive, input: '@ put something\nGroovies jip', expected: [['error', 'The call must not have extra keys besides "@", but it has a key "Groovies"']]},
-      {f: receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides "@ put", but it has a path "@ Groovies"']]},
-      {f: receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides "@ put", but it has a path "@ Groovies"']]},
+      {f: receive, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
+      {f: receive, input: '@ foo bar\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
+      {f: receive, input: '@ something is\n  another thing', expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
+      {f: receive, input: '@ put something\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
+      {f: receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
+      {f: receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
       {f: receive, input: '@ put foo bar 1\n@ put foo jip 2', expected: [['error', 'A put call can only receive a list.']]},
       {f: receive, input: '@ put 1 foo bar', expected: [['error', 'A put call can only receive a list with an even number of elements.']]},
-      {f: receive, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: [['error', 'A target value can only be a single path, but there is a multiple target value "1 something else"']]},
+      {f: receive, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: [['error', 'A target value can only be a single path, but there is a multiple target value `1 something else`']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -516,7 +520,7 @@ var test = function () {
       {f: receive, input: ['@ put . foo', '@ put . bar hey'], expected: [['ok']]},
       {f: receive, input: '@ foo', expected: [['bar', 'hey']]},
       {f: receive, input: '@ foo bar', expected: [['hey']]},
-      {f: receive, input: '@ put . foo 2\n@ put . something', expected: [['error', 'The path "foo bar hey" is setting a hash but there is already a list at path "foo"']]},
+      {f: receive, input: '@ put . foo 2\n@ put . something', expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -536,7 +540,7 @@ var test = function () {
          ['jup', 'yea'],
          ['soda', 'wey']
       ]},
-      {f: receive, input: ['@ put . foo bar yes', '@ put . sir'], expected: [['error', 'The path "foo bar yes sir" is setting a hash but there is already a list at path "foo bar"']]},
+      {f: receive, input: ['@ put . foo bar yes', '@ put . sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
       {f: receive, input: ['@ put . foo "\n\nbar"', '@ put . 1'], expected: [['ok']]},
       {f: receive, input: ['@ foo "\n\nbar"'], expected: [[1]]},
 
@@ -588,11 +592,13 @@ B.mrespond ([
          [1, 'dialogue', length + 1, 'from'],
          [2, 'user'],
          [3, 'dialogue', length + 1, 'message'],
-         [4, call],
+         [4, texter ([call])],
          [5, 'dialogue', length + 2, 'from'],
          [6, 'cell'],
          [7, 'dialogue', length + 2, 'message'],
-         [8, texter (response)],
+         ...dale.go (response, function (v) {
+            return [8, ...v];
+         }),
       ]);
 
       B.call (x, 'rem', [], 'call');

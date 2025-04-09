@@ -1,0 +1,28 @@
+Thirty-fifth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! No UI today, I just fixed a few things that were broken from yesterday. Today, I play (again) Nonagon Infinity from King Gizzard & the Lizard Wizard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+- Mobile version
+- Fix persistence
+- Hide the dialogue (but be able to reference it)
+- Backticks!
+- Fix @ x?
+
+Why is this
+         2 message error "The call must start with "@" but instead starts with "f""
+not escaped? It should be
+         2 message error "The call must start with \"@\" but instead starts with \"f\""
+
+Fixed!
+
+No space after a quote in line "         2 message error "The call must start with \"@\" but instead starts with \"f\"""
+
+This should be valid fourdata
+
+dialogue 1 from user
+         1 message w
+         2 from cell
+         2 message error "The call must start with /"@/" but instead starts with /"w/""
+
+Ah, no, it's forward slash!
+
