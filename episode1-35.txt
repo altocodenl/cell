@@ -25,4 +25,3 @@ dialogue 1 from user
          2 message error "The call must start with /"@/" but instead starts with /"w/""
 
 Ah, no, it's forward slash!
-

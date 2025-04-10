@@ -313,10 +313,10 @@ var get = function (queryPath, contextPath) {
 
       if (matches.length > 0) return matches;
 
-   }) || [];
+   }) || [['']];
 }
 
-var put = function (paths) {
+var put = function (paths, updateDialogue) {
    var dataspace = B.get ('dataspace');
 
    if (teishi.type (paths [0] [0]) !== 'integer') return [['error', 'A put call can only receive a list.']];
@@ -340,6 +340,7 @@ var put = function (paths) {
       var rightSide = v [1];
 
       if (v [0] [0] === 'put') return 'I\'m sorry Dave, I\'m afraid I can\'t do that';
+      if (v [0] [0] === 'dialogue' && ! updateDialogue) return 'A dialogue cannot be supressed by force.';
 
       dataspace = dale.fil (dataspace, undefined, function (path) {
          if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
@@ -467,18 +468,15 @@ var test = function () {
       {f: receive, input: '@ foo bar 1', expected: [
          ['jip'],
       ]},
-      {f: receive, input: '@ foo bar 1 jip', expected: [
-      ]},
-      {f: receive, input: '@ no such thing', expected: [
-      ]},
+      {f: receive, input: '@ foo bar 1 jip', expected: [['']]},
+      {f: receive, input: '@ no such thing', expected: [['']]},
       {f: receive, input: '@ foo soda', expected: [
          ['wey']
       ]},
       {f: receive, input: '@ something', expected: [
          ['else']
       ]},
-      {f: receive, input: '@ something else', expected: [
-      ]},
+      {f: receive, input: '@ something else', expected: [['']]},
       {reset: [
          ['foo', 10],
          ['inner', 'foo', 20],
@@ -490,8 +488,7 @@ var test = function () {
       {f: get, query: ['foo'], context: ['foo'], expected: [
          [10]
       ]},
-      {f: get, query: ['bar'], context: ['foo'], expected: [
-      ]},
+      {f: get, query: ['bar'], context: ['foo'], expected: [['']]},
       {f: get, query: ['foo'], context: ['inner'], expected: [
          [20],
       ]},
@@ -545,6 +542,8 @@ var test = function () {
       {f: receive, input: ['@ foo "\n\nbar"'], expected: [[1]]},
 
       {f: receive, input: ['@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
+      {f: receive, input: ['@ put . foo', '@ put . bar', '@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
+      {f: receive, input: ['@ put . dialogue', '@ put . 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
    ], false, function (test) {
 
       if (test.reset) return B.call ('set', 'dataspace', test.reset);
@@ -592,14 +591,14 @@ B.mrespond ([
          [1, 'dialogue', length + 1, 'from'],
          [2, 'user'],
          [3, 'dialogue', length + 1, 'message'],
-         [4, texter ([call])],
+         [4, call],
          [5, 'dialogue', length + 2, 'from'],
          [6, 'cell'],
          [7, 'dialogue', length + 2, 'message'],
          ...dale.go (response, function (v) {
             return [8, ...v];
          }),
-      ]);
+      ], true);
 
       B.call (x, 'rem', [], 'call');
    }],
@@ -617,9 +616,9 @@ views.main = function () {
 
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
       var dialogue = [];
-      dale.go (get (['dialogue'], []), function (v) {
-         if (v [1] === 'from') dialogue.push ({from: v [2]});
-         else teishi.last (dialogue).message = v [2];
+      if (get (['dialogue'], []).length > 1) dale.go (get (['dialogue'], []), function (v) {
+         if (v [1] === 'from') dialogue.push ({from: v [2], message: []});
+         else teishi.last (dialogue).message.push (v.slice (2));
       });
       call = call || '';
       return ['div', [
@@ -632,7 +631,8 @@ views.main = function () {
                var classes = 'code w-70 pa2 ba br3 mb2';
                if (item.from === 'user') classes += ' fr';
                else                      classes += ' fl bg-dark-green near-white';
-               return ['textarea', {class: classes, readonly: true, value: item.message, rows: item.message.split ('\n').length}, item.message];
+               var message = item.from === 'user' ? item.message [0] [0] : texter (item.message);
+               return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
             }),
             ['textarea', {
                class: 'code w-70 pa2 ba br3 mb2 fr',
@@ -649,7 +649,10 @@ views.main = function () {
 
 views.cell = function (path) {
    return B.view ('dataspace', function (dataspace) {
-      var response = get (path, []);
+      var response = dale.fil (get (path, []), undefined, function (v) {
+         if (v [0] === 'dialogue') return; // Don't show the dialogue
+         return v;
+      });
       return ['div', [
          ['h3', 'Location: ' + (texter (path) || 'all')],
          ['pre', texter (response)]

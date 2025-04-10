@@ -1,0 +1,32 @@
+Thirty-sixth episode! I'm building a programming language/environment from scratch while recording myself. Watch me struggle figuring out the bootstrapping! Some exciting ideas today, some coding to fix a few more things, a bit more of life in the system. Today, I play side A of Jethro Tull's Thick as a Brick (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+That's what I'm doing with cell: I'm giving a path beyond both spreadsheets and js/python scripts.
+
+- service
+- three way communication
+- ui: table view (for lists of hashes and perhaps lists in general), grid view, custom view
+- language constructs
+- get files & emails integrated
+
+1 born 1959
+  firstName Gustavo
+  lastName Cerati
+2 born 1962
+  firstName John
+  lastName Squire
+
+   born  firstName lastName
+1  1959  Gustavo   Cerati
+2  1962  John      Squire
+
+My notion of future cell performance will be measured in paths per unit of time.
+
+@ foo
+becomes
+[['@', 'foo']]
+
+@ foo
+
+silicon based forms will write in white text over a dark background (dark green and dark purple). carbon based forms will write black on a whitish background.
