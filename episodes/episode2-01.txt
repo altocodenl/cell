@@ -1,0 +1,13 @@
+First episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we explore drawing the datagrid. We even manage to pull out a nice recursive function in the nick of time. Today, I play Polygondwanaland of King Gizzard and the Lizard Wizard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Wishlist from the previous episode/season:
+
+- service
+- three way communication
+- ui: table view (for lists of hashes and perhaps lists in general), grid view, custom view
+- language constructs
+- get files & emails integrated
+
+But, we're going to start with the datagrid

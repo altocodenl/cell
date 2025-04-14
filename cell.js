@@ -4,22 +4,6 @@ var B = window.B;
 
 var clog = console.log;
 
-// *** DATASPACE ***
-
-B.call ('set', 'dataspace', []);
-
-var load = function () {
-   var text = localStorage.getItem ('cell');
-   if (text === null) text = '';
-   var paths = parser (text);
-   if (paths.error) alert (paths.error);
-   else B.call ('set', 'dataspace', paths);
-}
-
-var save = function () {
-   localStorage.setItem ('cell', texter (B.get ('dataspace')));
-}
-
 // *** MAIN FUNCTIONS ***
 
 // The pather takes text, presumably formatted as fourdata, and returns a list of paths.
@@ -270,6 +254,34 @@ var texter = function (paths) {
    return output.join ('\n');
 }
 
+var jsonTo4 = function (v, paths) {
+
+   paths = paths || [];
+
+   var singleTo4 = function (v) {
+      var type = teishi.type (v);
+      if (teishi.inc (['integer', 'float', 'string'], type)) return v;
+      if (type === 'boolean') return v ? 1 : 0;
+      if (type === 'date') return v.toISOString ();
+      if (teishi.inc (['regex', 'function', 'infinity'], type)) return v.toString ();
+      // Invalid values (nan, null, undefined) are returned as empty text
+      return '';
+   }
+
+   // if (teishi.simple (v) && paths.length === 0) return [[singleTo4 (v)]];
+
+   var recurse = function (v, path) {
+      if (teishi.simple (v)) paths.push ([...path, singleTo4 (v)]);
+      else                   dale.go (v, function (v2, k2) {
+         recurse (v2, [...path, k2]);
+      });
+   }
+
+   recurse (v, [])
+
+   return paths;
+}
+
 var receive = function (message) {
 
    var paths = parser (message);
@@ -296,12 +308,10 @@ var receive = function (message) {
 
    if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']];
 
-   return get (paths [0].slice (1), []);
+   return get (B.get ('dataspace'), paths [0].slice (1), []);
 }
 
-var get = function (queryPath, contextPath) {
-   var dataspace = B.get ('dataspace');
-
+var get = function (dataspace, queryPath, contextPath) {
    return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
 
       var matches = dale.fil (dataspace, undefined, function (path) {
@@ -358,6 +368,129 @@ var put = function (paths, updateDialogue) {
    B.call ('set', 'dataspace', dataspace);
    return [['ok']];
 }
+
+// *** DATASPACE ***
+
+B.call ('set', 'dataspace', []);
+
+var load = function () {
+   var text = localStorage.getItem ('cell');
+   if (text === null) text = '';
+   var paths = parser (text);
+   if (paths.error) alert (paths.error);
+   else B.call ('set', 'dataspace', paths);
+}
+
+var save = function () {
+   localStorage.setItem ('cell', texter (B.get ('dataspace')));
+}
+
+
+// *** RESPONDERS ***
+
+B.mrespond ([
+   ['change', 'dataspace', function (x) {
+      save ();
+   }],
+   ['initialize', [], function (x) {
+      load ();
+      if (B.get ('dataspace').length === 0) B.call (x, 'set', 'dataspace', [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+         ['something', 'else']
+      ]);
+   }],
+   ['send', 'call', function (x, call) {
+      var response = receive (call);
+      var dialogue = receive ('@ dialogue');
+      var length = 0;
+      if (dialogue.length) length = teishi.last (dialogue) [0];
+      put ([
+         [1, 'dialogue', length + 1, 'from'],
+         [2, 'user'],
+         [3, 'dialogue', length + 1, 'message'],
+         [4, call],
+         [5, 'dialogue', length + 2, 'from'],
+         [6, 'cell'],
+         [7, 'dialogue', length + 2, 'message'],
+         ...dale.go (response, function (v) {
+            return [8, ...v];
+         }),
+      ], true);
+
+      B.call (x, 'rem', [], 'call');
+   }],
+]);
+
+// *** VIEWS ***
+
+var views = {};
+
+views.css = [
+   ['body', {'padding-left, padding-top': 30, height: 100}],
+];
+
+views.main = function () {
+
+   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
+      var dialogue = [];
+      if (get (B.get ('dataspace'), ['dialogue'], []).length > 1) dale.go (get (B.get ('dataspace'), ['dialogue'], []), function (v) {
+         if (v [1] === 'from') dialogue.push ({from: v [2], message: []});
+         else teishi.last (dialogue).message.push (v.slice (2));
+      });
+      call = call || '';
+      return ['div', [
+         ['style', views.css],
+         ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
+            views.cell ([]),
+         ]],
+         ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
+            dale.go (dialogue || [], function (item) {
+               var classes = 'code w-70 pa2 ba br3 mb2';
+               if (item.from === 'user') classes += ' fr';
+               else                      classes += ' fl bg-dark-green near-white';
+               var message = item.from === 'user' ? item.message [0] [0] : texter (item.message);
+               return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
+            }),
+            ['textarea', {
+               class: 'code w-70 pa2 ba br3 mb2 fr',
+               onchange: B.ev ('set', 'call'),
+               oninput: B.ev ('set', 'call'),
+               autofocus: true,
+               value: call,
+            }],
+            ['button', {class: 'w-100', onclick: B.ev (['send', 'call', call])}, 'Submit'],
+         ]],
+      ]];
+   });
+}
+
+views.cell = function (path) {
+   return B.view ('dataspace', function (dataspace) {
+      var response = dale.fil (get (dataspace, path, []), undefined, function (v) {
+         if (v [0] === 'dialogue') return; // Don't show the dialogue
+         return v;
+      });
+
+      return ['div', [
+         ['h3', 'Location: ' + (texter (path) || 'all')],
+         ['pre', texter (response)],
+         ['h3', 'Location: ' + (texter (path) || 'all')],
+         ['table', {class: 'collapse'}, dale.go (response, function (path) {
+            return ['tr', [
+               dale.go (path, function (element) {
+                  return ['td', {class: 'ba pa2'}, element];
+               }),
+            ]];
+         })],
+      ]];
+   });
+}
+
+B.call ('initialize', []);
+
+B.mount ('body', views.main);
 
 // *** TESTS ***
 
@@ -552,7 +685,7 @@ var test = function () {
       if (test.f === receive && teishi.type (test.input)    === 'array') test.input = test.input.join ('\n');
       if (test.f === texter  && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
 
-      if (test.f === get) var result = get (test.query, test.context);
+      if (test.f === get) var result = get (teishi.copy (B.get ('dataspace')), test.query, test.context);
       else                var result = test.f (test.input);
 
       if (teishi.eq (result, test.expected)) return true;
@@ -566,100 +699,3 @@ var test = function () {
 }
 
 test ();
-
-// *** RESPONDERS ***
-
-B.mrespond ([
-   ['change', 'dataspace', function (x) {
-      save ();
-   }],
-   ['initialize', [], function (x) {
-      load ();
-      if (B.get ('dataspace').length === 0) B.call (x, 'set', 'dataspace', [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-         ['something', 'else']
-      ]);
-   }],
-   ['send', 'call', function (x, call) {
-      var response = receive (call);
-      var dialogue = receive ('@ dialogue');
-      var length = 0;
-      if (dialogue.length) length = teishi.last (dialogue) [0];
-      put ([
-         [1, 'dialogue', length + 1, 'from'],
-         [2, 'user'],
-         [3, 'dialogue', length + 1, 'message'],
-         [4, call],
-         [5, 'dialogue', length + 2, 'from'],
-         [6, 'cell'],
-         [7, 'dialogue', length + 2, 'message'],
-         ...dale.go (response, function (v) {
-            return [8, ...v];
-         }),
-      ], true);
-
-      B.call (x, 'rem', [], 'call');
-   }],
-]);
-
-// *** VIEWS ***
-
-var views = {};
-
-views.css = [
-   ['body', {'padding-left, padding-top': 30, height: 100}]
-];
-
-views.main = function () {
-
-   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
-      var dialogue = [];
-      if (get (['dialogue'], []).length > 1) dale.go (get (['dialogue'], []), function (v) {
-         if (v [1] === 'from') dialogue.push ({from: v [2], message: []});
-         else teishi.last (dialogue).message.push (v.slice (2));
-      });
-      call = call || '';
-      return ['div', [
-         ['style', views.css],
-         ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
-            views.cell ([]),
-         ]],
-         ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
-            dale.go (dialogue || [], function (item) {
-               var classes = 'code w-70 pa2 ba br3 mb2';
-               if (item.from === 'user') classes += ' fr';
-               else                      classes += ' fl bg-dark-green near-white';
-               var message = item.from === 'user' ? item.message [0] [0] : texter (item.message);
-               return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
-            }),
-            ['textarea', {
-               class: 'code w-70 pa2 ba br3 mb2 fr',
-               onchange: B.ev ('set', 'call'),
-               oninput: B.ev ('set', 'call'),
-               autofocus: true,
-               value: call,
-            }],
-            ['button', {class: 'w-100', onclick: B.ev (['send', 'call', call])}, 'Submit'],
-         ]],
-      ]];
-   });
-}
-
-views.cell = function (path) {
-   return B.view ('dataspace', function (dataspace) {
-      var response = dale.fil (get (path, []), undefined, function (v) {
-         if (v [0] === 'dialogue') return; // Don't show the dialogue
-         return v;
-      });
-      return ['div', [
-         ['h3', 'Location: ' + (texter (path) || 'all')],
-         ['pre', texter (response)]
-      ]];
-   });
-}
-
-B.call ('initialize', []);
-
-B.mount ('body', views.main);
