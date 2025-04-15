@@ -1,0 +1,33 @@
+Second episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, I fall in love with the datagrid, after cheating by working in the train without recording myself. Today, I play some Deadmau5 (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Goals for cell:
+- Paste/upload/email data to a project (formats: JSON, CSV & XLS) and make sense of it with the interface & the LLM. Question: should we be able to edit it and then output it?
+- Make an API request and store the result.
+- Create a small dashboard that's publicly available through an URL.
+
+@ put 1 "today's cake for 8"
+      2 @ "make cake" 8
+        : 1 @ mix . @ chocolate @ * . @ people
+                                      = 8
+                                    . 25
+                                = 200
+                    = "200 grams of chocolate!"
+                  . @ flour @ * . @ people
+                                  = 8
+                                . 125
+                            = 1000
+                    = "A kilo of flour!"
+                  . @ butter @ * . @ people
+                                   = 8
+                                 . 75
+                             = 600
+                    = error "No butter available!"
+            = error "An ingredient is missing!"
+          2 @ bake degrees 200
+                   ingredients @ 1
+            = error "No ingredients found"
+        = error "No ingredients found"
+
+I'm falling in love with the datagrid, hard.

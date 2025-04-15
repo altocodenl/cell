@@ -73,6 +73,13 @@ Cell intends to go beyond the spreadsheet in the following ways:
 
 These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
 
+## Innovations
+
+- Programming as message-based three-way communication between the environment, the user and the LLM.
+- Immediate integration of files and emails into the dataspace.
+- Integrated language, database, service and interface.
+- Four representations of data: text, datagrid, table (spreadsheet-like), and custom graphical views.
+
 **DEAR READER: cell is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
 
 ## The cell interface

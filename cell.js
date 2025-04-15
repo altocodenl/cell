@@ -244,7 +244,7 @@ var texter = function (paths) {
       var commonPrefix = [];
       if (k > 0) dale.stop (paths [k - 1], false, function (v, k) {
          if (v === path [k]) commonPrefix.push (v);
-         return false;
+         else return false;
       });
       path = path.slice (commonPrefix.length);
       var indent = spaces (pathToText (commonPrefix).length);
@@ -254,7 +254,7 @@ var texter = function (paths) {
    return output.join ('\n');
 }
 
-var jsonTo4 = function (v, paths) {
+var jsonToPaths = function (v, paths) {
 
    paths = paths || [];
 
@@ -268,12 +268,10 @@ var jsonTo4 = function (v, paths) {
       return '';
    }
 
-   // if (teishi.simple (v) && paths.length === 0) return [[singleTo4 (v)]];
-
    var recurse = function (v, path) {
       if (teishi.simple (v)) paths.push ([...path, singleTo4 (v)]);
       else                   dale.go (v, function (v2, k2) {
-         recurse (v2, [...path, k2]);
+         recurse (v2, [...path, teishi.type (k2) === 'integer' ? k2 + 1 : k2]);
       });
    }
 
@@ -477,10 +475,16 @@ views.cell = function (path) {
          ['h3', 'Location: ' + (texter (path) || 'all')],
          ['pre', texter (response)],
          ['h3', 'Location: ' + (texter (path) || 'all')],
-         ['table', {class: 'collapse'}, dale.go (response, function (path) {
+         ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (response, function (path, k) {
+            var abridge = 0;
+            if (k > 0) dale.stop (path, true, function (v2, k2) {
+               if (response [k - 1] [k2] !== v2) return true;
+               abridge++;
+            });
             return ['tr', [
-               dale.go (path, function (element) {
-                  return ['td', {class: 'ba pa2'}, element];
+               dale.go (path, function (element, k) {
+                  var abridged = k < abridge;
+                  return ['td', {class: 'ba pa1'}, ['p', {class: 'ma0' + (abridged ? ' silver' : '')}, element]];
                }),
             ]];
          })],
