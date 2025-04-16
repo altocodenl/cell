@@ -16,6 +16,12 @@ var pather = function (message) {
       return text;
    }
 
+   var unparseNumber = function (v) {
+      if (teishi.type (v) !== 'string') return v + '';
+      if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+      return v;
+   }
+
    var paths = [];
    var insideMultilineText = false;
 
@@ -35,7 +41,7 @@ var pather = function (message) {
          // lastPath always is nonzero in length, so there's no zero corner case
          var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
             // Converting v to text in case it is a number
-            matchedSpaces += (v + '').length + 1;
+            matchedSpaces += unparseNumber (v).length + 1;
             if (matchedSpaces === indentSize) return k;
             if (matchedSpaces > indentSize) return {error: 'The indent of the line `' + line + '` does not match that of the previous line.'};
             // If we haven't hit the indentSize, keep on going.
@@ -285,7 +291,7 @@ var receive = function (message) {
    var paths = parser (message);
    if (paths.error) return [['error', paths.error]];
 
-   if (! paths.length) return '';
+   if (! paths.length) return [];
 
    if (paths [0] [0] !== '@') return [['error', 'The call must start with `@` but instead starts with `' + paths [0] [0] + '`']];
    var extraKey = dale.stopNot (paths, undefined, function (path) {
@@ -403,7 +409,8 @@ B.mrespond ([
       var response = receive (call);
       var dialogue = receive ('@ dialogue');
       var length = 0;
-      if (dialogue.length) length = teishi.last (dialogue) [0];
+      if (dialogue.length > 1) length = teishi.last (dialogue) [0];
+
       put ([
          [1, 'dialogue', length + 1, 'from'],
          [2, 'user'],
@@ -473,8 +480,6 @@ views.cell = function (path) {
 
       return ['div', [
          ['h3', 'Location: ' + (texter (path) || 'all')],
-         ['pre', texter (response)],
-         ['h3', 'Location: ' + (texter (path) || 'all')],
          ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (response, function (path, k) {
             var abridge = 0;
             if (k > 0) dale.stop (path, true, function (v2, k2) {
@@ -527,6 +532,9 @@ var test = function () {
       {f: pather, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
       {f: pather, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
       {f: pather, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
+      {f: pather, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
+      {f: pather, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
+
       {f: dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
       {f: dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
       {f: dedotter, input: [['foo', 'klank', 'first'], ['foo', '.', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
@@ -570,8 +578,9 @@ var test = function () {
       {f: texter, expected: 'foo "bar yep"', input: [['foo', 'bar yep']]},
       {f: texter, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: texter, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
+      {f: texter, expected: ['foo bar 1 jip', '        2 yes'], input: [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]},
       {f: receive, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
-      {f: receive, input: '', expected: ''},
+      {f: receive, input: '', expected: []},
       {f: receive, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
       {f: receive, input: '@ foo bar\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
       {f: receive, input: '@ something is\n  another thing', expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
