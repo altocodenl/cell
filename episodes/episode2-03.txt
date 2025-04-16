@@ -1,0 +1,34 @@
+Third episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we fix a few bugs that makes the basis quite more resilient. We find a bug in our frontend library. And we chart what's next: a humble JSON/CSV viewer that stores things in individual hashes. Today, I play (again) Tetrachromacy from King Gizzard and the Lizard Wizard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Humble first use case: put JSON in, make sense of it in the datagrid, be able to see it again.
+
+Text that is breaking our parsing:
+
+dialogue "1" from user
+             message "@ foo"
+         "2" from cell
+             message bar 1 jip
+                         2 joo
+                     soda wey
+foo bar 1 jip
+        2 joo
+    soda wey
+something else
+
+
+Now, this is also breaking it!
+
+dialogue 1 from user
+           message "@ foo"
+         2 from cell
+           message bar 1 jip
+                       2 joo
+                   soda wey
+foo bar 1 jip
+        2 joo
+    soda wey
+something else
+
+We fixed both issues!
