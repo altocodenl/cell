@@ -1,0 +1,11 @@
+Fourth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we start working on the server. We extract cell into something we can import onto a browser and a server, and surprisingly it works the first time. Soon, we'll have an actual service! Today, I play (again?) the STONKS mix from Retro Player One (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Using cell to build cell!
+
+We need a server, to hit the LLM. Also to have better persistence. Let's start it.
+
+Let's extract cell into something we can import onto both the browser and the server.
+
+(I'm plundering https://github.com/altocodenl/tagaway/blob/master/server.js)
