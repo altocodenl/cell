@@ -1,4 +1,4 @@
-Fourth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we continue working on the server, make our first LLM call, and get tantalizingly close to having an actual cell initialized. Today, I play two albums by the Pixies: Bossanova and Trompe Le Monde (at zero volume to avoid copyright infringement...).
+Fifth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we continue working on the server, make our first LLM call, and get tantalizingly close to having an actual cell initialized. Today, I play two albums by the Pixies: Bossanova and Trompe Le Monde (at zero volume to avoid copyright infringement...).
 
 https://github.com/altocodenl/cell
 

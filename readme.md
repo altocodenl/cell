@@ -1,39 +1,28 @@
 # cell
 
-> Let your ideas run free.
+> Your data and your logic, together at last.
 
 ## Introduction
 
-Cell is a programming system that intends to make programming **as effective as possible**. The purpose of cell is to empower you to create new [digital information systems and understand existing ones](https://github.com/altocodenl/todis).
+Cell is a tool that allows you to create [data systems](https://github.com/altocodenl/todis) (think spreadsheets, apps, pages) with great ease. Particularly if you don't consider yourself to be a programmer.
 
-Cell allows you to do two things:
-
-1. See what is going on inside your system.
-2. Control what happens inside your system.
-
-Cell can be perhaps be described as [Schopenhauerian](https://en.wikipedia.org/wiki/The_World_as_Will_and_Representation), in that it only strives to give you a good *representation* of your system (what you see) and allow your *will* to freely control the system. In short, cell is useful because it provides you with 1) a good way to see what's going on, and 2) not getting in your way of changing it.
-
-cell is an implementation of the paradigm presented in [The Organization of Information Systems](https://github.com/altocodenl/todis).
+The purpose of cell is to empower you to transform your data into a system that perfectly fits your needs and that you can change at any time.
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
-cell is four things:
+## How is cell different to what's out there?
 
-1. A programming language: allows to express sequences of data transformations.
-2. A database: allows to structure and query information.
-3. A service: can expose an API to the network and can interact with other APIs.
-4. An interface: allows to create graphical interfaces to interact with data.
+Cell employs seven powerups to make programming as easy as possible:
 
-This is cell's [quadrivium](https://en.wikipedia.org/wiki/Quadrivium): language, database, service and interface. Curiously, it maps to the four things one normally does with programs:
+1. A simple way to represent data with text. This allows you to look directly at your data.
+2. A single *dataspace* where all the data of your project lives. Every part of your data has a meaningful location.
+3. Programming as a conversation: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
+4. Write any logic with only five constructs which you can understand in a few minutes.
+5. The system is always up to date and respond to your changes (just like a spreadsheet!).
+6. Everything is integrated: language, database, API and UI are in one place: your web browser.
+7. Generative AI that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
 
-- A script to get something done.
-- Shape and retrieve well-structured information.
-- Interact with other systems through APIs.
-- Create graphical user interfaces.
-
-cell is all of those things not because it tries to be everything; rather, it does all of this because it explores the angle that the best way to build information systems is to have an integrated system where language, database, service and interface spring from a common ground. cell is thought from the ground up as a simple, consistent whole.
-
-What can cell be used for?
+## What can I do with cell?
 
 1. Understand an existing system or design a new one.
 2. Define the logic of a system.
