@@ -14,26 +14,28 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 Cell employs seven powerups to make programming as easy as possible:
 
-1. A simple way to represent data with text. This allows you to look directly at your data.
-2. A single *dataspace* where all the data of your project lives. Every part of your data has a meaningful location.
-3. Programming as a conversation: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
-4. Write any logic with only five constructs which you can understand in a few minutes.
-5. The system is always up to date and respond to your changes (just like a spreadsheet!).
-6. Everything is integrated: language, database, API and UI are in one place: your web browser.
-7. Generative AI that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
+1. A simple way to **represent data with text**. This allows you to look directly at your data.
+2. A single *dataspace* **where all the data of your project lives**. Every part of your data has a meaningful location.
+3. Programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
+4. Write any logic with **only five constructs** which you can understand in a few minutes.
+5. The system is **always up to date** and responds to your changes (just like a spreadsheet!).
+6. **Everything is integrated**: language, database, API and UI are in one place: your web browser.
+7. **Generative AI** that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
 
-## What can I do with cell?
+## Use cases
 
-1. Understand an existing system or design a new one.
-2. Define the logic of a system.
-3. Create interfaces for a system.
-4. Test a system.
-
-The intention of cell, much like [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)) or [Lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)), is to be adaptable to any programming context.
+- Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
+- Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
+- Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
+- Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
 
 ## Relationship to the spreadsheet
 
-Cell is very much inspired by the [electronic spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
+see the results immediately
+the data is always somewhere
+text based but low noise
+
+Cell is very much inspired by the [spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
 
 In essence, a spreadsheet is immensely powerful because it has three properties:
 
