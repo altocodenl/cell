@@ -69,7 +69,8 @@ These new features are built on top of the same mechanisms that make the spreads
 - Programming as message-based three-way communication between the environment, the user and the LLM.
 - Immediate integration of files and emails into the dataspace.
 - Integrated language, database, service and interface.
-- Four representations of data: text, datagrid, table (spreadsheet-like), and custom graphical views.
+- Two general purpose representations of data: text and datagrid.
+- Storing discrete calls in a dialog gives us both commits and transactions in a single construct. This allows us to query the system's state at any specific moment. We can also examine how the system evolves over time by reviewing the sequence of interactions. The calls are the diffs of the system. If the `get` call takes a parameter, we can query any previous state. And if the `put` call can take a condition and perform multiple operations as a whole, we can have reified transactions. These insights grow from the work of Datomic (thanks Val Waeselynck for your [great explanation](https://vvvvalvalval.github.io/posts/2018-11-12-datomic-event-sourcing-without-the-hassle.html)!).
 
 ## The cell interface
 
