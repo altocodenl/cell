@@ -1,0 +1,23 @@
+Sixth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, I get lost in my own museum trying to understand the internals of cell.put, though we do extract the datagrid and use it "everywhere". Today, I play Flying Microtonal Banana from King Gizzard and The Lizard Wizard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+What's bothering me about cell.put on the dialogue:
+- That if you are adding four things, you are adding 8 lines (4 left sides and four right sides).
+- That you don't have add, so you need to compute the indexes of what you're adding.
+- And this one:
+         ...dale.go (response, function (v) {
+            return [8, ...v];
+         }),
+
+
+immediate todo:
+- Send calls to server. Receive entire dataspace as response.
+- Make server run cell and store the result.
+- Show ... when waiting for a response.
+- Improve datagrid: width scrolling, not use fixed width.
+- Show top level keys separately.
+- Return [] in get when there are no matches.
+====
+- Upload CSV, XLS, JSON.
+- Integrate LLM: when uploading file, when sending something that is not a call. It goes in between the call and the response, from the perspective of the client.
