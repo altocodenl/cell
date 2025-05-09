@@ -62,7 +62,7 @@ var routes = [
             ['link', {rel: 'stylesheet', href: 'https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css'}],
          ]],
          ['body', [
-            ['script', {src: 'https://cdn.jsdelivr.net/gh/fpereiro/gotob@d599867a327a74d3c53aa518f507820161bb4ac8/gotoB.min.js'}],
+            ['script', {src: 'https://cdn.jsdelivr.net/gh/fpereiro/gotob@434aa5a532fa0f9012743e935c4cd18eb5b3b3c5/gotoB.min.js'}],
             dale.go (['cell.js', 'client.js'], function (v) {
                return ['script', {src: v}];
             }),

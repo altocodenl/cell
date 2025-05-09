@@ -3,6 +3,8 @@
 var B    = window.B;
 var cell = window.cell;
 
+var type = teishi.type;
+
 // *** DATASPACE ***
 
 B.call ('set', 'dataspace', []);
@@ -111,13 +113,25 @@ views.main = function () {
             views.cell ([]),
          ]],
          ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
+
             dale.go (dialogue || [], function (item) {
+
                var classes = 'code w-70 pa2 ba br3 mb2';
                if (item.from === 'user') classes += ' fr';
                else                      classes += ' fl bg-dark-green near-white';
-               var message = item.from === 'user' ? item.message [0] [0] : cell.pathsToText (item.message);
-               return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
+
+               var message = item.from === 'user' ? item.message [0] [0] : item.message;
+               if (type (message) === 'string') {
+                  var parsedMessage = cell.parser (message);
+                  if (type (parsedMessage) === 'array') message = parsedMessage;
+               }
+
+               if (type (message) === 'array') return ['div', {class: classes}, views.datagrid (message)];
+               else return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
+
             }),
+
+            // New message
             ['textarea', {
                class: 'code w-70 pa2 ba br3 mb2 fr',
                onchange: B.ev ('set', 'call'),
@@ -131,28 +145,32 @@ views.main = function () {
    });
 }
 
+views.datagrid = function (paths) {
+   return ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (paths, function (path, k) {
+      var abridge = 0;
+      if (k > 0) dale.stop (path, true, function (v2, k2) {
+         if (paths [k - 1] [k2] !== v2) return true;
+         abridge++;
+      });
+      return ['tr', [
+         dale.go (path, function (element, k) {
+            var abridged = k < abridge;
+            return ['td', {class: 'ba pa1'}, ['p', {class: 'ma0' + (abridged ? ' silver' : '')}, element]];
+         }),
+      ]];
+   })]
+}
+
 views.cell = function (path) {
    return B.view ('dataspace', function (dataspace) {
-      var response = dale.fil (cell.get (dataspace, path, []), undefined, function (v) {
+      var paths = dale.fil (cell.get (dataspace, path, []), undefined, function (v) {
          if (v [0] === 'dialogue') return; // Don't show the dialogue
          return v;
       });
 
       return ['div', [
          ['h3', 'Location: ' + (cell.pathsToText (path) || 'all')],
-         ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (response, function (path, k) {
-            var abridge = 0;
-            if (k > 0) dale.stop (path, true, function (v2, k2) {
-               if (response [k - 1] [k2] !== v2) return true;
-               abridge++;
-            });
-            return ['tr', [
-               dale.go (path, function (element, k) {
-                  var abridged = k < abridge;
-                  return ['td', {class: 'ba pa1'}, ['p', {class: 'ma0' + (abridged ? ' silver' : '')}, element]];
-               }),
-            ]];
-         })],
+         views.datagrid (paths)
       ]];
    });
 }

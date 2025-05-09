@@ -286,7 +286,7 @@ cell.jsonToPaths = function (v, paths) {
 
    recurse (v, [])
 
-   return paths;
+   return cell.sorter (paths);
 }
 
 cell.receive = function (message) {
