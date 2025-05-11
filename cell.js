@@ -5,6 +5,9 @@ var isNode = typeof exports === 'object';
 if (isNode) var cell = exports;
 else        var cell = {};
 
+var dale   = isNode ? require ('dale')   : window.dale;
+var teishi = isNode ? require ('teishi') : window.teishi;
+
 var clog = console.log;
 
 // *** MAIN FUNCTIONS ***
@@ -289,7 +292,7 @@ cell.jsonToPaths = function (v, paths) {
    return cell.sorter (paths);
 }
 
-cell.receive = function (message) {
+cell.call = function (message, get, put) {
 
    var paths = cell.parser (message);
    if (paths.error) return [['error', paths.error]];
@@ -310,15 +313,17 @@ cell.receive = function (message) {
 
       return cell.put (dale.go (paths, function (path) {
          return path.slice (2);
-      }));
+      }), get, put);
    }
 
    if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']];
 
-   return cell.get (B.get ('dataspace'), paths [0].slice (1), []);
+   return cell.get (paths [0].slice (1), [], get);
 }
 
-cell.get = function (dataspace, queryPath, contextPath) {
+cell.get = function (queryPath, contextPath, get) {
+   var dataspace = get ();
+
    return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
 
       var matches = dale.fil (dataspace, undefined, function (path) {
@@ -330,11 +335,10 @@ cell.get = function (dataspace, queryPath, contextPath) {
 
       if (matches.length > 0) return matches;
 
-   }) || [['']];
+   }) || [];
 }
 
-cell.put = function (paths, updateDialogue) {
-   var dataspace = B.get ('dataspace');
+cell.put = function (paths, get, put, updateDialogue) {
 
    if (teishi.type (paths [0] [0]) !== 'integer') return [['error', 'A put call can only receive a list.']];
    if ((teishi.last (paths) [0] % 2) !== 0) return [['error', 'A put call can only receive a list with an even number of elements.']];
@@ -351,6 +355,8 @@ cell.put = function (paths, updateDialogue) {
          teishi.last (pairs) [1].push (teishi.last (pairs) [0].concat (path.slice (1)));
       }
    });
+
+   var dataspace = get ();
 
    error = dale.stopNot (pairs, undefined, function (v) {
       var leftSide = v [0];
@@ -372,7 +378,8 @@ cell.put = function (paths, updateDialogue) {
 
    if (error) return [['error', error]];
 
-   B.call ('set', 'dataspace', dataspace);
+   put (dataspace);
+
    return [['ok']];
 }
 
@@ -380,8 +387,7 @@ cell.put = function (paths, updateDialogue) {
 
 var test = function () {
    var start = teishi.time ();
-
-   var originalDataspace = teishi.copy (B.get ('dataspace'));
+   var dataspace = [];
 
    var errorFound = false === dale.stop ([
       {f: cell.textToPaths, input: '', expected: []},
@@ -454,50 +460,50 @@ var test = function () {
       {f: cell.pathsToText, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: cell.pathsToText, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       {f: cell.pathsToText, expected: ['foo bar 1 jip', '        2 yes'], input: [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]},
-      {f: cell.receive, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
-      {f: cell.receive, input: '', expected: []},
-      {f: cell.receive, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
-      {f: cell.receive, input: '@ foo bar\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
-      {f: cell.receive, input: '@ something is\n  another thing', expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
-      {f: cell.receive, input: '@ put something\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
-      {f: cell.receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
-      {f: cell.receive, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
-      {f: cell.receive, input: '@ put foo bar 1\n@ put foo jip 2', expected: [['error', 'A put call can only receive a list.']]},
-      {f: cell.receive, input: '@ put 1 foo bar', expected: [['error', 'A put call can only receive a list with an even number of elements.']]},
-      {f: cell.receive, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: [['error', 'A target value can only be a single path, but there is a multiple target value `1 something else`']]},
+      {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
+      {f: cell.call, input: '', expected: []},
+      {f: cell.call, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
+      {f: cell.call, input: '@ foo bar\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
+      {f: cell.call, input: '@ something is\n  another thing', expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
+      {f: cell.call, input: '@ put something\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
+      {f: cell.call, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
+      {f: cell.call, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
+      {f: cell.call, input: '@ put foo bar 1\n@ put foo jip 2', expected: [['error', 'A put call can only receive a list.']]},
+      {f: cell.call, input: '@ put 1 foo bar', expected: [['error', 'A put call can only receive a list with an even number of elements.']]},
+      {f: cell.call, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: [['error', 'A target value can only be a single path, but there is a multiple target value `1 something else`']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
          ['something', 'else']
       ]},
-      {f: cell.receive, input: '@', expected: [
+      {f: cell.call, input: '@', expected: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
          ['something', 'else']
       ]},
-      {f: cell.receive, input: '@ foo', expected: [
+      {f: cell.call, input: '@ foo', expected: [
          ['bar', 1, 'jip'],
          ['bar', 2, 'joo'],
          ['soda', 'wey'],
       ]},
-      {f: cell.receive, input: '@ foo bar', expected: [
+      {f: cell.call, input: '@ foo bar', expected: [
          [1, 'jip'],
          [2, 'joo'],
       ]},
-      {f: cell.receive, input: '@ foo bar 1', expected: [
+      {f: cell.call, input: '@ foo bar 1', expected: [
          ['jip'],
       ]},
-      {f: cell.receive, input: '@ foo bar 1 jip', expected: [['']]},
-      {f: cell.receive, input: '@ no such thing', expected: [['']]},
-      {f: cell.receive, input: '@ foo soda', expected: [
+      {f: cell.call, input: '@ foo bar 1 jip', expected: []},
+      {f: cell.call, input: '@ no such thing', expected: []},
+      {f: cell.call, input: '@ foo soda', expected: [
          ['wey']
       ]},
-      {f: cell.receive, input: '@ something', expected: [
+      {f: cell.call, input: '@ something', expected: [
          ['else']
       ]},
-      {f: cell.receive, input: '@ something else', expected: [['']]},
+      {f: cell.call, input: '@ something else', expected: []},
       {reset: [
          ['foo', 10],
          ['inner', 'foo', 20],
@@ -509,7 +515,7 @@ var test = function () {
       {f: cell.get, query: ['foo'], context: ['foo'], expected: [
          [10]
       ]},
-      {f: cell.get, query: ['bar'], context: ['foo'], expected: [['']]},
+      {f: cell.get, query: ['bar'], context: ['foo'], expected: []},
       {f: cell.get, query: ['foo'], context: ['inner'], expected: [
          [20],
       ]},
@@ -526,55 +532,64 @@ var test = function () {
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
       ]},
-      {f: cell.receive, input: ['@ put . foo bar', '@ put . hey'], expected: [['ok']]},
-      {f: cell.receive, input: '@ foo bar', expected: [['hey']]},
-      {f: cell.receive, input: ['@ put . foo', '@ put . 1'], expected: [['ok']]},
-      {f: cell.receive, input: '@ foo', expected: [[1]]},
-      {f: cell.receive, input: '@', expected: [['foo', 1]]},
+      {f: cell.call, input: ['@ put . foo bar', '@ put . hey'], expected: [['ok']]},
+      {f: cell.call, input: '@ foo bar', expected: [['hey']]},
+      {f: cell.call, input: ['@ put . foo', '@ put . 1'], expected: [['ok']]},
+      {f: cell.call, input: '@ foo', expected: [[1]]},
+      {f: cell.call, input: '@', expected: [['foo', 1]]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
       ]},
-      {f: cell.receive, input: ['@ put . foo', '@ put . bar hey'], expected: [['ok']]},
-      {f: cell.receive, input: '@ foo', expected: [['bar', 'hey']]},
-      {f: cell.receive, input: '@ foo bar', expected: [['hey']]},
-      {f: cell.receive, input: '@ put . foo 2\n@ put . something', expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-      ]},
-      {f: cell.receive, input: ['@ put . foo', '@ put . ""'], expected: [['ok']]},
-      {f: cell.receive, input: '@ foo', expected: [['']]},
+      {f: cell.call, input: ['@ put . foo', '@ put . bar hey'], expected: [['ok']]},
+      {f: cell.call, input: '@ foo', expected: [['bar', 'hey']]},
+      {f: cell.call, input: '@ foo bar', expected: [['hey']]},
+      {f: cell.call, input: '@ put . foo 2\n@ put . something', expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {f: cell.receive, input: ['@ put . foo jup', '@ put . yea'], expected: [['ok']]},
-      {f: cell.receive, input: '@ foo', expected: [
+      {f: cell.call, input: ['@ put . foo', '@ put . ""'], expected: [['ok']]},
+      {f: cell.call, input: '@ foo', expected: [['']]},
+      {reset: [
+         ['foo', 'bar', 1, 'jip'],
+         ['foo', 'bar', 2, 'joo'],
+         ['foo', 'soda', 'wey'],
+      ]},
+      {f: cell.call, input: ['@ put . foo jup', '@ put . yea'], expected: [['ok']]},
+      {f: cell.call, input: '@ foo', expected: [
          ['bar', 1, 'jip'],
          ['bar', 2, 'joo'],
          ['jup', 'yea'],
          ['soda', 'wey']
       ]},
-      {f: cell.receive, input: ['@ put . foo bar yes', '@ put . sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
-      {f: cell.receive, input: ['@ put . foo "\n\nbar"', '@ put . 1'], expected: [['ok']]},
-      {f: cell.receive, input: ['@ foo "\n\nbar"'], expected: [[1]]},
+      {f: cell.call, input: ['@ put . foo bar yes', '@ put . sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
+      {f: cell.call, input: ['@ put . foo "\n\nbar"', '@ put . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ foo "\n\nbar"'], expected: [[1]]},
 
-      {f: cell.receive, input: ['@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.receive, input: ['@ put . foo', '@ put . bar', '@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.receive, input: ['@ put . dialogue', '@ put . 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
+      {f: cell.call, input: ['@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
+      {f: cell.call, input: ['@ put . foo', '@ put . bar', '@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
+      {f: cell.call, input: ['@ put . dialogue', '@ put . 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
    ], false, function (test) {
 
-      if (test.reset) return B.call ('set', 'dataspace', test.reset);
+      if (test.reset) return dataspace = test.reset;
 
-      if (test.f === cell.textToPaths  && teishi.type (test.input)    === 'array') test.input = test.input.join ('\n');
-      if (test.f === cell.receive && teishi.type (test.input)    === 'array') test.input = test.input.join ('\n');
+      if (test.f === cell.textToPaths  && teishi.type (test.input)    === 'array') test.input    = test.input.join ('\n');
+      if (test.f === cell.call         && teishi.type (test.input)    === 'array') test.input    = test.input.join ('\n');
       if (test.f === cell.pathsToText  && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
 
-      if (test.f === cell.get) var result = cell.get (teishi.copy (B.get ('dataspace')), test.query, test.context);
-      else                var result = test.f (test.input);
+      var get = function () {
+         return dataspace;
+      }
+      var put = function (v) {
+         dataspace = v;
+      }
+
+      if (test.f === cell.get)       var result = cell.get (test.query, test.context, get);
+      else if (test.f === cell.put)  var result = cell.put (test.input, get, put);
+      else if (test.f === cell.call) var result = cell.call (test.input, get, put);
+      else                           var result = test.f (test.input);
 
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {expected: test.expected, obtained: result});
@@ -582,8 +597,6 @@ var test = function () {
    });
    if (errorFound) clog ('A test did not pass');
    else clog ('All tests successful', (teishi.time () - start) + 'ms');
-
-   B.call ('set', 'dataspace', originalDataspace);
 }
 
 test ();

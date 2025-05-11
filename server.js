@@ -3,8 +3,8 @@
 var CONFIG = require ('./config.js');
 var SECRET = require ('./secret.js');
 
-var fs = require ('fs');
-var path = require ('path');
+var fs   = require ('fs');
+var Path = require ('path');
 
 var dale   = require ('dale');
 var teishi = require ('teishi');
@@ -12,9 +12,17 @@ var lith   = require ('lith');
 var cicek  = require ('cicek');
 var hitit  = require ('hitit');
 
+var cell   = require ('./cell.js');
+
 var clog = console.log;
 
 var type = teishi.type, eq = teishi.eq, last = teishi.last, inc = teishi.inc, reply = cicek.reply;
+
+var stop = function (rs, rules) {
+   return teishi.stop (rules, function (error) {
+      reply (rs, 400, {error: error});
+   }, true);
+}
 
 // *** HELPERS ***
 
@@ -99,12 +107,45 @@ var routes = [
       });
    }],
 
-   ['get', 'project/:id', function (rq, rs) {
+   ['post', 'call/:id', function (rq, rs) {
 
-      fs.readFile (Path.join ('cells', rq.data.params [0]), 'utf8', function (error, dataspace) {
-         if (error && error.code === 'ENOENT') return reply (rs, 404);
-         if (error) return reply (rs, 500, {error: error});
-         reply (rs, 200, dataspace);
+      if (stop (rs, [
+         ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match]
+      ])) return;
+
+      var path = Path.join ('cells', rq.data.params.id);
+
+      fs.readFile (path, 'utf8', function (error, dataspace) {
+
+         if (error && error.code !== 'ENOENT') return reply (rs, 500, {error: error});
+         if (error) dataspace = '';
+
+         dataspace = cell.parser (dataspace);
+
+         var get = function () {return dataspace}
+         var put = function (dataspace) {
+            fs.writeFileSync (path, cell.pathsToText (dataspace), 'utf8');
+         }
+
+         var response = cell.call (rq.body.call, get, put);
+         var dialogue = cell.call ('@ dialogue', get, put);
+         var length = dialogue.length ? teishi.last (dialogue) [0] : 0;
+
+         // Note that even if the call is not valid, we still store it in the dialogue!
+         cell.put ([
+            [1, 'dialogue', length + 1, 'from'],
+            [2, 'user'],
+            [3, 'dialogue', length + 1, 'message'],
+            [4, rq.body.call],
+            [5, 'dialogue', length + 2, 'from'],
+            [6, 'cell'],
+            [7, 'dialogue', length + 2, 'message'],
+            ...dale.go (response, function (v) {
+               return [8, ...v];
+            }),
+         ], get, put, true);
+
+         reply (rs, 200, {response: response});
       });
    }],
 

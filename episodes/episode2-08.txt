@@ -1,0 +1,12 @@
+Eight episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We officially have a service with persistence and query it from the client, and run into new, interesting problems. It's taking shape. Today, I listen to a mythical concert from Soda Stereo (Obras 1988) (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+put should not return [['ok']], it should return a diff! A diff on paths, not lines.
+
+refactor dialogue as:
+
+@ a
+= b
+from c
+to   d

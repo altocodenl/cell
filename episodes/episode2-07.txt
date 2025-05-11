@@ -1,0 +1,102 @@
+Seventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We are getting closer to having a service with persistence that we can query from the client! Today, I play Flying Microtonal Banana (again) from King Gizzard and The Lizard Wizard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Hello Earth! Silent episode today, I'm on a very noisy place. Let's continue where we left off last time.
+
+Ah, now I remember. The issue was that I wasn't sure about how I was sending the call to put the updates on the dialogue. After some more thought, I realize that it's just fine to do it like that. It's a low-level way to represent data, using raw paths in JS, but it works.
+
+So let's move on and now move to the server what was before in the client.
+
+(I'm also fixing something on cell.get: to return no paths if we get an empty text.)
+
+My wife just brought me coffee. What a sweetheart!
+
+So, we receive the call. Just refreshing my mind on what cell.receive does, and whether it is necessary or not.
+
+It should not be "receive". It should be *respond*. Let's fix it.
+
+Eh, I changed my mind. We should just call it, eh, cell.call. You're making a call to cell. Then, cell responds to your call.
+
+We don't need this any more. This was an artifact from returning [['']] from an empty call to cell.get.
+      if (dialogue.length less than 1) length = teishi.last (dialogue) [0];
+
+Interesting question: do we send text or paths over the wire? Well, if we have paths on the server, and the client also needs paths to show, then we'd just spending cycles to turn the paths to text on the server, and then do the inverse process on the client.
+
+However, if we were to intercept what's going on on the wire, it'd be more readable to send text. So let's send that instead. Computer cycles are cheaper than brain cycles.
+
+Off topic: I'm in an indoor kid play area and on the corner of my eye I caught what I thought was a seagull. Turns out it was a toddler crawling. So much for my limbic brain.
+
+Call me crazy, but I think we did the client part already. Now onto the server.
+
+The call endpoint should return the response, not the entire dataspace. But the get call does return the entire dataspace, right? But then, why bother with a second roundtrip? Let's just return the entire dataspace.
+
+Later, the put call should return the *diff* on what you're looking at on the client. Optimizations will come later. Let's get something useful going!
+
+Why return the dataspace straight from the put? One less round trip. Why make people wait?
+
+Whoops, our cell implementation needed to receive the dataspace as an argument.
+
+Thinking how to have a dataspace just for tests.
+
+Will pass the dataspace as the last argument to cell.get.
+
+I think I need to give to put a function that will persist the change, because we cannot just return the entire dataspace from put, since it needs to return an OK.
+
+Same with get, we need to give it a getter that can later leverage the query parameters too.
+
+This is quite functional looking, I have to say.
+
+Now changing all the calls to cell.get and cell.put
+
+Yeah, was just making sure that when putting things, we sort the paths.
+
+I know that using sync blocks the server, but we can change that when we need to. Let's get something working.
+
+Now I need to fix the tests: cell.call, cell.get and cell.put.
+
+See you on the next episode!! Thanks for watching :)
+
+I have a few more minutes, let's keep on pushing.
+
+This overwriting on the tests is not going to work!
+
+Oh, I have no internet, that's why. We should be serving gotoB locally? Let's get internet first anyway.
+
+Whoops, found the issue. It was somewhere else, not in the tests, but in client.js.
+
+OK, now I think the issue is with the put.
+
+Let's try something.
+
+var foo = [];
+
+var a = function () {
+   return foo;
+}
+
+var b = function () {
+   foo = [1, 2, 3];
+}
+
+var c = function () {
+   foo = [1, 2, 3, 4];
+}
+
+b ();
+
+clog (a ());
+
+c ();
+
+clog (a ());
+
+Nah, this works. We can overwrite the dataspace with a new array and it will still work, the reference from the get to it will still work.
+
+We are getting no matches rather than getting the whole thing. Why?
+
+The dataspace always looks empty!
+
+I'm a dummy, it was the reset call!
+
+OK, done now!!
