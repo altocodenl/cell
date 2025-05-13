@@ -110,7 +110,8 @@ var routes = [
    ['post', 'call/:id', function (rq, rs) {
 
       if (stop (rs, [
-         ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match]
+         ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
+         ['mute', rq.body.mute, [undefined, true, false], 'oneOf', teishi.test.equal],
       ])) return;
 
       var path = Path.join ('cells', rq.data.params.id);
@@ -123,26 +124,30 @@ var routes = [
          dataspace = cell.parser (dataspace);
 
          var get = function () {return dataspace}
-         var put = function (dataspace) {
+         var put = function (Dataspace) {
+            dataspace = Dataspace;
             fs.writeFileSync (path, cell.pathsToText (dataspace), 'utf8');
          }
 
          var response = cell.call (rq.body.call, get, put);
          var dialogue = cell.call ('@ dialogue', get, put);
+
          var length = dialogue.length ? teishi.last (dialogue) [0] : 0;
 
          // Note that even if the call is not valid, we still store it in the dialogue!
-         cell.put ([
+         if (! rq.body.mute) cell.put ([
             [1, 'dialogue', length + 1, 'from'],
             [2, 'user'],
-            [3, 'dialogue', length + 1, 'message'],
-            [4, rq.body.call],
-            [5, 'dialogue', length + 2, 'from'],
-            [6, 'cell'],
-            [7, 'dialogue', length + 2, 'message'],
-            ...dale.go (response, function (v) {
-               return [8, ...v];
-            }),
+            [3, 'dialogue', length + 1, 'to'],
+            [4, 'cell'],
+            [5, 'dialogue', length + 1, '@'],
+            [6, rq.body.call],
+            ... (response.length ? [
+               [7, 'dialogue', length + 1, '='],
+               ...dale.go (response, function (v) {
+                  return [8, ...v];
+               }),
+            ] : []),
          ], get, put, true);
 
          reply (rs, 200, {response: response});

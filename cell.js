@@ -8,7 +8,7 @@ else        var cell = {};
 var dale   = isNode ? require ('dale')   : window.dale;
 var teishi = isNode ? require ('teishi') : window.teishi;
 
-var clog = console.log;
+var clog = console.log, type = teishi.type;
 
 // *** MAIN FUNCTIONS ***
 
@@ -23,7 +23,7 @@ cell.textToPaths = function (message) {
    }
 
    var unparseNumber = function (v) {
-      if (teishi.type (v) !== 'string') return v + '';
+      if (type (v) !== 'string') return v + '';
       if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
       return v;
    }
@@ -153,7 +153,7 @@ cell.dedotter = function (paths) {
          var lastPath = paths [k - 1];
          var continuing;
          if (lastPath === undefined) continuing = false;
-         else continuing = teishi.eq (lastPath.slice (0, k2), v.slice (0, k2)) && teishi.type (lastPath [k2]) !== 'string';
+         else continuing = teishi.eq (lastPath.slice (0, k2), v.slice (0, k2)) && type (lastPath [k2]) !== 'string';
 
          if (! continuing) paths [k] [k2] = 1;
          else              paths [k] [k2] = lastPath [k2] + 1;
@@ -165,7 +165,7 @@ cell.dedotter = function (paths) {
 cell.sorter = function (paths) {
 
    var compare = function (v1, v2) {
-      var types = [teishi.type (v1) === 'string' ? 'text' : 'number', teishi.type (v2) === 'string' ? 'text' : 'number'];
+      var types = [type (v1) === 'string' ? 'text' : 'number', type (v2) === 'string' ? 'text' : 'number'];
       // Numbers first.
       if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
       if (types [0] === 'number') return v1 - v2;
@@ -204,15 +204,15 @@ cell.validator = function (paths) {
    var error = dale.stopNot (paths, undefined, function (path) {
 
       return dale.stopNot (path, undefined, function (v, k) {
-         if (teishi.type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + cell.pathsToText ([path]) + '` uses it as a key.';
+         if (type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + cell.pathsToText ([path]) + '` uses it as a key.';
 
-         var type = teishi.type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
+         var Type = type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
 
          var seenKey = JSON.stringify (path.slice (0, k));
-         if (! seen [seenKey]) seen [seenKey] = type;
+         if (! seen [seenKey]) seen [seenKey] = Type;
          else {
-            if (seen [seenKey] !== type) return 'The path `' + cell.pathsToText ([path]) + '` is setting a ' + type + ' but there is already a ' + seen [seenKey] + ' at path `' + cell.pathsToText ([path.slice (0, k)]) + '`';
-            if (type === 'number' || type === 'text') return 'The path `' + cell.pathsToText ([path]) + '` is repeated.';
+            if (seen [seenKey] !== Type) return 'The path `' + cell.pathsToText ([path]) + '` is setting a ' + Type + ' but there is already a ' + seen [seenKey] + ' at path `' + cell.pathsToText ([path.slice (0, k)]) + '`';
+            if (Type === 'number' || Type === 'text') return 'The path `' + cell.pathsToText ([path]) + '` is repeated.';
          }
       });
    });
@@ -221,7 +221,7 @@ cell.validator = function (paths) {
 }
 
 cell.parser = function (message) {
-   if (teishi.type (message) !== 'string') return {error: 'The message must be text but instead is ' + teishi.type (message)};
+   if (type (message) !== 'string') return {error: 'The message must be text but instead is ' + type (message)};
 
    var paths = cell.textToPaths (message);
    if (paths.error) return paths;
@@ -248,7 +248,7 @@ cell.pathsToText = function (paths) {
 
    var pathToText = function (path) {
       return dale.go (path, function (v) {
-         return teishi.type (v) === 'string' ? quoter (v) : (v + '');
+         return type (v) === 'string' ? quoter (v) : (v + '');
       }).join (' ');
    }
 
@@ -266,16 +266,16 @@ cell.pathsToText = function (paths) {
    return output.join ('\n');
 }
 
-cell.jsonToPaths = function (v, paths) {
+cell.JSToPaths = function (v, paths) {
 
    paths = paths || [];
 
    var singleTo4 = function (v) {
-      var type = teishi.type (v);
-      if (teishi.inc (['integer', 'float', 'string'], type)) return v;
-      if (type === 'boolean') return v ? 1 : 0;
-      if (type === 'date') return v.toISOString ();
-      if (teishi.inc (['regex', 'function', 'infinity'], type)) return v.toString ();
+      var Type = type (v);
+      if (teishi.inc (['integer', 'float', 'string'], Type)) return v;
+      if (Type === 'boolean') return v ? 1 : 0;
+      if (Type === 'date') return v.toISOString ();
+      if (teishi.inc (['regex', 'function', 'infinity'], Type)) return v.toString ();
       // Invalid values (nan, null, undefined) are returned as empty text
       return '';
    }
@@ -283,13 +283,37 @@ cell.jsonToPaths = function (v, paths) {
    var recurse = function (v, path) {
       if (teishi.simple (v)) paths.push ([...path, singleTo4 (v)]);
       else                   dale.go (v, function (v2, k2) {
-         recurse (v2, [...path, teishi.type (k2) === 'integer' ? k2 + 1 : k2]);
+         recurse (v2, [...path, type (k2) === 'integer' ? k2 + 1 : k2]);
       });
    }
 
    recurse (v, [])
 
    return cell.sorter (paths);
+}
+
+cell.pathsToJS = function (paths, output) {
+
+   if (paths.length === 0) return {};
+
+   if (paths.length === 1 && paths [0].length === 1) return paths [0] [0];
+
+   var output = type (paths [0] [0]) === 'string' ? {} : [];
+
+   dale.go (paths, function (path) {
+      var target = output;
+      dale.go (path, function (element, depth) {
+         if (depth + 1 === path.length) return;
+         if (type (element) === 'integer') element = element - 1;
+         if (depth + 2 < path.length) {
+            if (target [element] === undefined) target [element] = type (path [depth + 1]) === 'string' ? {} : [];
+            target = target [element];
+         }
+         else target [element] = path [depth + 1];
+      });
+   });
+
+   return output;
 }
 
 cell.call = function (message, get, put) {
@@ -340,7 +364,7 @@ cell.get = function (queryPath, contextPath, get) {
 
 cell.put = function (paths, get, put, updateDialogue) {
 
-   if (teishi.type (paths [0] [0]) !== 'integer') return [['error', 'A put call can only receive a list.']];
+   if (type (paths [0] [0]) !== 'integer') return [['error', 'A put call can only receive a list.']];
    if ((teishi.last (paths) [0] % 2) !== 0) return [['error', 'A put call can only receive a list with an even number of elements.']];
 
    var error = dale.stopNot (paths, undefined, function (path, k) {
@@ -528,6 +552,10 @@ var test = function () {
 
       // *** PUT ***
 
+      {reset: []},
+      {f: cell.call, input: ['@ put 1 foo', '@ put 2 bar'], expected: [['ok']]},
+      {f: cell.call, input: '@', expected: [['foo', 'bar']]},
+      {f: cell.call, input: '@ foo', expected: [['bar']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -571,13 +599,21 @@ var test = function () {
       {f: cell.call, input: ['@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
       {f: cell.call, input: ['@ put . foo', '@ put . bar', '@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
       {f: cell.call, input: ['@ put . dialogue', '@ put . 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
+      {f: cell.JSToPaths, input: {c: 'd', a: 'b'}, expected: [['a', 'b'], ['c', 'd']]},
+      {f: cell.JSToPaths, input: [1, 2, 3], expected: [[1, 1], [2, 2], [3, 3]]},
+      {f: cell.JSToPaths, input: {boo: [true, false], why: new Date ('2025-01-01T00:00:00.000Z')}, expected: [['boo', 1, 1], ['boo', 2, 0], ['why', '2025-01-01T00:00:00.000Z']]},
+      {f: cell.JSToPaths, input: {foo: null, some: '', thing: parseInt ('!')}, expected: [[ 'foo', ''], ['some', ''], ['thing', '']]},
+      {f: cell.pathsToJS, input: [], expected: {}},
+      {f: cell.pathsToJS, input: [['']], expected: ''},
+      {f: cell.pathsToJS, input: [[1]], expected: 1},
+      {f: cell.pathsToJS, input: [['bar', 1, 'jip'], ['bar', 2, 'joo'], ['jup', 'yea'], ['soda', 'wey']], expected: {bar: ['jip', 'joo'], jup: 'yea', soda: 'wey'}},
    ], false, function (test) {
 
       if (test.reset) return dataspace = test.reset;
 
-      if (test.f === cell.textToPaths  && teishi.type (test.input)    === 'array') test.input    = test.input.join ('\n');
-      if (test.f === cell.call         && teishi.type (test.input)    === 'array') test.input    = test.input.join ('\n');
-      if (test.f === cell.pathsToText  && teishi.type (test.expected) === 'array') test.expected = test.expected.join ('\n');
+      if (test.f === cell.textToPaths  && type (test.input)    === 'array') test.input    = test.input.join ('\n');
+      if (test.f === cell.call         && type (test.input)    === 'array') test.input    = test.input.join ('\n');
+      if (test.f === cell.pathsToText  && type (test.expected) === 'array') test.expected = test.expected.join ('\n');
 
       var get = function () {
          return dataspace;

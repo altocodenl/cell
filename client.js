@@ -48,6 +48,8 @@ B.mrespond ([
    }],
    ['send', 'call', function (x, call) {
 
+      if (call.trim ().length === 0) return;
+
       var cellName = window.location.hash.replace ('#/', '');
 
       B.call (x, 'post', 'call/' + cellName, {}, {call: call}, function (x, error, rs) {
@@ -62,7 +64,7 @@ B.mrespond ([
 
       var cellName = window.location.hash.replace ('#/', '');
 
-      B.call (x, 'post', 'call/' + cellName, {}, {call: '@'}, function (x, error, rs) {
+      B.call (x, 'post', 'call/' + cellName, {}, {call: '@', mute: true}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', error);
          B.call (x, 'set', 'dataspace', rs.body.response);
       });
@@ -80,12 +82,7 @@ views.css = [
 views.main = function () {
 
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
-      var dialogue = cell.get (['dialogue'], [], function () {return B.get ('dataspace') || []});
-      var dialogueOutput = [];
-      if (dialogue.length) dale.go (dialogue, function (v) {
-         if (v [1] === 'from') dialogueOutput.push ({from: v [2], message: []});
-         else teishi.last (dialogueOutput).message.push (v.slice (2));
-      });
+      var dialogue = cell.pathsToJS (cell.get (['dialogue'], [], function () {return B.get ('dataspace') || []}));
 
       call = call || '';
       return ['div', [
@@ -95,21 +92,26 @@ views.main = function () {
          ]],
          ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
 
-            dale.go (dialogueOutput || [], function (item) {
+            dale.go (dialogue, function (entry) {
 
-               var classes = 'code w-70 pa2 ba br3 mb2';
-               if (item.from === 'user') classes += ' fr bg-white';
-               else                      classes += ' fl bg-dark-green near-white';
-
-               var message = item.from === 'user' ? item.message [0] [0] : item.message;
-               if (type (message) === 'string') {
-                  var parsedMessage = cell.parser (message);
-                  if (type (parsedMessage) === 'array') message = parsedMessage;
+               var classes = function (who) {
+                  var output = 'code w-70 pa2 ba br3 mb2';
+                  if (who === 'user') output += ' fr bg-white';
+                  else                output += ' fl bg-dark-green near-white';
+                  return output;
                }
 
-               if (type (message) === 'array') return ['div', {class: classes}, views.datagrid (message)];
-               else return ['textarea', {class: classes, readonly: true, value: message, rows: message.split ('\n').length}, message];
+               var parseIfValid = function (v) {
+                  var parsed = cell.parser (v);
+                  return type (parsed) === 'array' ? parsed : v;
+               }
 
+               var call = parseIfValid (entry ['@']);
+
+               return [
+                  type (call) === 'array' ? ['div', {class: classes (entry.from)}, views.datagrid (call)] : ['textarea', {class: classes, readonly: true, value: call, rows: call.split ('\n').length}, call],
+                  ['div', {class: classes (entry.to)}, entry ['='] !== undefined ? views.datagrid (cell.JSToPaths (entry ['='])) : views.datagrid ([['""']])],
+               ];
             }),
 
             // New message
