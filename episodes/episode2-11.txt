@@ -1,0 +1,120 @@
+Eleventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We are able now to upload JSON and table/spreadsheet-like data into cell. And we find a bad parsing bug involving the slash. Good stuff! We also define what we need for the demo, which will be the end of the season. Today, I listen to Otro Le Travaladna and Gol de Mujer by Divididos (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Hi! Today's episode will start mute, then I'll continue from a place where I can speak.
+
+I changed my mind: we won't do multiput in one operation, just do one put per update we want to do.
+
+I've been thinking about the demo, and what it should be. Here's what I want:
+
+Demo checklist:
+- Upload XLS/CSV/JSON (file & clipboard): 1) client send, 2) server receive, 3) parse it, 4) put it in the dataspace using the filenames
+- Integrate the LLM to look at the data it already suggests ideas on what to do; then we can make queries on it that it can run itself, and then put it on a summary
+- Add a bit of validation on that summary
+- Add a service where you can get that summary as an API
+- Add a small view where you can expose that summary as a table
+
+The idea is that we always have an input of data; then, we build the database, the service and the view around it. The language and the client grow from these efforts, wherever needed. We can then build incrementally across all fronts, but always with something working. I don't want to build a full database and have no service or no view. A little bit of each multiplies the value of the solution, there's a sort of Metcalfe effect here with the features behaving like nodes on a network.
+
+Let's commit yesterday's changes.
+
+Of course, the train goes into a tunnel and the connection goes out when I'm trying to commit... never mind, it went through! Serves me right for complaining.
+
+Ah, so pretty to be able to start the server.
+
+OK, let's tackle the upload. We will do the LLM after we have some data in.
+
+Just thinking out loud: we should also be able to paste a file in the upload, and "auto-pick" the format. Yeah, let's change the demo checklist. We will have this demo checklist at the top of every episode.
+
+Also had a thought: the user won't start by writing calls to cell. They will start by uploading files or pasting data and asking the LLM to do something with it. And the LLM should really kick in as soon as the data is pasted. The data should almost "speak" to you, it comes alive through the nondeterministic LLM and the computational power of cell.
+
+Whenever I feel like stalling, I just run `git status`. It's the equivalent of saying "uhmmmm", but with my fingertips.
+
+Thinking...
+
+Yeah, the copy paste should go first. What should I copy first? I cannot test without data. I could start with those JSON templates.
+
+Thanks again, Douglas Crockford, for inventing JSON.
+
+{
+    "glossary": {
+        "title": "example glossary",
+		"GlossDiv": {
+            "title": "S",
+			"GlossList": {
+                "GlossEntry": {
+                    "ID": "SGML",
+					"SortAs": "SGML",
+					"GlossTerm": "Standard Generalized Markup Language",
+					"Acronym": "SGML",
+					"Abbrev": "ISO 8879:1986",
+					"GlossDef": {
+                        "para": "A meta-markup language, used to create markup languages such as DocBook.",
+						"GlossSeeAlso": ["GML", "XML"]
+                    },
+					"GlossSee": "markup"
+                }
+            }
+        }
+    }
+}
+
+I don't think I need those [] around the argument to B.ev.
+
+Why did they make it async?!?
+
+If you're tired of OOP, you're not the only one. Give. Me. The. Data.
+
+Alright, we're getting somewhere.
+
+Let's start by uploading that.
+
+Let's think a bit:
+- If we just submit the text without parsing, it's not so useful. Some "autoparsing" would come in handy.
+- Then, we can have an endpoint that parses the file, while keeping the original.
+- Then, that endpoint puts the original file and the parsed version. What would be the structure?
+
+<name> data ...
+       file data <base 64 or plaintext if original is plaintext>
+            name <name>
+            size ...
+            type xls/csv/json
+
+Let's skip the multipart and just send it as base64. More comfortable, at least for now.
+
+
+Dump of ideas:
+- Let's try later a XLS/CSV, copied. This is going to be mighty useful too.
+- I also want to paste lines of JSONs that come from logs. This would be mighty useful when debugging.
+- At some point, the LLM should catch whatever we can't parse and try to interpret it. The idea is to throw cell any shoe and always get it back polished.
+- Maybe it's better to have =, then @ rather than the other way around. Start with the result, then look at where it comes from, perhaps.
+
+
+This broke us: text = ' /'
+
+Also this: text = ' /a'
+
+Using slashes fails in the dialogue, because the call is shown as text. The first one also fails outright, it's the worse case. The first one triggers a failure of encoding. The second one, a failure of parsing (bypassable by not adding an entry in the dialogue).
+
+" /" should be encoded as " //"
+" //" should be decode as " /"
+
+The rule is: if in the original string there is a /", make the slash a double slash. Same for decoding: if there's a double slash before a ", make it a single slash.
+
+
+oroduct	Amount	Year
+Macetas	14	2025
+Cabezas	22	2025
+Rivotril	666	2025
+
+Product  Amount   Year
+Macetas  14 2025
+Cabezas  22 2025
+Rivotril 666   2025
+
+Product  Amount   Year
+Macetas  14 2025
+Cabezas  22
+Rivotril 666   2025
+

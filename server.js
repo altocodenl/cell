@@ -43,8 +43,8 @@ var LLM = function (model, question, cb) {
    httpCall ({
       https: true,
       host: 'api.openai.com',
-      path: 'v1/responses',
       method: 'post',
+      path: 'v1/responses',
       headers: {authorization: 'Bearer ' + SECRET.openai},
       body: {model: model, temperature: 1, input: question}
    }, function (error, rs) {
@@ -111,6 +111,7 @@ var routes = [
 
       if (stop (rs, [
          ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
+         ['call', rq.body.call, 'string'],
          ['mute', rq.body.mute, [undefined, true, false], 'oneOf', teishi.test.equal],
       ])) return;
 
@@ -160,6 +161,61 @@ var routes = [
       });
    }],
 
+   ['post', 'file/:id', function (rq, rs) {
+      if (stop (rs, [
+         ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
+         ['file', rq.body.file, 'string'],
+         ['name', rq.body.name, 'string'],
+         ['mime', rq.body.mime, 'string']
+      ])) return;
+
+      var plainParse = function (text) {
+         var json = teishi.parse (text);
+         if (json) return json;
+
+         var detabler = function (separator) {
+
+            var lines = text.split (/\r?\n/);
+
+            if (! lines [0].match (separator)) return;
+
+            var output = [];
+            dale.obj (lines, function (v, k) {
+               if (k === 0) return;
+               output.push (dale.obj (v.split ('\t'), function (v2, k2) {
+                  return [lines [0].split ('\t') [k2], cell.toNumberIfNumber (v2)];
+               }))
+            });
+            return output;
+         }
+
+         var table = detabler ('\t');
+         if (table) return table;
+
+         var table = detabler (',');
+         if (table) return table;
+
+         return text;
+      }
+
+      httpCall ({
+         https: false,
+         host: 'localhost',
+         port: CONFIG.port,
+         method: 'post',
+         path: 'call/' + rq.data.params.id,
+         body: {
+            call: cell.pathsToText (cell.JSToPaths ({'@': {'put': {
+               p: rq.body.name,
+               v: plainParse (rq.body.file),
+            }}})),
+            mute: true,
+         }
+      }, function (error, RS) {
+         if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});
+         reply (rs, 200);
+      });
+   }],
 ];
 
 // LLM ('gpt-4o', 'Hi, can you give me an JS array with single quotes with twenty random (but common) English nouns?', console.log);

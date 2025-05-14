@@ -1,0 +1,13 @@
+Ninth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today the work expands fractally in front of us, as we refactor dialogue and add a new fnction to cell. Today, I listen to a Deadmau5 mix (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+- Refactor dialogue, change the code that prints it.
+- mute flag
+- Test pathsToJSON
+
+For later:
+- Show ... when waiting for a response.
+- Show top level keys separately.
+- Upload CSV, XLS, JSON. Add some parsing so it's as data, also keep original file. base64!
+- Integrate LLM: when uploading file, when sending something that is not a call. It goes in between the call and the response, from the perspective of the client.

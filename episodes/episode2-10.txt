@@ -1,0 +1,13 @@
+Tenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We manage to close a branch of the fractal and even dare refactor put. We're getting closer to uploading files and having an LLM. Today, I listen (again) to Laminated Denim by King Gizzard (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Done:
+- Refactor dialogue, change the code that prints it.
+- mute flag
+- Test pathsToJSON
+- refactor put to p and v
+
+- multiput with p1 v1, whatever that starts with combinations of p and v
+
+- Show top level keys separately.

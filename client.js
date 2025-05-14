@@ -69,6 +69,16 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', rs.body.response);
       });
    }],
+   ['upload', 'clipboard', async function (x) {
+      var file = await navigator.clipboard.readText ();
+
+      var cellName = window.location.hash.replace ('#/', '');
+
+      B.call ('post', 'file/' + cellName, {}, {file: file, name: 'clipboard-' + (Math.random () + '').slice (3, 6), mime: 'text/plain'}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', error);
+         B.call (x, 'retrieve', 'cell');
+      });
+   }],
 ]);
 
 // *** VIEWS ***
@@ -122,7 +132,8 @@ views.main = function () {
                autofocus: true,
                value: call,
             }],
-            ['button', {class: 'w-100', onclick: B.ev (['send', 'call', call])}, 'Submit'],
+            ['button', {class: 'w-100', onclick: B.ev ('send', 'call', call)}, 'Submit'],
+            ['button', {onclick: B.ev ('upload', 'clipboard')}, 'Upload from clipboard'],
          ]],
       ]];
    });
