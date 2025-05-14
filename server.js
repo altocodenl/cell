@@ -135,20 +135,26 @@ var routes = [
          var length = dialogue.length ? teishi.last (dialogue) [0] : 0;
 
          // Note that even if the call is not valid, we still store it in the dialogue!
-         if (! rq.body.mute) cell.put ([
-            [1, 'dialogue', length + 1, 'from'],
-            [2, 'user'],
-            [3, 'dialogue', length + 1, 'to'],
-            [4, 'cell'],
-            [5, 'dialogue', length + 1, '@'],
-            [6, rq.body.call],
-            ... (response.length ? [
-               [7, 'dialogue', length + 1, '='],
+         if (! rq.body.mute) {
+            cell.put ([
+               ['p', 'dialogue', length + 1, 'from'],
+               ['v', 'user'],
+            ], get, put, true);
+            cell.put ([
+               ['p', 'dialogue', length + 1, 'to'],
+               ['v', 'cell'],
+            ], get, put, true);
+            cell.put ([
+               ['p', 'dialogue', length + 1, '@'],
+               ['v', rq.body.call],
+            ], get, put, true);
+            if (response.length) cell.put ([
+               ['p', 'dialogue', length + 1, '='],
                ...dale.go (response, function (v) {
-                  return [8, ...v];
+                  return ['v', ...v];
                }),
-            ] : []),
-         ], get, put, true);
+            ], get, put, true);
+         }
 
          reply (rs, 200, {response: response});
       });

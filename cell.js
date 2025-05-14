@@ -364,17 +364,18 @@ cell.get = function (queryPath, contextPath, get) {
 
 cell.put = function (paths, get, put, updateDialogue) {
 
-   if (type (paths [0] [0]) !== 'integer') return [['error', 'A put call can only receive a list.']];
-   if ((teishi.last (paths) [0] % 2) !== 0) return [['error', 'A put call can only receive a list with an even number of elements.']];
+   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
+   if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
 
    var error = dale.stopNot (paths, undefined, function (path, k) {
       if ((path [0] % 2) === 1 && paths [k + 1] && paths [k + 1] [0] === path [0]) return 'A target value can only be a single path, but there is a multiple target value `' + cell.pathsToText ([paths [k + 1]]) + '`';
    });
    if (error) return [['error', error]];
 
+   // We keep the pairs in case we want to implement multi put later
    var pairs = [];
    dale.go (paths, function (path) {
-      if ((path [0] % 2) === 1) pairs.push ([path.slice (1), []]);
+      if (path [0] === 'p') pairs.push ([path.slice (1), []]);
       else {
          teishi.last (pairs) [1].push (teishi.last (pairs) [0].concat (path.slice (1)));
       }
@@ -492,9 +493,10 @@ var test = function () {
       {f: cell.call, input: '@ put something\nGroovies jip', expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
       {f: cell.call, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
       {f: cell.call, input: '@ put something\n@ Groovies jip', expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
-      {f: cell.call, input: '@ put foo bar 1\n@ put foo jip 2', expected: [['error', 'A put call can only receive a list.']]},
-      {f: cell.call, input: '@ put 1 foo bar', expected: [['error', 'A put call can only receive a list with an even number of elements.']]},
-      {f: cell.call, input: '@ put 1 foo bar\n@ put 1 something else\n@ put 2 value', expected: [['error', 'A target value can only be a single path, but there is a multiple target value `1 something else`']]},
+      {f: cell.call, input: '@ put foo bar 1\n@ put foo jip 2', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
+      {f: cell.call, input: '@ put 1 foo\n      2 bar', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
+      {f: cell.call, input: '@ put k foo\n      v bar', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
+      {f: cell.call, input: '@ put p foo\n      v bar\n      x jip', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -553,56 +555,55 @@ var test = function () {
       // *** PUT ***
 
       {reset: []},
-      {f: cell.call, input: ['@ put 1 foo', '@ put 2 bar'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
       {f: cell.call, input: '@', expected: [['foo', 'bar']]},
       {f: cell.call, input: '@ foo', expected: [['bar']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
       ]},
-      {f: cell.call, input: ['@ put . foo bar', '@ put . hey'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo bar', '@ put v hey'], expected: [['ok']]},
       {f: cell.call, input: '@ foo bar', expected: [['hey']]},
-      {f: cell.call, input: ['@ put . foo', '@ put . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo', '@ put v 1'], expected: [['ok']]},
       {f: cell.call, input: '@ foo', expected: [[1]]},
       {f: cell.call, input: '@', expected: [['foo', 1]]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
       ]},
-      {f: cell.call, input: ['@ put . foo', '@ put . bar hey'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo', '@ put v bar hey'], expected: [['ok']]},
       {f: cell.call, input: '@ foo', expected: [['bar', 'hey']]},
       {f: cell.call, input: '@ foo bar', expected: [['hey']]},
-      {f: cell.call, input: '@ put . foo 2\n@ put . something', expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
+      {f: cell.call, input: '@ put p foo 2\n@ put v something', expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {f: cell.call, input: ['@ put . foo', '@ put . ""'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo', '@ put v ""'], expected: [['ok']]},
       {f: cell.call, input: '@ foo', expected: [['']]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
          ['foo', 'soda', 'wey'],
       ]},
-      {f: cell.call, input: ['@ put . foo jup', '@ put . yea'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo jup', '@ put v yea'], expected: [['ok']]},
       {f: cell.call, input: '@ foo', expected: [
          ['bar', 1, 'jip'],
          ['bar', 2, 'joo'],
          ['jup', 'yea'],
          ['soda', 'wey']
       ]},
-      {f: cell.call, input: ['@ put . foo bar yes', '@ put . sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
-      {f: cell.call, input: ['@ put . foo "\n\nbar"', '@ put . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p foo bar yes', '@ put v sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
+      {f: cell.call, input: ['@ put p foo "\n\nbar"', '@ put v 1'], expected: [['ok']]},
       {f: cell.call, input: ['@ foo "\n\nbar"'], expected: [[1]]},
 
-      {f: cell.call, input: ['@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.call, input: ['@ put . foo', '@ put . bar', '@ put . put', '@ put . 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.call, input: ['@ put . dialogue', '@ put . 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
+      {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
+      {f: cell.call, input: ['@ put p dialogue', '@ put v 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
       {f: cell.JSToPaths, input: {c: 'd', a: 'b'}, expected: [['a', 'b'], ['c', 'd']]},
       {f: cell.JSToPaths, input: [1, 2, 3], expected: [[1, 1], [2, 2], [3, 3]]},
       {f: cell.JSToPaths, input: {boo: [true, false], why: new Date ('2025-01-01T00:00:00.000Z')}, expected: [['boo', 1, 1], ['boo', 2, 0], ['why', '2025-01-01T00:00:00.000Z']]},
-      {f: cell.JSToPaths, input: {foo: null, some: '', thing: parseInt ('!')}, expected: [[ 'foo', ''], ['some', ''], ['thing', '']]},
+      {f: cell.JSToPaths, input: {foo: null, some: '', thing: parseInt ('!')}, expected: [['foo', ''], ['some', ''], ['thing', '']]},
       {f: cell.pathsToJS, input: [], expected: {}},
       {f: cell.pathsToJS, input: [['']], expected: ''},
       {f: cell.pathsToJS, input: [[1]], expected: 1},
