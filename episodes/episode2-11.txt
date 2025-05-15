@@ -75,9 +75,9 @@ Let's think a bit:
 - Then, we can have an endpoint that parses the file, while keeping the original.
 - Then, that endpoint puts the original file and the parsed version. What would be the structure?
 
-<name> data ...
-       file data <base 64 or plaintext if original is plaintext>
-            name <name>
+(name) data ...
+       file data (base 64 or plaintext if original is plaintext)
+            name (name)
             size ...
             type xls/csv/json
 

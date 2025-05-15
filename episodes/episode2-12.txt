@@ -1,0 +1,9 @@
+Eleventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we go head first into the parsing issues we encountered yesterday. We find solace and a way forward in annotating the code for the parsing function of cell and make progress, even remembering what we did last season. Still no glory, but solid progress. Today, I listen to Endtroducing... by DJ Shadow (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+dale.stop (text.split (''), function (c, k) {
+   if (c !== '"') return;
+   if (text.split ('') [k - 1] !== '/') return k;
+   if (text.split ('') [k - 2] === '/') return k;
+});

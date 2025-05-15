@@ -190,6 +190,275 @@ TODO: everything :)
 - Implementation of U and of pg's lisp interpreter.
 - Self-hosting.
 
+## Annotated source code (fragments)
+
+### cell.js
+
+This function takes a `message`, which is text, and returns an array of paths.
+
+```js
+cell.textToPaths = function (message) {
+```
+
+This function takes a value `v` that's either a number or text. We know it is a number or text because we only pass to it path elements, which by design can only be text or number.
+
+```js
+   var unparseNumber = function (v) {
+```
+
+If the value is a number, it just returns it as text, but without quotes around it.
+
+```js
+      if (type (v) !== 'string') return v + '';
+```
+
+If the value is text, and the text "looks" like a number (can start with a minus, can have one or more digits before a dot with a dot (or no dot), and has a bunch of digits after that), we return it surrounded by double quotes.
+
+```js
+      if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+```
+
+Otherwise, we return the text as is.
+
+```js
+      return v;
+   }
+```
+
+We will put the output `paths` here.
+
+```js
+   var paths = [];
+```
+
+A flag that tells us whether we are inside a multiline text, which starts as `false`.
+
+```js
+   var insideMultilineText = false;
+```
+
+If our message is empty text, we just return an empty array of paths.
+
+```js
+   if (message === '') return paths;
+```
+
+We are going to split the message into lines. We are going to go through each of these lines and parse them.
+
+If we encounter any error while parsing a line, we will stop the iteration and return the error.
+
+```js
+   var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
+```
+
+We set variables for storing a new path (that will go into `paths`), we copy the original line into `originalLine` (since we will modify `line` as we progress the parsing), and we will make a reference to the last path already in `paths`.
+
+```js
+      var path = [], originalLine = line, lastPath = teishi.last (paths);
+```
+
+If we encounter an empty line, and we are not inside multiline text, we just ignore this line. This is useful in case we get a message that has empty lines in it, usually at the beginning or end.
+
+```js
+      if (line.length === 0 && ! insideMultilineText) return;
+```
+
+This is a good moment to remark that most of the complexity of this function is about dealing with multiline text.
+
+If the line starts with a space, and we are not inside multiline text, we deal with this indentation.
+
+```js
+      if (line [0] === ' ' && ! insideMultilineText) {
+```
+
+If there is no previous path in `paths`, `message` is invalid, because the first non-empty line of a message cannot be indented. We return an error and stop the iteration.
+
+```js
+         if (! lastPath) return 'The first line of the message cannot be indented';
+```
+
+Indentations are for *abridged* fourdata. For example:
+
+```
+unabridged:
+
+foo bar 1
+foo jip 2
+
+abridged:
+
+foo bar 1
+    jip 2
+```
+
+We measure the length of the indentation.
+
+```js
+         var indentSize = line.match (/^ +/g) [0].length;
+```
+
+We keep track of how many matched spaces we've seen so far, starting at 0.
+
+```js
+         var matchedSpaces = 0;
+```
+
+
+What we need to do is to figure out how many elements of the `lastPath` the indentation on this line matches, so we can copy those over to the new path.
+
+`lastPath` always will have elements. If before there were only empty lines, there would be no path element. Therefore, we know that `matchUpTo` will return something. The moment this iteration over the last path stops, we will find either an index or an error.
+
+```js
+         var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
+```
+
+We pass `v` through `unparseNumber` in case it's text that looks like a number and therefore must be surrounded by double quotes. We need this so that the length of this path element is restored and therefore matches the matched spaces.
+
+TODO: when we unparse text with a slash at the end, we also need to unparse this for length.
+
+The `+ 1` is there to also match the space after the path element.
+
+```js
+            matchedSpaces += unparseNumber (v).length + 1;
+```
+
+If by adding the length of this element from the last path (plus 1), we match the indent size, we return the index of this element of the last path.
+
+```js
+            if (matchedSpaces === indentSize) return k;
+```
+
+If we went over and matched more than we wanted to, the elements of the previous path are not lining together with those of this line. We return an error.
+
+```js
+            if (matchedSpaces > indentSize) return {error: 'The indent of the line `' + line + '` does not match that of the previous line.'};
+```
+
+If we haven't hit the indentSize, keep on going.
+
+```js
+         });
+```
+         if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
+         if (matchUpTo.error) return matchUpTo.error;
+         // We store the "deabridged" part of the line, taking it from the last element of `paths`
+         path = lastPath.slice (0, matchUpTo + 1);
+         line = line.slice (matchedSpaces);
+
+         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
+      }
+```
+
+If we haven't found a match, we have more spaces here than length as text of the previous path. We return an error.
+
+```js
+         if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
+```
+
+And if the iteration returned an error, we just return it.
+
+```js
+         if (matchUpTo.error) return matchUpTo.error;
+```
+
+If we are here, we successfully matched our indentation with some elements of the previous path. We make `path` to be a copy of those elements from the previous path, using the `matchUpTo` index we obtained in the iteration we just finished.
+
+```js
+         path = lastPath.slice (0, matchUpTo + 1);
+```
+
+We chop off the indentation off the line.
+
+```js
+         line = line.slice (matchedSpaces);
+```
+
+```js
+         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
+```
+
+We're done with indentation/abridged lines.
+
+```js
+      }
+```
+
+This function takes text (more precisely, a text element from a path) and removes quotes from it.
+TODO: explain what it does when I remember what it really does.
+
+```js
+      var dequoter = function (text) {
+```
+
+We initialize our output to keep track of `start` and `end`. These are indexes. When they are at -1, they mean there is no start or no end.
+
+```js
+         var output = {start: -1, end: -1};
+```
+
+This utility function replaces a slash followed by a double quote with just a slash. However, if that slash is prepended by another slash, the double quote is preserved.
+
+```js
+         var unescapeQuotes = function (text) {
+            // TODO: deal with a slash that does not escape the quote
+            //return text.replace (/[^\/]\/"/g, '"');
+            return text.replace (/[^\/]\/"/g, '"');
+         }
+```
+
+We set a regex to find an unescaped quote.
+
+```js
+         var findUnescapedQuote = /(?:[^/])"/;
+```
+
+If the text starts with two double quotes, we return a start at 0 (where the quoting starts), an end at 1 (where the quoting ends) and return an empty text as text.
+
+```js
+         if (text [0] === '"' && text [1] === '"') return {start: 0, end: 1, text: ''};
+```
+
+If the text starts with a double quote, we set `start` to 0.
+
+```js
+         if (text [0] === '"') output.start = 0;
+```
+
+If it doesn't start with a double quote, we find the first unescaped quote. If we find one, we set that to start. The if else is required because of our negative lookahead in the regex.
+
+```js
+         else {
+            var match = text.match (findUnescapedQuote);
+            if (match) output.start = match.index + 1;
+         }
+```
+
+If we are inside multiline text,
+
+```js
+         if (insideMultilineText) {
+```
+
+If there is no quote, we unescape the quotes from `text` and set that as the text of the output.
+
+```js
+            if (output.start === -1) output.text = unescapeQuotes (text);
+            if (output.start === 0) output.text = '';
+            if (output.start > 0) output.text = unescapeQuotes (text.slice (0, output.start));
+         }
+
+         else if (output.start === -1) output.text = text;
+         else {
+            match = text.slice (output.start + 1).match (findUnescapedQuote);
+            if (match) output.end = match.index + output.start + 1;
+
+            output.text = unescapeQuotes (text.slice (output.start + 1, output.end === -1 ? Infinity : (output.end + 1)))
+         }
+
+         return output;
+      }
+
+
 ## Acknowledgments
 
 [Kartik Agaram](http://akkartik.name) has provided extremely valuable insights and questions.

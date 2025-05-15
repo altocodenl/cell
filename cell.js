@@ -33,7 +33,6 @@ cell.textToPaths = function (message) {
 
    if (message === '') return paths;
 
-   // We stop at the first error.
    var error = dale.stopNot (message.split ('\n'), undefined, function (line) {
 
       var path = [], originalLine = line, lastPath = teishi.last (paths);
@@ -44,27 +43,26 @@ cell.textToPaths = function (message) {
          if (! lastPath) return 'The first line of the message cannot be indented';
          var indentSize = line.match (/^ +/g) [0].length;
          var matchedSpaces = 0;
-         // lastPath always is nonzero in length, so there's no zero corner case
+
          var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
-            // Converting v to text in case it is a number
             matchedSpaces += unparseNumber (v).length + 1;
             if (matchedSpaces === indentSize) return k;
             if (matchedSpaces > indentSize) return {error: 'The indent of the line `' + line + '` does not match that of the previous line.'};
-            // If we haven't hit the indentSize, keep on going.
          });
          if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
-         // We store the "deabridged" part of the line, taking it from the last element of `paths`
+
          path = lastPath.slice (0, matchUpTo + 1);
          line = line.slice (matchedSpaces);
 
-         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
+         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace.';
       }
 
       var dequoter = function (text) {
          var output = {start: -1, end: -1};
 
          var unescapeQuotes = function (text) {
+            //return text.replace (/[^\/]\/"/g, '"');
             return text.replace (/\/"/g, '"');
          }
 
@@ -423,12 +421,16 @@ var test = function () {
       {f: cell.textToPaths, input: ['a b', 'c'], expected: [['a', 'b'], ['c']]},
       {f: cell.textToPaths, input: ['foo bar 1', '   jip 2'], expected: {error: 'The indent of the line `   jip 2` does not match that of the previous line.'}},
       {f: cell.textToPaths, input: ['foo bar 1', '                        jip 2'], expected: {error: 'The indent of the line `                        jip 2` does not match that of the previous line.'}},
+      {f: cell.textToPaths, input: ['foo bar 1', '          '], expected: {error: 'The line `          ` has no data besides whitespace.'}},
       {f: cell.textToPaths, input: ['foo bar 1', '    jip  2'], expected: {error: 'The line `    jip  2` has at least two spaces separating two elements.'}},
       {f: cell.textToPaths, input: ['foo bar 1', '    jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
+      {f: cell.textToPaths, input: ['foo bar 1', 'foo jip 2'], expected: [['foo', 'bar', 1], ['foo', 'jip', 2]]},
       {f: cell.textToPaths, input: ['foo bar 0.1', '    jip 2.75'], expected: [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]},
       {f: cell.textToPaths, input: ['foo 1 hey', '    2 yo'], expected: [['foo', 1, 'hey'], ['foo', 2, 'yo']]},
       {f: cell.textToPaths, input: 'something"foo" 1', expected: {error: 'The line `something"foo" 1` has an unescaped quote.'}},
       {f: cell.textToPaths, input: '"foo bar" 1', expected: [['foo bar', 1]]},
+      {f: cell.textToPaths, input: '"foo" "bar" 1', expected: [['foo', 'bar', 1]]},
+      {f: cell.textToPaths, input: '"/"foo/" /"bar/" 1"', expected: [['"foo" "bar" 1']]},
       {f: cell.textToPaths, input: '"foo bar"x1', expected: {error: 'No space after a quote in line `"foo bar"x1`'}},
       {f: cell.textToPaths, input: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
       {f: cell.textToPaths, input: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
@@ -440,6 +442,8 @@ var test = function () {
       {f: cell.textToPaths, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: cell.textToPaths, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
+      {f: cell.textToPaths, input: ['" /"'], expected: [[' /']]},
+      {f: cell.textToPaths, input: ['" /a"'], expected: [[' /a']]},
 
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
