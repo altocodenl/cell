@@ -1,0 +1,3 @@
+Thirteenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we are neck deep into the parsing issues we encountered two episodes ago. We annotate more code and almost seem to understand what the code does. Sometimes you fly, sometimes you trudge. Today, I listen to A.N.I.M.A.L's Poder Latino, and a bit of Nirvana's Nevermind (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell

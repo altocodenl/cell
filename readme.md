@@ -383,8 +383,19 @@ We're done with indentation/abridged lines.
       }
 ```
 
-This function takes text (more precisely, a text element from a path) and removes quotes from it.
-TODO: explain what it does when I remember what it really does.
+There are two types of double quotes (`"`):
+- Literal double quotes, which are escaped by a slash. These really stand for themselves.
+- Non-literal double quotes, which are there to surround text that has at least space, a new line, or a literal double quote.
+
+This function takes text (more precisely, a text element from a path) and does two things:
+- Gives the indexes of the first and (sometimes) the second non-literal double quotes on the text. If one of them is missing, we set its index to -1.
+- Unescapes the non-literal double quotes from a portion of the text.
+
+If we are inside multiline text, we only look for the first non-literal double quote and return the unescaped text between the beginning of the text and the first non-literal quote.
+
+If we are not inside multiline text, we return the text between the first and second non-literal double quote (if the second one is missing, we give return all the text until the end).
+
+Because of the way we use this function, if we are not inside multiline text, if there is a non-literal double quote in the text, it will *always* be at position 0. So you don't have to worry about input like `nevermind "foo"` happening, although the function, in practice, handles it (it'd just give you `foo` as text, ignoring `nevermind`).
 
 ```js
       var dequoter = function (text) {
@@ -399,7 +410,7 @@ We initialize our output to keep track of `start` and `end`. These are indexes. 
 This utility function replaces a slash followed by a double quote with just a slash. However, if that slash is prepended by another slash, the double quote is preserved.
 
 ```js
-         var unescapeQuotes = function (text) {
+         var unescapeLiteralQuotes = function (text) {
             // TODO: deal with a slash that does not escape the quote
             //return text.replace (/[^\/]\/"/g, '"');
             return text.replace (/[^\/]\/"/g, '"');
@@ -433,30 +444,48 @@ If it doesn't start with a double quote, we find the first unescaped quote. If w
          }
 ```
 
-If we are inside multiline text,
+If we are inside multiline text, we are already inside a single text surrounded by quotes. We take all the text up until the first non-literal quote, unescape it, and put it in `output.text`.
 
 ```js
          if (insideMultilineText) {
+            if (output.start === -1) output.text = unescapeLiteralQuotes (text);
+            else                     output.text = unescapeLiteralQuotes (text.slice (0, output.start));
+         }
 ```
 
-If there is no quote, we unescape the quotes from `text` and set that as the text of the output.
+If we are not inside multiline text, we are looking for all the text up until the first non-literal quote.
+
+If there is no quote, we set the entire output text to be the text.
 
 ```js
-            if (output.start === -1) output.text = unescapeQuotes (text);
-            if (output.start === 0) output.text = '';
-            if (output.start > 0) output.text = unescapeQuotes (text.slice (0, output.start));
-         }
-
          else if (output.start === -1) output.text = text;
+```
+
+If we are not inside multiline text and there is a non-literal quote, we try to find a second non-literal quote that closes the first one.
+
+```js
          else {
             match = text.slice (output.start + 1).match (findUnescapedQuote);
+```
+
+If there is a second non-literal quote, we set `end` to its index plus one.
+
+```js
             if (match) output.end = match.index + output.start + 1;
+```
 
-            output.text = unescapeQuotes (text.slice (output.start + 1, output.end === -1 ? Infinity : (output.end + 1)))
-         }
+We set the output text to be the text between the non-literal quotes, unescaped.
 
+```js
+            output.text = unescapeLiteralQuotes (text.slice (output.start + 1, output.end === -1 ? text.length : output.end + 1))
+```
+
+We return `output` and close dequoter.
+
+```js
          return output;
       }
+```
 
 
 ## Acknowledgments
