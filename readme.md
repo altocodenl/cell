@@ -4,9 +4,9 @@
 
 ## Introduction
 
-Cell is a tool that allows you to create [data systems](https://github.com/altocodenl/todis) (think spreadsheets, apps, pages) with great ease. Particularly if you don't consider yourself to be a programmer.
+Cell is a tool that allows you to create [data systems](https://github.com/altocodenl/todis) (think spreadsheets, apps, pages) with ease. Particularly if you don't consider yourself to be a programmer.
 
-The purpose of cell is to empower you to transform your data into a system that perfectly fits your needs and that you can change at any time.
+Cell allows you to allow you to transform your data into a system that perfectly fits your needs.
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
@@ -22,6 +22,17 @@ Cell employs seven powerups to make programming as easy as possible:
 6. **Everything is integrated**: language, database, API and UI are in one place: your web browser.
 7. **Generative AI** that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
 
+## Can't we just ask AI to create systems for us?
+
+As of mid-2025, AIs are a great starting point for creating small systems. But exclusively relying on AI to build these systems for us brings three problems:
+
+1. Your system still needs to "live" somewhere: it has to be hosted so that it's always reachable and its data preserved. The AI cannot solve this problem for you.
+2. You need to verify what your system does: even if AI is great at understanding what you mean, it's often necessary to validate both the logic and the data of your system.
+
+Cell makes it extremely easy to give your system a place to live. And, even more importantly, it makes it straightforward for you to read the data and the logic of your system (even if you're not a programmer), so that you can build your systems with confidence.
+
+Cell is a canvas where you and an AI collaborate to make a system out of your data.
+
 ## Use cases
 
 - Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
@@ -31,15 +42,11 @@ Cell employs seven powerups to make programming as easy as possible:
 
 ## Relationship to the spreadsheet
 
-see the results immediately
-the data is always somewhere
-text based but low noise
-
 Cell is very much inspired by the [spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
 
 In essence, a spreadsheet is immensely powerful because it has three properties:
 
-1. All of its data is contained in cells, each of them with an address.
+1. All of its data is contained in cells, each of them with an address. Each piece of data has an address.
 2. A cell can reference another cell.
 3. When a cell changes, all of the cells depending on it change as well.
 
@@ -64,7 +71,7 @@ Cell intends to go beyond the spreadsheet in the following ways:
 
 These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
 
-## Innovations
+## Innovations of cell
 
 - Programming as message-based three-way communication between the environment, the user and the LLM.
 - Immediate integration of files and emails into the dataspace.
@@ -391,9 +398,9 @@ This function takes text (more precisely, a text element from a path) and does t
 - Gives the indexes of the first and (sometimes) the second non-literal double quotes on the text. If one of them is missing, we set its index to -1.
 - Unescapes the non-literal double quotes from a portion of the text.
 
-If we are inside multiline text, we only look for the first non-literal double quote and return the unescaped text between the beginning of the text and the first non-literal quote.
+If we are not inside multiline text, we only call this function if `text` starts with a non-literal double quote. In this case we return the text between the first and second non-literal double quote (if the second one is missing, we give return all the text until the end).
 
-If we are not inside multiline text, we return the text between the first and second non-literal double quote (if the second one is missing, we give return all the text until the end).
+If we are inside multiline text, we only look for the first non-literal double quote and return the unescaped text between the beginning of the text and the first non-literal quote.
 
 Because of the way we use this function, if we are not inside multiline text, if there is a non-literal double quote in the text, it will *always* be at position 0. So you don't have to worry about input like `nevermind "foo"` happening, although the function, in practice, handles it (it'd just give you `foo` as text, ignoring `nevermind`).
 
