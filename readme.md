@@ -26,6 +26,10 @@ Cell employs seven powerups to make programming as easy as possible:
 
 As of mid-2025, AIs are a great starting point for creating small systems. But exclusively relying on AI to build these systems for us brings three problems:
 
+hosting
+control: (control is also automatic)
+unstuck
+
 1. Your system still needs to "live" somewhere: it has to be hosted so that it's always reachable and its data preserved. The AI cannot solve this problem for you.
 2. You need to verify what your system does: even if AI is great at understanding what you mean, it's often necessary to validate both the logic and the data of your system.
 
@@ -39,6 +43,7 @@ Cell is a canvas where you and an AI collaborate to make a system out of your da
 - Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
 - Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
 - Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
+- Usage dashboard: requests per second, also per code, bytes flowing. See fun data in real time.
 
 ## Relationship to the spreadsheet
 
@@ -414,26 +419,54 @@ We initialize our output to keep track of `start` and `end`. These are indexes. 
          var output = {start: -1, end: -1};
 ```
 
-This utility function replaces a slash followed by a double quote with just a slash. However, if that slash is prepended by another slash, the double quote is preserved.
+This utility function gives the index of the first non-literal double quote.
 
 ```js
-         var unescapeLiteralQuotes = function (text) {
-            // TODO: deal with a slash that does not escape the quote
-            //return text.replace (/[^\/]\/"/g, '"');
-            return text.replace (/[^\/]\/"/g, '"');
+         var findNonLiteralQuote = function (text) {
+```
+
+We iterate every character in text until we decide to stop if the internal function returns something that's not `undefined`.
+
+```js
+            var index = dale.stopNot (text.split (''), undefined, function (c, k) {
+```
+
+If we don't find a double quote, we go to the next character.
+
+```js
+               if (c !== '"') return;
+```
+
+If it's not prepended by a slash, or if it's prepended by a slash that is also prepended by another slash, it is a nonliteral quote. In this case, we return the index.
+
+```js
+               if (text [k - 1] !== '/' || text [k - 2] === '/') return k;
+            });
+```
+
+If we didn't find a nonliteral quote, we return -1.
+
+```js
+            return index !== undefined ? index : -1;
          }
 ```
 
-We set a regex to find an unescaped quote.
+This utility function replaces a slash followed by a double quote with just a slash. However, if that slash is prepended by another slash, the double quote is preserved.
+
+For the case where there's a slash prepended by another slash and followed by a double quote, we skip that slash altogether.
+
+
+
 
 ```js
-         var findUnescapedQuote = /(?:[^/])"/;
-```
-
-If the text starts with two double quotes, we return a start at 0 (where the quoting starts), an end at 1 (where the quoting ends) and return an empty text as text.
-
-```js
-         if (text [0] === '"' && text [1] === '"') return {start: 0, end: 1, text: ''};
+         var unescapeLiteralQuotes = function (text) {
+            var output = '';
+            text = text.split ('');
+            dale.go (text, function (c, k) {
+               if (c !== '/' && text [k + 1] !== '"') return output += c;
+         var unescapeLiteralQuotes = function (text) {
+            return text.replace (/(?:[^\/])?\/"/g, '"');
+         }
 ```
 
 If the text starts with a double quote, we set `start` to 0.
@@ -446,7 +479,7 @@ If it doesn't start with a double quote, we find the first unescaped quote. If w
 
 ```js
          else {
-            var match = text.match (findUnescapedQuote);
+            var match = text.match (findNonLiteralQuote);
             if (match) output.start = match.index + 1;
          }
 ```
@@ -472,7 +505,7 @@ If we are not inside multiline text and there is a non-literal quote, we try to 
 
 ```js
          else {
-            match = text.slice (output.start + 1).match (findUnescapedQuote);
+            match = text.slice (output.start + 1).match (findNonLiteralQuote);
 ```
 
 If there is a second non-literal quote, we set `end` to its index plus one.

@@ -1,0 +1,11 @@
+Fourteenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, an absolute slog. But we succeed in fixing the parsing issues, through sheer trudging, although I end up understanding what I was doing. Today, I listen to Ultravox's Rage In Eden (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Hi! I'm just recording for a few minutes, without even talking. I am proceeding with the annotated source code.
+
+Now that I understand what dequoter does, we can change it to support a two slashes and a quote after that.
+
+Will continue tomorrow, with sound!
+
+Bug with "" closing multiline text.

@@ -59,34 +59,37 @@ cell.textToPaths = function (message) {
       }
 
       var dequoter = function (text) {
+
          var output = {start: -1, end: -1};
 
+         var findNonLiteralQuote = function (text) {
+            var index = dale.stopNot (text.split (''), undefined, function (c, k) {
+               if (c !== '"') return;
+               if (text [k - 1] !== '/' || text [k - 2] === '/') return k;
+            });
+            return index !== undefined ? index : -1;
+         }
+
          var unescapeLiteralQuotes = function (text) {
-            //return text.replace (/[^\/]\/"/g, '"');
-            return text.replace (/\/"/g, '"');
+            text = text.replace (/\/"/g, '"');
+            if (text.match (/\s/)) text = text.replace (/\/\/$/, '/');
+            return text;
          }
 
-         var findUnescapedQuote = /(?:[^/])"/;
-
-         if (text [0] === '"' && text [1] === '"') return {start: 0, end: 1, text: ''};
-
-         if (text [0] === '"') output.start = 0;
-         else {
-            var match = text.match (findUnescapedQuote);
-            if (match) output.start = match.index + 1;
-         }
+         output.start = findNonLiteralQuote (text);
 
          if (insideMultilineText) {
             if (output.start === -1) output.text = unescapeLiteralQuotes (text);
             else                     output.text = unescapeLiteralQuotes (text.slice (0, output.start));
          }
-
-         else if (output.start === -1) output.text = text;
          else {
-            match = text.slice (output.start + 1).match (findUnescapedQuote);
-            if (match) output.end = match.index + output.start + 1;
+            if (output.start === -1) output.text = text;
+            else {
+               var match = findNonLiteralQuote (text.slice (output.start + 1));
+               if (match !== -1) output.end = output.start + 1 + match;
 
-            output.text = unescapeLiteralQuotes (text.slice (output.start + 1, output.end === -1 ? text.length : output.end + 1))
+               output.text = unescapeLiteralQuotes (text.slice (output.start + 1, output.end === -1 ? text.length : output.end))
+            }
          }
 
          return output;
@@ -113,7 +116,7 @@ cell.textToPaths = function (message) {
             var dequoted = dequoter (line);
             if (dequoted.end !== -1) {
                path.push (dequoted.text);
-               line = line.slice (dequoted.end + (dequoted.text === '' ? 1 : 2)); // Remove the quote. There's a special case for when the text is empty, because we are removing the second quote.
+               line = line.slice (dequoted.end + 1);
                // Check that the first element is a space, then remove it
                if (line.length && line [0] !== ' ') return 'No space after a quote in line `' + originalLine + '`';
                line = line.slice (1);
@@ -433,6 +436,7 @@ var test = function () {
       {f: cell.textToPaths, input: '"foo bar"x1', expected: {error: 'No space after a quote in line `"foo bar"x1`'}},
       {f: cell.textToPaths, input: ['foo "bar', 'i am on a new line but I am still the same text" 1'], expected: [['foo', 'bar\ni am on a new line but I am still the same text', 1]]},
       {f: cell.textToPaths, input: 'foo "1" bar', expected: [['foo', '1', 'bar']]},
+      {f: cell.textToPaths, input: 'foo "\t" bar', expected: [['foo', '\t', 'bar']]},
       {f: cell.textToPaths, input: ['"i am text', '', '', 'yep"'], expected: [['i am text\n\n\nyep']]},
       {f: cell.textToPaths, input: 'foo "bar"', expected: [['foo', 'bar']]},
       {f: cell.textToPaths, input: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
@@ -441,8 +445,11 @@ var test = function () {
       {f: cell.textToPaths, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: cell.textToPaths, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
-      // TODO: support this
-      // {f: cell.textToPaths, input: ['" /"'], expected: [[' /']]},
+      {f: cell.textToPaths, input: ['" /"'], expected: {error: 'Multiline text not closed: ` "\n`'}},
+      {f: cell.textToPaths, input: ['" //"'], expected: [[' /']]},
+      {f: cell.textToPaths, input: ['" ///"'], expected: [[' //']]},
+      {f: cell.textToPaths, input: ['//'], expected: [['//']]},
+      {f: cell.textToPaths, input: ['"//"'], expected: [['//']]},
       {f: cell.textToPaths, input: ['" /a"'], expected: [[' /a']]},
 
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
