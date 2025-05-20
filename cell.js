@@ -70,7 +70,7 @@ cell.textToPaths = function (message) {
             return index !== undefined ? index : -1;
          }
 
-         var unescapeLiteralQuotes = function (text) {
+         var unescaper = function (text) {
             text = text.replace (/\/"/g, '"');
             if (text.match (/\s/)) text = text.replace (/\/\/$/, '/');
             return text;
@@ -79,8 +79,8 @@ cell.textToPaths = function (message) {
          output.start = findNonLiteralQuote (text);
 
          if (insideMultilineText) {
-            if (output.start === -1) output.text = unescapeLiteralQuotes (text);
-            else                     output.text = unescapeLiteralQuotes (text.slice (0, output.start));
+            if (output.start === -1) output.text = unescaper (text);
+            else                     output.text = unescaper (text.slice (0, output.start));
          }
          else {
             if (output.start === -1) output.text = text;
@@ -88,7 +88,7 @@ cell.textToPaths = function (message) {
                var match = findNonLiteralQuote (text.slice (output.start + 1));
                if (match !== -1) output.end = output.start + 1 + match;
 
-               output.text = unescapeLiteralQuotes (text.slice (output.start + 1, output.end === -1 ? text.length : output.end))
+               output.text = unescaper (text.slice (output.start + 1, output.end === -1 ? text.length : output.end))
             }
          }
 
@@ -103,8 +103,11 @@ cell.textToPaths = function (message) {
          }
          else {
             lastPath [lastPath.length - 1] += dequoted.text;
-            line = line.slice (dequoted.start + 2); // Remove the quote and the space after the quote
             path = lastPath;
+
+            line = line.slice (dequoted.start + 1);
+            if (line.length && line [0] !== ' ') return 'No space after a quote in line `' + originalLine + '`';
+            line = line.slice (1);
             insideMultilineText = false;
          }
       }
@@ -114,17 +117,17 @@ cell.textToPaths = function (message) {
 
          if (line [0] === '"') {
             var dequoted = dequoter (line);
-            if (dequoted.end !== -1) {
-               path.push (dequoted.text);
-               line = line.slice (dequoted.end + 1);
-               // Check that the first element is a space, then remove it
-               if (line.length && line [0] !== ' ') return 'No space after a quote in line `' + originalLine + '`';
-               line = line.slice (1);
-            }
-            else {
+            if (dequoted.end === -1) {
                insideMultilineText = true;
                path.push (dequoted.text + '\n');
                line = '';
+            }
+            else {
+               path.push (dequoted.text);
+
+               line = line.slice (dequoted.end + 1);
+               if (line.length && line [0] !== ' ') return 'No space after a quote in line `' + originalLine + '`';
+               line = line.slice (1);
             }
             continue;
          }
@@ -133,11 +136,10 @@ cell.textToPaths = function (message) {
          if (element.match (/\s/)) return 'The line `' + line + '` contains a space that is not contained within quotes.';
          if (element.match (/"/)) return 'The line `' + line + '` has an unescaped quote.';
 
-         line = line.slice (element.length + 1); // Here we don't need to check that the last character sliced is a space, because we used spaces to split the line
          path.push (cell.toNumberIfNumber (element));
+         line = line.slice (element.length + 1); // Here we don't need to check that the last character sliced is a space, because we used spaces to split the line
       }
 
-      // This will be true if we just closed a multiline text on this line
       if (! paths.includes (path)) paths.push (path);
    });
 
@@ -442,6 +444,7 @@ var test = function () {
       {f: cell.textToPaths, input: 'foo "bar yep"', expected: [['foo', 'bar yep']]},
       {f: cell.textToPaths, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
       {f: cell.textToPaths, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
+      {f: cell.textToPaths, input: ['"just multiline', '', '"foo'], expected: {error: 'No space after a quote in line `"foo`'}},
       {f: cell.textToPaths, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: cell.textToPaths, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
