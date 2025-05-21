@@ -1,0 +1,13 @@
+Sixteenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, more penance, some progress. Still parsing. It feels positively retro to do this without the advice of a LLM. An unwitting salute to the pioneers that preceded us (though we decided not to stand on the shoulders of lexer and parser). Today, I listen to Mitch Murder's Interceptor (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Two issues now:
+- We are quoting things twice.
+- We cannot support doing this.
+
+One problem is we cannot put a literal slash before a literal double quote. A literal double quote requires a slash before it. If we want to put a slash before a non-literal quote, we also add a slash before it. The combination of these two things clashes when we put a literal slash before a literal double quote.
+
+Tomorrow:
+- Think of a good solution to how to represent a literal slash before a literal double quote.
+- Write a test that removes the slashes from before literal double quotes in textToPaths, and also fix that.

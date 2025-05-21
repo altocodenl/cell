@@ -20,13 +20,19 @@ cell.toNumberIfNumber = function (text) {
    return text;
 }
 
-cell.textToPaths = function (message) {
+cell.unparseElement = function (v) {
+   if (type (v) !== 'string') return v + '';
+   if (v.length === 0) return '""';
 
-   var unparseNumber = function (v) {
-      if (type (v) !== 'string') return v + '';
-      if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
-      return v;
+   if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+   if (v.match ('"') || v.match (/\s/)) {
+      if (v.match (/\/$/)) v += '/';
+      return '"' + v.replace (/"/g, '/"') + '"';
    }
+   return v;
+}
+
+cell.textToPaths = function (message) {
 
    var paths = [];
    var insideMultilineText = false;
@@ -45,7 +51,7 @@ cell.textToPaths = function (message) {
          var matchedSpaces = 0;
 
          var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
-            matchedSpaces += unparseNumber (v).length + 1;
+            matchedSpaces += cell.unparseElement (v).length + 1;
             if (matchedSpaces === indentSize) return k;
             if (matchedSpaces > indentSize) return {error: 'The indent of the line `' + line + '` does not match that of the previous line.'};
          });
@@ -71,7 +77,7 @@ cell.textToPaths = function (message) {
          }
 
          var unescaper = function (text) {
-            text = text.replace (/\/"/g, '"');
+            text = text.replace (/\/"/gm, '"');
             if (text.match (/\s/)) text = text.replace (/\/\/$/, '/');
             return text;
          }
@@ -235,13 +241,6 @@ cell.parser = function (message) {
 
 cell.pathsToText = function (paths) {
 
-   var quoter = function (text) {
-      if (text.match (/^-?(\d+\.)?\d+/) !== null) return '"' + text + '"';
-      if (text.match ('"') || text.match (/\s/)) return '"' + text.replace (/"/g, '/"') + '"';
-      if (text.length === 0) return '""';
-      return text;
-   }
-
    var spaces = function (n) {
       return Array (n).fill (' ').join ('');
    }
@@ -249,9 +248,7 @@ cell.pathsToText = function (paths) {
    var output = [];
 
    var pathToText = function (path) {
-      return dale.go (path, function (v) {
-         return type (v) === 'string' ? quoter (v) : (v + '');
-      }).join (' ');
+      return dale.go (path, cell.unparseElement).join (' ');
    }
 
    dale.go (paths, function (path, k) {
@@ -445,9 +442,14 @@ var test = function () {
       {f: cell.textToPaths, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
       {f: cell.textToPaths, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
       {f: cell.textToPaths, input: ['"just multiline', '', '"foo'], expected: {error: 'No space after a quote in line `"foo`'}},
+      {f: cell.textToPaths, input: '"/"GML"', expected: [['"GML']]},
+      // TODO: fix this
+      // {f: cell.textToPaths, input: '"///"GML"', expected: [['/"GML']]},
       {f: cell.textToPaths, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: cell.textToPaths, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
+      {f: cell.textToPaths, input: ['dialogue " //" from user', '               message "@ foo"'], expected: [['dialogue', ' /', 'from', 'user'], ['dialogue', ' /', 'message', '@ foo']]},
+      {f: cell.textToPaths, input: ['dialogue "" from user', '            message "@ foo"'], expected: [['dialogue', '', 'from', 'user'], ['dialogue', '', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['" /"'], expected: {error: 'Multiline text not closed: ` "\n`'}},
       {f: cell.textToPaths, input: ['" //"'], expected: [[' /']]},
       {f: cell.textToPaths, input: ['" ///"'], expected: [[' //']]},
@@ -499,6 +501,7 @@ var test = function () {
       {f: cell.pathsToText, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: cell.pathsToText, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       {f: cell.pathsToText, expected: ['foo bar 1 jip', '        2 yes'], input: [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]},
+      {f: cell.pathsToText, expected: '" //" " ///" // " /a"', input: [[' /', ' //', '//', ' /a']]},
       {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: cell.call, input: '', expected: []},
       {f: cell.call, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},

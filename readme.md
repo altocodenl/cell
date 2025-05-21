@@ -201,35 +201,56 @@ TODO: everything :)
 
 ### cell.js
 
-This function takes a `message`, which is text, and returns an array of paths.
+This function takes a value `v` that's either a number or text. We know it is a number or text because we only pass to it path elements, which by design can only be text or number. It will then return the text that, when parsed, becomes the element.
+
+for example: a number `1` becomes `1`; a text `1` becomes `"1"`; a text ` ` becomes `" "`. In essence, the unparser adds back non-literal quotes and slashes that escape literal quotes.
 
 ```js
-cell.textToPaths = function (message) {
-```
-
-This function takes a value `v` that's either a number or text. We know it is a number or text because we only pass to it path elements, which by design can only be text or number.
-
-```js
-   var unparseNumber = function (v) {
+cell.unparseElement = function (v) {
 ```
 
 If the value is a number, it just returns it as text, but without quotes around it.
 
 ```js
-      if (type (v) !== 'string') return v + '';
+   if (type (v) !== 'string') return v + '';
+```
+
+If this is an empty text, return two double quotes.
+
+```js
+   if (v.length === 0) return '""';
 ```
 
 If the value is text, and the text "looks" like a number (can start with a minus, can have one or more digits before a dot with a dot (or no dot), and has a bunch of digits after that), we return it surrounded by double quotes.
 
 ```js
-      if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+   if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
 ```
 
-Otherwise, we return the text as is.
+If there is a literal double quote or whitespace inside the element, we need to do the following:
+
+- If it ends with a slash, add another slash before that one, to escape that slash. This avoids that final slash trying to escape the final, non-literal, double quote that surrounds the entire element. (I know).
+- Prepend every literal double quote with a slash.
+- Surround it with double quotes.
+
+```js
+   if (v.match ('"') || v.match (/\s/)) {
+      if (v.match (/\/$/)) v += '/';
+      return '"' + v.replace (/"/g, '/"') + '"';
+   }
+```
+
+Otherwise, we return the original text.
 
 ```js
       return v;
    }
+```
+
+This function takes a `message`, which is text, and returns an array of paths.
+
+```js
+cell.textToPaths = function (message) {
 ```
 
 We will put the output `paths` here.
@@ -319,14 +340,12 @@ What we need to do is to figure out how many elements of the `lastPath` the inde
          var matchUpTo = dale.stopNot (lastPath, undefined, function (v, k) {
 ```
 
-We pass `v` through `unparseNumber` in case it's text that looks like a number and therefore must be surrounded by double quotes. We need this so that the length of this path element is restored and therefore matches the matched spaces.
-
-TODO: when we unparse text with a slash at the end, we also need to unparse this for length.
+We pass `v` through `unparseElement` in case it's text that looks like a number and therefore must be surrounded by double quotes. This is also necessary if the text had spaces or literal double quotes in it. We need this so that the length of this path element is restored and therefore matches the matched spaces.
 
 The `+ 1` is there to also match the space after the path element.
 
 ```js
-            matchedSpaces += unparseNumber (v).length + 1;
+            matchedSpaces += cell.unparseElement (v).length + 1;
 ```
 
 If by adding the length of this element from the last path (plus 1), we match the indent size, we return the index of this element of the last path.

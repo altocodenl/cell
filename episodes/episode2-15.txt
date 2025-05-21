@@ -1,0 +1,26 @@
+Fifteen episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, I thought we were out of parsing hell, but forgot of a few details. Are we paying a penance for not using a lexer and a parser? Let's find out! We're almost there, though. Today, I listen to Pappo's Volumen 2 & Volumen 3, plus a bit of The Fixx's Calm Animals (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+ideas for readme (for later):
+- talk about time to outcome
+
+This broke us, again.
+
+dialogue 1 from user
+           to cell
+           = error "The call must start with `@` but instead starts with `/`"
+           @ "/ a"
+         2 from user
+           to cell
+           = ok
+           @ "@ put p foo
+      v /" ///""
+
+What's still broken:
+- In textToPaths: the "extra characters" accounted for when measuring matchings of indentations if there's unescaped quotes or slashes.
+- In pathsToText: escaping paths back.
+
+Test cases to unescape an element:
+- If there's a double quote, add a slash before it!
+- If there's any whitespace characters, surround it with double quotes. (We cover this one already)

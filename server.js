@@ -124,6 +124,11 @@ var routes = [
 
          dataspace = cell.parser (dataspace);
 
+         if (dataspace.error) {
+            notify ({priority: 'important', type: 'parse error', error: dataspace.error, id: rq.data.params.id});
+            return reply (rs, 500, {error: 'Parse error'});
+         }
+
          var get = function () {return dataspace}
          var put = function (Dataspace) {
             dataspace = Dataspace;
