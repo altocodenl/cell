@@ -1,0 +1,11 @@
+Seventeenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finish fixing the parsing issues, after finally realizing what the escapes should be like. We are ready to add AI and all sorts of data into the mix. The only sour note is that the video stopped recording halfway through, so only the audio keeps on going after that. Today, I listen (again) to King Gizzard's Laminated Denim (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+If inside an element delimited by non-literal double quotes (" "), the following goes:
+- Any literal double quote is prepended by a slash.
+- Any literal slash is prepended by a slash.
+
+That's it!
+
+We fixed all the parsing issues. We're ready for what's next.

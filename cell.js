@@ -26,8 +26,7 @@ cell.unparseElement = function (v) {
 
    if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
    if (v.match ('"') || v.match (/\s/)) {
-      if (v.match (/\/$/)) v += '/';
-      return '"' + v.replace (/"/g, '/"') + '"';
+      return '"' + v.replace (/\//g, '//').replace (/"/g, '/"') + '"';
    }
    return v;
 }
@@ -71,14 +70,14 @@ cell.textToPaths = function (message) {
          var findNonLiteralQuote = function (text) {
             var index = dale.stopNot (text.split (''), undefined, function (c, k) {
                if (c !== '"') return;
-               if (text [k - 1] !== '/' || text [k - 2] === '/') return k;
+               var slashes = text.slice (0, k + 1).match (/\/{0,}"$/g);
+               if ((slashes [0].length - 1) % 2 === 0) return k;
             });
             return index !== undefined ? index : -1;
          }
 
          var unescaper = function (text) {
-            text = text.replace (/\/"/gm, '"');
-            if (text.match (/\s/)) text = text.replace (/\/\/$/, '/');
+            if (text.match (/\s/) || text.match (/"/) || insideMultilineText) return text.replace (/\/\//g, '/').replace (/\/"/g, '"');
             return text;
          }
 
@@ -104,7 +103,7 @@ cell.textToPaths = function (message) {
       if (insideMultilineText) {
          var dequoted = dequoter (line);
          if (dequoted.start === -1) {
-            lastPath [lastPath.length - 1] += line + '\n';
+            lastPath [lastPath.length - 1] += dequoted.text + '\n';
             return;
          }
          else {
@@ -442,9 +441,10 @@ var test = function () {
       {f: cell.textToPaths, input: 'empty "" indeed', expected: [['empty', '', 'indeed']]},
       {f: cell.textToPaths, input: ['"just multiline', '', '"'], expected: [['just multiline\n\n']]},
       {f: cell.textToPaths, input: ['"just multiline', '', '"foo'], expected: {error: 'No space after a quote in line `"foo`'}},
-      {f: cell.textToPaths, input: '"/"GML"', expected: [['"GML']]},
-      // TODO: fix this
-      // {f: cell.textToPaths, input: '"///"GML"', expected: [['/"GML']]},
+      {f: cell.textToPaths, input: ['"just multiline', '//', '/""'], expected: [['just multiline\n/\n"']]},
+      {f: cell.textToPaths, input: '"/""', expected: [['"']]},
+      {f: cell.textToPaths, input: '" //"', expected: [[' /']]},
+      {f: cell.textToPaths, input: '"///""', expected: [['/"']]},
       {f: cell.textToPaths, input: ['"The call must start with /"@/" but instead starts with /"w/""'], expected: [['The call must start with "@" but instead starts with "w"']]},
       {f: cell.textToPaths, input: ['dialogue "1" from user', '             message "@ foo"'], expected: [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['dialogue 2 from user', '           message "@ foo"'], expected: [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]},
@@ -452,7 +452,7 @@ var test = function () {
       {f: cell.textToPaths, input: ['dialogue "" from user', '            message "@ foo"'], expected: [['dialogue', '', 'from', 'user'], ['dialogue', '', 'message', '@ foo']]},
       {f: cell.textToPaths, input: ['" /"'], expected: {error: 'Multiline text not closed: ` "\n`'}},
       {f: cell.textToPaths, input: ['" //"'], expected: [[' /']]},
-      {f: cell.textToPaths, input: ['" ///"'], expected: [[' //']]},
+      {f: cell.textToPaths, input: ['" ////"'], expected: [[' //']]},
       {f: cell.textToPaths, input: ['//'], expected: [['//']]},
       {f: cell.textToPaths, input: ['"//"'], expected: [['//']]},
       {f: cell.textToPaths, input: ['" /a"'], expected: [[' /a']]},
@@ -501,7 +501,7 @@ var test = function () {
       {f: cell.pathsToText, expected: 'empty "" indeed', input: [['empty', '', 'indeed']]},
       {f: cell.pathsToText, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       {f: cell.pathsToText, expected: ['foo bar 1 jip', '        2 yes'], input: [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]},
-      {f: cell.pathsToText, expected: '" //" " ///" // " /a"', input: [[' /', ' //', '//', ' /a']]},
+      {f: cell.pathsToText, expected: '" //" " ////" // " //a"', input: [[' /', ' //', '//', ' /a']]},
       {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: cell.call, input: '', expected: []},
       {f: cell.call, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},

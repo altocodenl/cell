@@ -227,16 +227,15 @@ If the value is text, and the text "looks" like a number (can start with a minus
    if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
 ```
 
-If there is a literal double quote or whitespace inside the element, we need to do the following:
+If there is a literal double quote or whitespace inside the element, the element must be surrounded with double quotes. Therefore, we need to do the following:
 
-- If it ends with a slash, add another slash before that one, to escape that slash. This avoids that final slash trying to escape the final, non-literal, double quote that surrounds the entire element. (I know).
+- Prepend every literal slash with another slash.
 - Prepend every literal double quote with a slash.
-- Surround it with double quotes.
+- Surround the whole text with double quotes.
 
 ```js
    if (v.match ('"') || v.match (/\s/)) {
-      if (v.match (/\/$/)) v += '/';
-      return '"' + v.replace (/"/g, '/"') + '"';
+      return '"' + v.replace (/\//g, '//').replace (/"/g, '/"') + '"';
    }
 ```
 
@@ -433,7 +432,7 @@ We initialize our output to keep track of `start` and `end`. These are indexes. 
          var output = {start: -1, end: -1};
 ```
 
-This utility function gives the index of the first non-literal double quote.
+This utility function gives the index of the first non-literal double quote. This was a tricky function to write.
 
 ```js
          var findNonLiteralQuote = function (text) {
@@ -451,10 +450,18 @@ If we don't find a double quote, we go to the next character.
                if (c !== '"') return;
 ```
 
-If it's not prepended by a slash, or if it's prepended by a slash that is also prepended by another slash, it is a nonliteral quote. In this case, we return the index.
+We see how many slashes are before the double quote we just found.
 
 ```js
-               if (text [k - 1] !== '/' || text [k - 2] === '/') return k;
+               var slashes = text.slice (0, k + 1).match (/\/{0,}"$/);
+```
+
+Now for the tricky bit. If there's an even amount of slashes before the double quote (even 0), this is a non-literal double quote, therefore we return `k` and stop the iteration.
+
+If there's an odd amount of slashes, it means that this double quote is escaped. For example, if there's a single slash before the quote, the quote is escaped. If there are two slashes before the quote, what we have is a literal slash, followed by a non-literal double quote (so in that case, we also return `k`). If there are three slashes before the quote, there's a literal slash, followed by a literal double quote. And so forth.
+
+```js
+               if ((slashes [0].length - 1) % 2 === 0) return k;
             });
 ```
 
@@ -465,29 +472,17 @@ If we didn't find a nonliteral quote, we return -1.
          }
 ```
 
-We now define `unescaper`, an utility function that takes `text` and also returns text, with two modifications:
-- Removes the slash from before each literal double quote. For example: `/"foo/"` becomes `"foo"`.
-- Removes the slash that escapes a literal slash that happens to be just before a non-literal double quote. For example: `" //"` becomes `" /"`.
-
-A major assumption here (which is fulfilled by the way we use this function) is that any double quotes that are in `text` are literal double quotes.
+We now define `unescaper`, an utility function that takes `text` and also returns text. If `text` has a double quote (which must be a literal one, given the fact that we call this on text that is between non-literal double quotes), or if we are inside multiline text, we remove each slash from before a literal double quote, as well as removing every slash before a literal slash.
 
 ```js
          var unescaper = function (text) {
 ```
 
-We replace any slash that come before a double quote.
-
 ```js
-            text = text.replace (/\/"/g, '"');
+            if (text.match (/\s/) || text.match (/"/) || insideMultilineText) return text.replace (/\/\//g, '/').replace (/\/"/g, '"');
 ```
 
-If there is a space in this text, it had to be surrounded by non-literal double quotes. Therefore, if the text ends with two slashes, we remove the last one. This is a very, very involved corner case.
-
-```js
-            if (text.match (/\s/)) text = text.replace (/\/\/$/, '/');
-```
-
-We return `text` and clsoe `dequoter`.
+If there's no space or double quote, and we are not inside multiline text, we just return `text` as is and close `dequoter`.
 
 ```js
             return text;
@@ -556,12 +551,12 @@ What makes multiline text particularly interesting is that it *spans* lines. The
 
 We run the `line` through `dequoted`. If there is no non-literal double quote, the entire line belongs to the last element of the last path. There already has to be a path with at least an element there, which was initialized by the beginning of the multiline text we are still processing.
 
-Thereforew, we just append the entire `line` into the last element of the last path, also taking care of adding the newline that we removed when we started to iterate each of the lines of the original text.
+Thereforew, we just append the entire `line` (taking care to use `dequoted.text`, in case there are characters we need to unescape such as slashes and literal double quotes) into the last element of the last path, also taking care of adding the newline that we removed when we started to iterate each of the lines of the original text.
 
 ```js
          var dequoted = dequoter (line);
          if (dequoted.start === -1) {
-            lastPath [lastPath.length - 1] += line + '\n';
+            lastPath [lastPath.length - 1] += dequoted.text + '\n';
 ```
 
 We `return` so that we can move on to process the next line.
