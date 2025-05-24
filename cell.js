@@ -12,9 +12,6 @@ var clog = console.log, type = teishi.type;
 
 // *** MAIN FUNCTIONS ***
 
-// The textToPaths takes text, presumably formatted as fourdata, and returns a list of paths.
-// For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
-
 cell.toNumberIfNumber = function (text) {
    if (text.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (text);
    return text;
@@ -31,6 +28,8 @@ cell.unparseElement = function (v) {
    return v;
 }
 
+// The textToPaths takes text, presumably formatted as fourdata, and returns a list of paths.
+// For example: `foo bar 1\n    jip 2` will become [['foo', 'bar', 1], ['foo', 'jip', 2]]
 cell.textToPaths = function (message) {
 
    var paths = [];
@@ -142,7 +141,7 @@ cell.textToPaths = function (message) {
          if (element.match (/"/)) return 'The line `' + line + '` has an unescaped quote.';
 
          path.push (cell.toNumberIfNumber (element));
-         line = line.slice (element.length + 1); // Here we don't need to check that the last character sliced is a space, because we used spaces to split the line
+         line = line.slice (element.length + 1);
       }
 
       if (! paths.includes (path)) paths.push (path);
