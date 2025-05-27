@@ -1,0 +1,11 @@
+Eighteenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we add an LLM to give us names for the things we paste. We also add a spinny and improve the looks somewhat. Today, I listen to Mozart's Dissonance Quartet (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+- See first 5k of data, name it [DONE]
+- Improve look and feel
+
+- client-side quick search at the top
+- data: csv with books, json with logs, xls with financial data, db dump with customers, see own requests per second
+- show top level keys separately
+- if there's a =, show that straight with a possibility to expand by clicking next to the key
