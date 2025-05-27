@@ -46,7 +46,7 @@ var LLM = function (model, question, cb) {
       method: 'post',
       path: 'v1/responses',
       headers: {authorization: 'Bearer ' + SECRET.openai},
-      body: {model: model, temperature: 1, input: question}
+      body: {model: model, temperature: 1, input: question.join ('\n')}
    }, function (error, rs) {
       if (error) return cb (error);
       cb (null, rs.body.output [0].content [0].text);
@@ -203,27 +203,29 @@ var routes = [
          return text;
       }
 
-      httpCall ({
-         https: false,
-         host: 'localhost',
-         port: CONFIG.port,
-         method: 'post',
-         path: 'call/' + rq.data.params.id,
-         body: {
-            call: cell.pathsToText (cell.JSToPaths ({'@': {'put': {
-               p: rq.body.name,
-               v: plainParse (rq.body.file),
-            }}})),
-            mute: true,
-         }
-      }, function (error, RS) {
-         if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});
-         reply (rs, 200);
+      LLM ('gpt-4o', ['Hi, can you give me a good name for this data? Please make your response just the name.', rq.body.file.slice (0, 5000)], function (error, name) {
+         if (error) return reply (rs, 500, {error: error});
+
+         httpCall ({
+            https: false,
+            host: 'localhost',
+            port: CONFIG.port,
+            method: 'post',
+            path: 'call/' + rq.data.params.id,
+            body: {
+               call: cell.pathsToText (cell.JSToPaths ({'@': {'put': {
+                  p: name,
+                  v: plainParse (rq.body.file),
+               }}})),
+               mute: true,
+            }
+         }, function (error, RS) {
+            if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});
+            reply (rs, 200);
+         });
       });
    }],
 ];
-
-// LLM ('gpt-4o', 'Hi, can you give me an JS array with single quotes with twenty random (but common) English nouns?', console.log);
 
 // *** SERVER ***
 

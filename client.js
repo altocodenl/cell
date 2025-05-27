@@ -5,6 +5,8 @@ var cell = window.cell;
 
 var type = teishi.type;
 
+var style = lith.css.style;
+
 // *** HELPERS ***
 
 var H = {};
@@ -52,7 +54,11 @@ B.mrespond ([
 
       var cellName = window.location.hash.replace ('#/', '');
 
+      B.call (x, 'set', 'loading', true);
+
       B.call (x, 'post', 'call/' + cellName, {}, {call: call}, function (x, error, rs) {
+         B.call (x, 'set', 'loading', false);
+
          if (error) return B.call (x, 'report', 'error', error);
 
          B.call (x, 'retrieve', 'cell');
@@ -74,7 +80,9 @@ B.mrespond ([
 
       var cellName = window.location.hash.replace ('#/', '');
 
+      B.call (x, 'set', 'loading', true);
       B.call ('post', 'file/' + cellName, {}, {file: file, name: 'clipboard-' + (Math.random () + '').slice (3, 6), mime: 'text/plain'}, function (x, error, rs) {
+         B.call (x, 'set', 'loading', false);
          if (error) return B.call (x, 'report', 'error', error);
          B.call (x, 'retrieve', 'cell');
       });
@@ -91,12 +99,24 @@ views.css = [
 
 views.main = function () {
 
-   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
+   return B.view ([['dataspace'], ['call'], ['loading']], function (dataspace, call, loading) {
       var dialogue = cell.pathsToJS (cell.get (['dialogue'], [], function () {return B.get ('dataspace') || []}));
+
+      var spinny = ['span', {style: style ({
+         border: '2px solid rgba(0,0,0,0.1)',
+         'border-left-color': '#fff',
+         'border-radius': '9999px',
+         width: '1rem',
+         height: '1rem',
+         animation: 'spin 0.6s linear infinite',
+         display: 'inline-block',
+         'margin-left': '0.5rem'
+      })}];
 
       call = call || '';
       return ['div', [
          ['style', views.css],
+         ['style', '@keyframes spin {from { transform: rotate(0deg); } to   { transform: rotate(360deg); }}'],
          ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
             views.cell ([]),
          ]],
@@ -132,27 +152,37 @@ views.main = function () {
                autofocus: true,
                value: call,
             }],
-            ['button', {class: 'w-100', onclick: B.ev ('send', 'call', call)}, 'Submit'],
-            ['button', {onclick: B.ev ('upload', 'clipboard')}, 'Upload from clipboard'],
+            ['div', {class: 'flex flex-column w-100'}, [
+               ['button', {
+                  class: 'w-100 pv2 ph3 br2 bg-blue white hover-bg-dark-blue pointer shadow-1',
+                  onclick: loading ? '' : B.ev ('send', 'call', call)
+               }, loading ? spinny : 'Submit'],
+               ['button', {
+                  class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
+                  onclick: loading ? '' : B.ev ('upload', 'clipboard')
+               }, loading ? spinny : 'Upload from clipboard']
+            ]]
          ]],
       ]];
    });
 }
 
 views.datagrid = function (paths) {
-   return ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (paths, function (path, k) {
-      var abridge = 0;
-      if (k > 0) dale.stop (path, true, function (v2, k2) {
-         if (paths [k - 1] [k2] !== v2) return true;
-         abridge++;
-      });
-      return ['tr', [
-         dale.go (path, function (element, k) {
-            var abridged = k < abridge;
-            return ['td', {class: 'ba pa1'}, ['p', {class: 'ma0' + (abridged ? ' silver' : '')}, element]];
-         }),
-      ]];
-   })]
+   return ['div', {class: 'w-100 overflow-auto', style: style ({'max-height': Math.round (window.innerHeight * 0.8) + 'px'})}, [
+      ['table', {class: 'collapse', style: 'font-family: monospace; font-size: 16px'}, dale.go (paths, function (path, k) {
+         var abridge = 0;
+         if (k > 0) dale.stop (path, true, function (v2, k2) {
+            if (paths [k - 1] [k2] !== v2) return true;
+            abridge++;
+         });
+         return ['tr', [
+            dale.go (path, function (element, k) {
+               var abridged = k < abridge;
+               return ['td', {class: 'ba pa1'}, ['p', {class: 'ma0' + (abridged ? ' silver' : '')}, element]];
+            }),
+         ]];
+      })]
+   ]];
 }
 
 views.cell = function (path) {
