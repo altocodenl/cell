@@ -1,0 +1,7 @@
+Nineteenth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, a very long episode where we find a better way to display the datagrid. We also add CSV parsing. And we find and fix an issue with dedotter mixed with indentations. It still feels miles away from something useful, but at the same time some involved "code" from TODIS looks definitely readable. Strongly oscillating betwee hope and fear, as usual. Today, I listen to Ultravox's greatest hits, as well as some Roxy Music and Pixies (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+- fix dedotter [DONE]
+- hide/show more
+- client-side quick search at the top

@@ -198,7 +198,7 @@ views.datagrid = function (paths) {
          if (element === '') element = '""';
 
          return ['div', {
-            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' silver' : ''),
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : ''),
             style: style ({
                'height': height
             })

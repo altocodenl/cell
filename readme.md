@@ -187,8 +187,6 @@ TODO: everything :)
 
 ## TODO
 
-
-
 - Altocookies: login with email with link or oauth with providers that always provide email (google)
 - Recursive lambdas by referencing itself from inside the loop?
 - Diff by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
@@ -196,6 +194,10 @@ TODO: everything :)
 - Encrypted dumps/restores
 - Implementation of U and of pg's lisp interpreter.
 - Self-hosting.
+
+- Parsing issues I am playing dumb about:
+   - Distinguishing literal dots in hashes.
+   - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
 
 ## Annotated source code (fragments)
 
@@ -207,6 +209,12 @@ for example: a number `1` becomes `1`; a text `1` becomes `"1"`; a text ` ` beco
 
 ```js
 cell.unparseElement = function (v) {
+```
+
+But wait, how can `v` be `null`? I forgot to mention that, because we allow dots as placeholders of the keys of lists, we need to account for when there's indentation below these dot placeholders. The only unambiguous way I found to do this (see `cell.textToPaths` below) is using `null`. In these cases, `null` will be a single space. Therefore, in this function, we return a single space. Moving on...
+
+```js
+   if (v === null) return ' ';
 ```
 
 If the value is a number, it just returns it as text, but without quotes around it.
@@ -364,16 +372,6 @@ If we haven't hit the indentSize, keep on going.
 ```js
          });
 ```
-         if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
-         if (matchUpTo.error) return matchUpTo.error;
-         // We store the "deabridged" part of the line, taking it from the last element of `paths`
-         path = lastPath.slice (0, matchUpTo + 1);
-         line = line.slice (matchedSpaces);
-
-         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
-      }
-```
-
 If we haven't found a match, we have more spaces here than length as text of the previous path. We return an error.
 
 ```js
@@ -388,9 +386,15 @@ And if the iteration returned an error, we just return it.
 
 If we are here, we successfully matched our indentation with some elements of the previous path. We make `path` to be a copy of those elements from the previous path, using the `matchUpTo` index we obtained in the iteration we just finished.
 
+However, a subtle point! If we have a dot on the previous path, we don't want to copy that, because if we add a dot, the `cell.dedotter` function will understand this to be a new element of a list, rather than belonging to the existing one. To mark these indentations that stand for belonging to the same (dotted) element of a list, we cover our noses and use `null`.
+
 ```js
-         path = lastPath.slice (0, matchUpTo + 1);
+         path = dale.go (lastPath.slice (0, matchUpTo + 1), function (v) {
+            return v === '.' ? null : v;
+         });
 ```
+
+Note that, in the above loop, if there were already a previous `null`, we will also copy it over.
 
 We chop off the indentation off the line.
 
