@@ -18,6 +18,7 @@ cell.toNumberIfNumber = function (text) {
 }
 
 cell.unparseElement = function (v) {
+   if (v === null) return ' ';
    if (type (v) !== 'string') return v + '';
    if (v.length === 0) return '""';
 
@@ -56,7 +57,9 @@ cell.textToPaths = function (message) {
          if (matchUpTo === undefined) return 'The indent of the line `' + line + '` does not match that of the previous line.';
          if (matchUpTo.error) return matchUpTo.error;
 
-         path = lastPath.slice (0, matchUpTo + 1);
+         path = dale.go (lastPath.slice (0, matchUpTo + 1), function (v) {
+            return v === '.' ? null : v;
+         });
          line = line.slice (matchedSpaces);
 
          if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace.';
@@ -149,13 +152,15 @@ cell.textToPaths = function (message) {
 
    if (error) return {error: error};
    if (insideMultilineText) return {error: 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`'};
-   return paths;
+   return cell.sorter (cell.dedotter (paths));
 }
 
 cell.dedotter = function (paths) {
    dale.go (paths, function (v, k) {
       dale.go (v, function (v2, k2) {
-         if (v2 !== '.') return;
+         if (v2 === null) return paths [k] [k2] = paths [k - 1] [k2];
+
+         if (v2 !== '.' && v !== null) return;
          var lastPath = paths [k - 1];
          var continuing;
          if (lastPath === undefined) continuing = false;
@@ -231,7 +236,7 @@ cell.parser = function (message) {
 
    var paths = cell.textToPaths (message);
    if (paths.error) return paths;
-   paths = cell.sorter (cell.dedotter (paths));
+
    var error = cell.validator (paths);
    if (error !== true) return error;
    return paths;
@@ -455,11 +460,13 @@ var test = function () {
       {f: cell.textToPaths, input: ['//'], expected: [['//']]},
       {f: cell.textToPaths, input: ['"//"'], expected: [['//']]},
       {f: cell.textToPaths, input: ['" /a"'], expected: [[' /a']]},
+      {f: cell.textToPaths, input: ['. foo bar', '  sub acu ', '  jip heh'], expected: [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']]},
 
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
       {f: cell.dedotter, input: [['foo', 'klank', 'first'], ['foo', '.', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
       {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second'], ['foo', '.', 'third']], expected: [['foo', 1, 'first'], ['foo', 2, 'second'], ['foo', 3, 'third']]},
+      {f: cell.dedotter, input: [['.', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']], expected: [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']]},
       {f: cell.sorter, input: [['foo', 'bar', 1], ['foo', 'bar', 2]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
       {f: cell.sorter, input: [['foo', 'bar', 2], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
       {f: cell.sorter, input: [['foo', 'jip', 1], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'jip', 1]]},
@@ -501,6 +508,7 @@ var test = function () {
       {f: cell.pathsToText, expected: ['"just multiline', '', '"'], input: [['just multiline\n\n']]},
       {f: cell.pathsToText, expected: ['foo bar 1 jip', '        2 yes'], input: [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]},
       {f: cell.pathsToText, expected: '" //" " ////" // " //a"', input: [[' /', ' //', '//', ' /a']]},
+      {f: cell.pathsToText, expected: ['. foo bar', '  jip heh', '  sub acu'], input: [['.', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']]},
       {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: cell.call, input: '', expected: []},
       {f: cell.call, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
