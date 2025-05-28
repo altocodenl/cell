@@ -24,6 +24,11 @@ var stop = function (rs, rules) {
    }, true);
 }
 
+
+// *** PARSING LIBRARIES ***
+
+var csv = require ('csv-parse/sync');
+
 // *** HELPERS ***
 
 var httpCall = function (options, cb) {
@@ -174,9 +179,15 @@ var routes = [
          ['mime', rq.body.mime, 'string']
       ])) return;
 
-      var plainParse = function (text) {
-         var json = teishi.parse (text);
-         if (json) return json;
+      var plainParse = function (text, format) {
+         if (format === 'json') {
+            var json = teishi.parse (text);
+            if (json) return json;
+         }
+
+         if (format === 'csv') {
+            return csv.parse (text, {columns: true, skip_empty_lines: true});
+         }
 
          var detabler = function (separator) {
 
@@ -203,8 +214,18 @@ var routes = [
          return text;
       }
 
-      LLM ('gpt-4o', ['Hi, can you give me a good name for this data? Please make your response just the name.', rq.body.file.slice (0, 5000)], function (error, name) {
+      LLM ('gpt-4o', [
+         'Hi! I need two things: 1) a good name for this data; 2) for you to tell me what format you think it is (csv, xls, json, something else?).',
+         'Please make your response a JSON of the shape {name: "...", format: "..."}',
+         'I am only giving you the first 5k of the data',
+         'Thanks!',
+         rq.body.file.slice (0, 5000)
+      ], function (error, res) {
          if (error) return reply (rs, 500, {error: error});
+         var parsed = res.replace (/^```json/, '').replace (/```$/, '');
+         if (teishi.parse (parsed) === false) return reply (rs, 500, {error: 'LLM did not give us JSON', res: res});
+         parsed = JSON.parse (parsed);
+         if (type (parsed.name) !== 'string' || type (parsed.format) !== 'string') return reply (rs, 500, {error: 'LLM did not give us the JSON we wanted', res: res});
 
          httpCall ({
             https: false,
@@ -214,8 +235,8 @@ var routes = [
             path: 'call/' + rq.data.params.id,
             body: {
                call: cell.pathsToText (cell.JSToPaths ({'@': {'put': {
-                  p: name,
-                  v: plainParse (rq.body.file),
+                  p: parsed.name,
+                  v: plainParse (rq.body.file, parsed.format.toLowerCase ()),
                }}})),
                mute: true,
             }

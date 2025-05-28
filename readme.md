@@ -187,11 +187,11 @@ TODO: everything :)
 
 ## TODO
 
-- Project, with 8 hex identifiers
+
+
 - Altocookies: login with email with link or oauth with providers that always provide email (google)
-- Split screen 60/40, llm prompt on the right
 - Recursive lambdas by referencing itself from inside the loop?
-- Differ by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
+- Diff by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
 - PWAs out of the box.
 - Encrypted dumps/restores
 - Implementation of U and of pg's lisp interpreter.

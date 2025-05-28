@@ -6,7 +6,8 @@
       "dale":    "6.0.2",
       "hitit":   "1.2.8",
       "lith":    "6.0.7",
-      "teishi":  "5.1.0"
+      "teishi":  "5.1.0",
+      "csv-parse": "5.6.0"
    },
    "main": "server.js",
    "author": "Altocode <info@altocode.nl>",

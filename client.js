@@ -168,23 +168,41 @@ views.main = function () {
 }
 
 views.datagrid = function (paths) {
-   return ['div', {class: 'w-100 overflow-auto code', style: style ({'max-height': Math.round (window.innerHeight * 0.8) + 'px'})}, dale.go (paths, function (path, k) {
+   return ['div', {
+      class: 'w-100 overflow-x-auto code',
+      style: style ({
+         'max-height': Math.round (window.innerHeight * 0.8) + 'px',
+         'white-space': 'nowrap',
+      })
+   }, dale.go (paths, function (path, k) {
       var abridge = 0;
       if (k > 0) dale.stop (path, true, function (v2, k2) {
          if (paths [k - 1] [k2] !== v2) return true;
          abridge++;
       });
 
+      var height = '';
       var maxLength = Math.max.apply (null, dale.go (path, function (element) {
          return (element + '').length;
       }));
+      if (maxLength > 50) height = (Math.min (9, Math.floor (maxLength / 50)) + 2) + 'rem';
 
-      return ['div', {class: 'flex nowrap'}, dale.go (path, function (element, k) {
+      return ['div', {
+         class: 'cf',
+         style: style ({
+            'white-space': 'nowrap',
+         }),
+      }, dale.go (path, function (element, k) {
          var abridged = k < abridge;
+
+         if (element === '') element = '""';
+
          return ['div', {
-            class: 'bt bl br2 pa2',
-            style: style ({height: maxLength > 100 ? '9rem' : ''})
-         }, ['p', {style: 'word-break: break-word', class: 'ma0 normal' + (abridged ? ' silver' : '')}, element]];
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' silver' : ''),
+            style: style ({
+               'height': height
+            })
+         }, element];
       })];
    })];
 }
