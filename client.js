@@ -48,6 +48,13 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', []);
       });
    }],
+   ['expand', 'prefix', function (x, prefix) {
+      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
+      if (teishi.eq (expanded, {})) expanded = [];
+      expanded.push (prefix);
+
+      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})));
+   }],
    ['send', 'call', function (x, call) {
 
       if (call.trim ().length === 0) return;
@@ -86,6 +93,33 @@ B.mrespond ([
          if (error) return B.call (x, 'report', 'error', error);
          B.call (x, 'retrieve', 'cell');
       });
+   }],
+   ['upload', 'files', function (x) {
+      var input = c ('#file-upload');
+      alert ('here');
+      dale.go (input.files, function (file) {
+         B.call (x, 'upload', 'file', file);
+      });
+   }],
+   ['upload', 'file', function (x, file) {
+      var reader = new FileReader ();
+
+      reader.onloadend = function () {
+         B.call (x, 'set', 'loading', true);
+         // We send the file contents as base64
+         var cellName = window.location.hash.replace ('#/', '');
+         B.call ('post', 'file/' + cellName, {}, {file: reader.result, name: file.name, mime: file.type}, function (x, error, rs) {
+            B.call (x, 'set', 'loading', false);
+            if (error) return B.call (x, 'report', 'error', error);
+            B.call (x, 'retrieve', 'cell');
+         });
+      };
+
+      reader.onerror = function (error) {
+         B.call (x, 'report', 'error', error);
+      }
+
+      reader.readAsDataURL (file);
    }],
 ]);
 
@@ -160,24 +194,58 @@ views.main = function () {
                ['button', {
                   class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
                   onclick: loading ? '' : B.ev ('upload', 'clipboard')
-               }, loading ? spinny : 'Upload from clipboard']
+               }, loading ? spinny : 'Upload from clipboard'],
+               ['input', {
+                  class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
+                  id: 'file-upload', type: 'file', multiple: true,
+               }],
+               ['button', {
+                  onclick: loading ? '' : B.ev ('upload', 'files')
+               }, loading ? spinny : 'Upload files'],
             ]]
          ]],
       ]];
    });
 }
 
-views.datagrid = function (paths) {
+views.datagrid = function (paths, expanded) {
+
+   if (type (expanded) !== 'array') expanded = [];
+
+   var leftmost = {};
+   dale.go (paths, function (path) {
+      if (! leftmost [path [0]]) leftmost [path [0]] = 0;
+      leftmost [path [0]]++;
+   });
+
+   var foldedPaths = [];
+
+   dale.go (paths, function (path) {
+      if (expanded.includes (path [0])) return foldedPaths.push (path);
+
+      if (! leftmost [path [0]]) return;
+
+      foldedPaths.push (path);
+      foldedPaths.push ({prefix: path [0], entries: leftmost [path [0]]});
+      delete leftmost [path [0]];
+   });
+
    return ['div', {
       class: 'w-100 overflow-x-auto code',
       style: style ({
          'max-height': Math.round (window.innerHeight * 0.8) + 'px',
          'white-space': 'nowrap',
       })
-   }, dale.go (paths, function (path, k) {
+   }, dale.go (foldedPaths, function (path, k) {
+
+      if (type (path) === 'object') return ['div', {
+         class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+         onclick: B.ev ('expand', 'prefix', path.prefix)
+      }, ['See all ', path.entries, ' paths...']];
+
       var abridge = 0;
       if (k > 0) dale.stop (path, true, function (v2, k2) {
-         if (paths [k - 1] [k2] !== v2) return true;
+         if (foldedPaths [k - 1] [k2] !== v2) return true;
          abridge++;
       });
 
@@ -209,6 +277,9 @@ views.datagrid = function (paths) {
 
 views.cell = function (path) {
    return B.view ('dataspace', function (dataspace) {
+
+      var expanded = cell.pathsToJS (cell.get (path, ['expanded'], function () {return dataspace}));
+
       var paths = dale.fil (cell.get (path, [], function () {return dataspace}), undefined, function (v) {
          if (v [0] === 'dialogue') return; // Don't show the dialogue
          return v;
@@ -216,7 +287,7 @@ views.cell = function (path) {
 
       return ['div', [
          ['h3', 'Location: ' + (cell.pathsToText (path) || 'all')],
-         views.datagrid (paths)
+         views.datagrid (paths, expanded)
       ]];
    });
 }

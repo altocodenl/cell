@@ -1,0 +1,16 @@
+Twentieth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, a side quest with file uploads, then we add functionality to hide and show some prefixes. We're getting closer to making cell computable. Today, I listen to Deadmau5 (at zero volume to avoid copyright infringement...).
+
+https://github.com/altocodenl/cell
+
+Up next:
+- base64 upload of binary
+- hide/show more
+- client-side quick search at the top
+
+- Count items
+
+= number
+@ count depth
+        prefix 1 ANZSIC Industry Data 2011
+
+- Get unique types: iterate, push to list if not already there
