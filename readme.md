@@ -15,7 +15,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 My contention is: if you want to build data systems using AI, you need to do three things:
 
 1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
-2. **Control** the system. AIs, like humans, are fallible and inconsistent. It is very important to have "rigitd" parts in the system that enforce certain constraints.
+2. **Control** the system. AIs, like humans, are fallible and inconsistent. It is very important to have rigid parts in the system that enforce constraints.
 3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
 
 Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence. This simplicity comes from seven powerups.

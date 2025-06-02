@@ -296,7 +296,7 @@ cell.JSToPaths = function (v, paths) {
 
 cell.pathsToJS = function (paths, output) {
 
-   if (paths.length === 0) return {};
+   if (paths.length === 0) return '';
 
    if (paths.length === 1 && paths [0].length === 1) return paths [0] [0];
 
@@ -628,7 +628,7 @@ var test = function () {
       {f: cell.JSToPaths, input: [1, 2, 3], expected: [[1, 1], [2, 2], [3, 3]]},
       {f: cell.JSToPaths, input: {boo: [true, false], why: new Date ('2025-01-01T00:00:00.000Z')}, expected: [['boo', 1, 1], ['boo', 2, 0], ['why', '2025-01-01T00:00:00.000Z']]},
       {f: cell.JSToPaths, input: {foo: null, some: '', thing: parseInt ('!')}, expected: [['foo', ''], ['some', ''], ['thing', '']]},
-      {f: cell.pathsToJS, input: [], expected: {}},
+      {f: cell.pathsToJS, input: [], expected: ''},
       {f: cell.pathsToJS, input: [['']], expected: ''},
       {f: cell.pathsToJS, input: [[1]], expected: 1},
       {f: cell.pathsToJS, input: [['bar', 1, 'jip'], ['bar', 2, 'joo'], ['jup', 'yea'], ['soda', 'wey']], expected: {bar: ['jip', 'joo'], jup: 'yea', soda: 'wey'}},

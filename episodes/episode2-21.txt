@@ -1,0 +1,8 @@
+Twenty-first episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finish the expand and add the logic to fold paths, and even add a quick search at the top. Next episode we will start writing computation.
+
+https://github.com/altocodenl/cell
+
+- if fold is undefined, do not fold any paths [DONE]
+- don't fold short paths (<= 3) [DONE]
+- fold long paths [DONE]
+- quick search at the top

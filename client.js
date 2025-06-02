@@ -21,6 +21,11 @@ window.addEventListener ('hashchange', function () {
    B.call ('read', 'hash', window.location.hash);
 });
 
+window.addEventListener ('resize', function () {
+   B.call ('change', 'dataspace');
+});
+
+
 B.mrespond ([
    ['initialize', [], function (x) {
       B.call (x, 'read', 'hash');
@@ -48,14 +53,25 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', []);
       });
    }],
-   ['expand', 'prefix', function (x, prefix) {
+   ['expand', 'path', function (x, prefix) {
       var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
-      if (teishi.eq (expanded, {})) expanded = [];
+      if (! expanded) expanded = [];
       expanded.push (prefix);
 
-      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})));
+      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})), true);
    }],
-   ['send', 'call', function (x, call) {
+   ['fold', 'path', function (x, prefix) {
+      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
+      expanded = dale.fil (expanded, prefix, function (v) {return v});
+      if (expanded.length === 0) expanded = '';
+
+      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})), true);
+   }],
+   ['search', [], function (x, term) {
+      clog (term);
+      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'search', v: term}}})), true);
+   }],
+   ['send', 'call', function (x, call, mute) {
 
       if (call.trim ().length === 0) return;
 
@@ -63,7 +79,7 @@ B.mrespond ([
 
       B.call (x, 'set', 'loading', true);
 
-      B.call (x, 'post', 'call/' + cellName, {}, {call: call}, function (x, error, rs) {
+      B.call (x, 'post', 'call/' + cellName, {}, {call: call, mute: mute}, function (x, error, rs) {
          B.call (x, 'set', 'loading', false);
 
          if (error) return B.call (x, 'report', 'error', error);
@@ -152,11 +168,12 @@ views.main = function () {
          ['style', views.css],
          ['style', '@keyframes spin {from { transform: rotate(0deg); } to   { transform: rotate(360deg); }}'],
          ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
-            views.cell ([]),
+            views.cell (),
          ]],
          ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
 
             dale.go (dialogue, function (entry) {
+               if (! entry) return;
 
                var classes = function (who) {
                   var output = 'code w-70 pa2 ba br3 mb2';
@@ -208,27 +225,43 @@ views.main = function () {
    });
 }
 
-views.datagrid = function (paths, expanded) {
+views.datagrid = function (paths, fold) {
 
-   if (type (expanded) !== 'array') expanded = [];
+   if (fold) {
 
-   var leftmost = {};
-   dale.go (paths, function (path) {
-      if (! leftmost [path [0]]) leftmost [path [0]] = 0;
-      leftmost [path [0]]++;
-   });
+      var leftmost = {};
+      dale.go (paths, function (path) {
+         if (! leftmost [path [0]]) leftmost [path [0]] = 0;
+         leftmost [path [0]]++;
+      });
 
-   var foldedPaths = [];
+      var foldedPaths = [];
+      var maxWhenFolded = 3;
 
-   dale.go (paths, function (path) {
-      if (expanded.includes (path [0])) return foldedPaths.push (path);
+      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace')})) || [];
+      dale.go (paths, function (path) {
 
-      if (! leftmost [path [0]]) return;
+         if (expanded.includes (path [0])) {
+            foldedPaths.push (path);
+            leftmost [path [0]]--;
+            // If this is the last element of an unfolded path, put an object to fold it.
+            if (leftmost [path [0]] === 0) foldedPaths.push ({prefix: path [0], hide: true});
+         }
+         else {
+            if (! leftmost [path [0]]) return;
+            if (leftmost [path [0]] <= 3) return foldedPaths.push (path);
+            else {
+               foldedPaths.push (path);
+               foldedPaths.push ({prefix: path [0], entries: leftmost [path [0]]});
+               delete leftmost [path [0]];
+            }
+         }
+      });
 
-      foldedPaths.push (path);
-      foldedPaths.push ({prefix: path [0], entries: leftmost [path [0]]});
-      delete leftmost [path [0]];
-   });
+      paths = foldedPaths;
+   }
+
+   var search = cell.pathsToJS (cell.get (['search'], [], function () {return B.get ('dataspace')}));
 
    return ['div', {
       class: 'w-100 overflow-x-auto code',
@@ -236,16 +269,21 @@ views.datagrid = function (paths, expanded) {
          'max-height': Math.round (window.innerHeight * 0.8) + 'px',
          'white-space': 'nowrap',
       })
-   }, dale.go (foldedPaths, function (path, k) {
+   }, dale.go (paths, function (path, k) {
 
-      if (type (path) === 'object') return ['div', {
+      if (type (path) === 'object' && path.entries) return ['div', {
          class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-         onclick: B.ev ('expand', 'prefix', path.prefix)
-      }, ['See all ', path.entries, ' paths...']];
+         onclick: B.ev ('expand', 'path', path.prefix)
+      }, ['Expand all ', path.entries, ' paths...']];
+
+      if (type (path) === 'object' && path.hide) return ['div', {
+         class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+         onclick: B.ev ('fold', 'path', path.prefix)
+      }, ['Fold path']];
 
       var abridge = 0;
       if (k > 0) dale.stop (path, true, function (v2, k2) {
-         if (foldedPaths [k - 1] [k2] !== v2) return true;
+         if (paths [k - 1] [k2] !== v2) return true;
          abridge++;
       });
 
@@ -261,33 +299,49 @@ views.datagrid = function (paths, expanded) {
             'white-space': 'nowrap',
          }),
       }, dale.go (path, function (element, k) {
+
+         var searchMatch = search && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
+
          var abridged = k < abridge;
 
          if (element === '') element = '""';
 
+         var f1rst = k === 0;
+
          return ['div', {
-            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : ''),
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : '') + (f1rst ? ' pointer' : '') + (searchMatch ? ' b underline' : ''),
             style: style ({
                'height': height
-            })
+            }),
+            onclick: f1rst ? B.ev ('fold', 'path', element) : '',
          }, element];
       })];
    })];
 }
 
-views.cell = function (path) {
+views.cell = function () {
    return B.view ('dataspace', function (dataspace) {
 
-      var expanded = cell.pathsToJS (cell.get (path, ['expanded'], function () {return dataspace}));
+      var search = '';
 
-      var paths = dale.fil (cell.get (path, [], function () {return dataspace}), undefined, function (v) {
+      var paths = dale.fil (cell.get ([], [], function () {return dataspace}), undefined, function (v) {
          if (v [0] === 'dialogue') return; // Don't show the dialogue
+         if (v [0] === 'expanded') return; // Don't show expanded
+         if (v [0] === 'search') {
+            search = v [1];
+            return; // Don't show search, but set it to the local variable.
+         }
          return v;
       });
 
-      return ['div', [
-         ['h3', 'Location: ' + (cell.pathsToText (path) || 'all')],
-         views.datagrid (paths, expanded)
+      return ['div', {class: 'pa3'}, [
+         ['textarea', {
+            class: 'code w-70 pa2 ba br3 mb2 fr',
+            onchange: B.ev ('search', [], {raw: 'this.value'}),
+            oninput: B.ev ('search', [], {raw: 'this.value'}),
+            value: search || '',
+         }],
+         views.datagrid (paths, true)
       ]];
    });
 }
