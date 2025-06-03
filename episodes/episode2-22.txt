@@ -1,0 +1,77 @@
+https://github.com/altocodenl/cell
+
+Organization of each cell:
+
+- dialogue
+- editor ("client" is meaningless)
+   - search
+- endpoints
+   - email
+   - http
+- rules
+- views
+
+TODO:
+
+- quick search at the top [DONE, except that performance sucks with large cells]
+
+- compute number of paths at a prefix
+
+Ideas:
+- A prefix is the left part of a path.
+
+"anzsic count" = 280
+               @ count = ...
+                       @ "ANZSIC Industry Data 2011"
+
+Questions:
+- Do we save the results at = or not?
+   - Argument against: a lot of duplication.
+   - Argument for: making HTTP calls for which we want to keep the result.
+
+Let's go with against and do this on the fly.
+
+"anzsic count" @ count @ "ANZSIC Industry Data 2011"
+
+find rightmost @ in path and expand it to = and @
+then keep on doing this until all the @s have a = on top.
+
+But, there is a problem! When we add the =, we have two paths!
+
+
+"anzsic count" @ count = ...
+                       @ "ANZSIC Industry Data 2011"
+
+Problems:
+- The call to @ count needs to get the value from the =. Solution: check if the value is a hash and has a key =. If it does, use that as the value. Otherwise, use the whole thing as the value.
+- Who runs these expansions? Do we do it on the server or on the editor? It has to be in the server. The server is the source of truth.
+
+options:
+- don't store the results, re-run calls every time and just serve them to the client.
+- store the results, but still re-run them on change.
+
+Let's go with option 2. We'll see later how we deal with http calls or external services.
+
+Who is in charge of computing things? Put! At least, that is the entry point. You can only place calls through put!
+
+simpler example:
+
+batters @ clipboard-843 batter
+
+put:
+- iterate each path after executing the put.
+- if you find something with an @, take its suffix and run a get on it. all the paths you get, insert them at the prefix of the @ and with a = in the middle.
+
+This basically gives us a nested put.
+
+This implements reference!
+
+
+
+logo design! Prompt:
+
+Hi! Can you design me a logo for cell? (github.com/altocodenl/cell)
+
+My idea is to have a "c" and a schwa, with the c being bigger and surrounding the schwa, and both letters being sans-serif, bordering on mono, and the whole thing kind of reading like a "ce".
+
+Please do black letters on white background.

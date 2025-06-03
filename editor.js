@@ -261,7 +261,7 @@ views.datagrid = function (paths, fold) {
 
             foldedPaths.push (path);
             pathsPushedPerPrefix [path [0]]++;
-            if (pathsPushedPerPrefix [path [0]] === maxWhenFolded) {
+            if (pathsPushedPerPrefix [path [0]] === maxWhenFolded && pathsPerPrefix [path [0]] > pathsPushedPerPrefix [path [0]]) {
                foldedPaths.push ({prefix: path [0], entries: pathsPerPrefix [path [0]]});
             }
          }
@@ -352,6 +352,22 @@ views.cell = function () {
 
       return ['div', {class: 'pa3 flex flex-column items-center'}, [
 
+         ['div', {class: 'absolute top-0 left-0 ml2 mt2', style: 'width: 2.5rem; height: 2.5rem;'}, [
+            ['div', {class: 'relative w-100 h-100'}, [
+               ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
+                  ['span', {
+                     class: 'f-headline fw4 black',
+                     style: 'font-family: sans-serif;',
+                  }, 'c']
+               ]],
+               ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
+                  ['span', {
+                     class: 'f1 fw4 black',
+                     style: 'font-family: sans-serif;',
+                  }, 'ə']
+               ]]
+            ]]
+         ]],
          ['input', {
             class: 'code w-50 pa3 ba br3 mb3 db center',
             onchange: B.ev ('search', [], {raw: 'this.value'}),
