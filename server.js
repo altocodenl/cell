@@ -76,13 +76,13 @@ var routes = [
          ]],
          ['body', [
             ['script', {src: 'https://cdn.jsdelivr.net/gh/fpereiro/gotob@434aa5a532fa0f9012743e935c4cd18eb5b3b3c5/gotoB.min.js'}],
-            dale.go (['cell.js', 'client.js'], function (v) {
+            dale.go (['cell.js', 'editor.js'], function (v) {
                return ['script', {src: v}];
             }),
          ]]
       ]]
    ])],
-   ['get', ['client.js', 'cell.js'], cicek.file],
+   ['get', ['cell.js', 'editor.js'], cicek.file],
 
    // *** PROJECTS ***
 

@@ -24,13 +24,13 @@ Cell intends to make the hosting, control and understanding of your system to be
 
 Cell employs seven powerups to make programming as easy as possible:
 
-1. A simple way to **represent data with text**. This allows you to look directly at your data.
-2. A single *dataspace* **where all the data of your project lives**. Every part of your data has a meaningful location.
-3. Programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
-4. Write any logic with **only five constructs** which you can understand in a few minutes.
-5. The system is **always up to date** and responds to your changes (just like a spreadsheet!).
-6. **Everything is integrated**: language, database, API and UI are in one place: your web browser.
-7. **Generative AI** that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
+1. **Fourdata**: a simple way to **represent data with text**. This allows you to look directly at any data.
+2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location.
+3. **Dialogue**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
+4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
+5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
+6. **Integrated editor**: language, database, API and UI are in one editor that runs in your web browser.
+7. **Generative AI**: automatic intelligence that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
 
 ## Use cases
 
@@ -78,8 +78,9 @@ These new features are built on top of the same mechanisms that make the spreads
 - Integrated language, database, service and interface.
 - Two general purpose representations of data: text and datagrid.
 - Storing discrete calls in a dialog gives us both commits and transactions in a single construct. This allows us to query the system's state at any specific moment. We can also examine how the system evolves over time by reviewing the sequence of interactions. The calls are the diffs of the system. If the `get` call takes a parameter, we can query any previous state. And if the `put` call can take a condition and perform multiple operations as a whole, we can have reified transactions. These insights grow from the work of Datomic (thanks Val Waeselynck for your [great explanation](https://vvvvalvalval.github.io/posts/2018-11-12-datomic-event-sourcing-without-the-hassle.html)!).
+- A first-class [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation): paths.
 
-## The cell interface
+## The cell editor
 
 - The *main*: a main window that contains *cells*: smaller windows that show either text (fourdata) or graphical components.
 - The *dialogue*: a dialogue window that combines the concept of a terminal with that of an LLM prompt, enabling a dialogue between the user, an LLM and cell. Any message starting with @, whether it comes from the user or the LLM, is understood as a call to cell. Any message sent by the user that is not starting with a @ is sent to the LLM, which will then respond with other messages and possibly calls to cell. Calls to cell will control the interface as well as put data in the dataspace (actually, the interface is simply an interpretation of part of the dataspace, but we mention it as an important special case). cell won't output anything on the dialogue, its results will be seen (optionally) in the main window.
@@ -101,6 +102,19 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 ## The language
 
 Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-3-call-and-response) and [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-4-logic-is-what-happens-between-call-and-response).
+
+## Organization of a cell
+
+```
+dialogue
+editor
+   search
+endpoints
+   email
+   http
+rules
+views
+```
 
 **DEAR READER: cell is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
 
