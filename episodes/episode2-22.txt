@@ -1,3 +1,5 @@
+Twenty-second episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we have performance issues with the search bar, but we boldly go forward and design reference.
+
 https://github.com/altocodenl/cell
 
 Organization of each cell:

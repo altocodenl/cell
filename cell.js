@@ -521,6 +521,16 @@ var test = function () {
       {f: cell.call, input: '@ put 1 foo\n      2 bar', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
       {f: cell.call, input: '@ put k foo\n      v bar', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
       {f: cell.call, input: '@ put p foo\n      v bar\n      x jip', expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
+
+      // *** GET ***
+
+      {reset: []},
+      {f: cell.call, input: '@', expected: [
+      ]},
+
+      {f: cell.call, input: '@ foo', expected: [
+      ]},
+
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -554,6 +564,9 @@ var test = function () {
          ['else']
       ]},
       {f: cell.call, input: '@ something else', expected: []},
+
+      // *** GET WITH CONTEXT ***
+
       {reset: [
          ['foo', 10],
          ['inner', 'foo', 20],
@@ -565,6 +578,9 @@ var test = function () {
       {f: cell.get, query: ['foo'], context: ['foo'], expected: [
          [10]
       ]},
+      {f: cell.get, query: ['foo'], context: ['bar'], expected: [
+         [10]
+      ]},
       {f: cell.get, query: ['bar'], context: ['foo'], expected: []},
       {f: cell.get, query: ['foo'], context: ['inner'], expected: [
          [20],
@@ -574,6 +590,9 @@ var test = function () {
       ]},
       {f: cell.get, query: ['foo'], context: ['inner', 'jip', 'foo'], expected: [
          [30],
+      ]},
+      {f: cell.get, query: ['foo'], context: ['something', 'else', 'completely'], expected: [
+         [10],
       ]},
 
       // *** PUT ***

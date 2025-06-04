@@ -173,7 +173,10 @@ views.main = function () {
          ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
             views.cell (),
          ]],
-         ['div', {class: 'dialogue fl w-40 pa2 bg-black'}, [
+         ['div', {
+            class: 'fl w-40 pa2 bg-black overflow-auto',
+            style: style ({'max-height': Math.round (window.innerHeight * 0.9) + 'px'}),
+         }, [
 
             dale.go (dialogue, function (entry) {
                if (! entry) return;

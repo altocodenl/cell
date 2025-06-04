@@ -1,0 +1,39 @@
+Twenty-third episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we go into language designing mode. I rework the tests, annotate cell.get and get ready to make a "walking" put, which we'll need very soon.
+
+https://github.com/altocodenl/cell
+
+TODO:
+
+(going back on what I said; let's just design the language!)
+
+- Make put walk up.
+- Allow for . in put. Also in get.
+- Reference.
+   - iterate each path after executing the put.
+   - if you find something with an @, take its suffix and run a get on it. all the paths you get, insert them at the prefix of the @ and with a = in the middle.
+- Indirect reference. Jump the =s.
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error.
+- List: take a value, make it into a list of paths.
+- Count.
+
+From this point on, all is implemented in cell (minus number and text calls, perhaps, though we could do it in cell inefficiently).
+
+- Loop
+
+====
+
+Stuff we have is:
+- Go from text to paths (textToPaths, dedotter, sorter, validator, parser) or from paths to text (pathsToText).
+- Go from paths to JS (pathsToJS) or JS to paths (JSToPaths).
+- cell.call: takes text, makes it into paths, validates further and then calls either get or put. It's the interface to cell.
+
+Why do we need cell.call? For getting and for putting. You can get data out by sending a get call. This will be run as if you are outside of the dataspace (or rather, at the root, or prefix []) but it does go in the dialogue. As for put, it is the way you can put stuff in the dataspace. Later, when there's logic inside the dataspace, that logic can also put more data into the dataspace.
+
+The dialogue is the shell, so to speak.
+
+====
+
+Express all the language constructs as transformations from a set of paths to another set of paths.
+
+Set of paths A: call: Set of paths B

@@ -78,7 +78,7 @@ These new features are built on top of the same mechanisms that make the spreads
 - Integrated language, database, service and interface.
 - Two general purpose representations of data: text and datagrid.
 - Storing discrete calls in a dialog gives us both commits and transactions in a single construct. This allows us to query the system's state at any specific moment. We can also examine how the system evolves over time by reviewing the sequence of interactions. The calls are the diffs of the system. If the `get` call takes a parameter, we can query any previous state. And if the `put` call can take a condition and perform multiple operations as a whole, we can have reified transactions. These insights grow from the work of Datomic (thanks Val Waeselynck for your [great explanation](https://vvvvalvalval.github.io/posts/2018-11-12-datomic-event-sourcing-without-the-hassle.html)!).
-- A first-class [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation): paths.
+- A first-class [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation): paths. Computation as rewriting of paths.
 
 ## The cell editor
 
@@ -735,6 +735,76 @@ If we are here, the parsing was successful. We return `paths` and close `textToP
 
 ```js
    return paths;
+}
+```
+
+// LONG UNCOMMENTED FRAGMENT
+
+We now define `cell.get`, which performs `reference` for us. It takes three arguments:
+
+- A `queryPath`, which is the path of what we're looking for.
+- A `contextPath`, which is the path of where we're currently standing. For calls that come from outside, this will be an empty list.
+- `get`, a storage-layer function that gives us the entire dataspace.
+
+```js
+cell.get = function (queryPath, contextPath, get) {
+```
+
+We start by getting all the paths in the dataspace.
+
+```js
+   var dataspace = get ();
+```
+
+We will try to find the `queryPath` at the deepest possible level in `contextPath`. The simplest case is when `contextPath` has length 0. In this case, we just go through the entire dataspace once and find any paths that start with the elements in `queryPath` (if `queryPath` is itself empty, we then match every single path in the dataspace!). These are the `matches` we get.
+
+If `contextPath` has more than length 0, we start by finding all the paths that match it. We then shave off the `contextPath` as prefix from each of the matched paths and we go through all of them to find what matches with `queryPath`.
+
+In this way, the function walks "up" the context path, removing elements from its end, and stopping when it finds one or more paths that match the query.
+
+We will run a loop that stops on not `undefined` and runs at most the length of contextPath + 1 (the + 1 is to run it against an empty context path).
+
+```js
+   return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
+```
+
+We go through the dataspace and accumulate any paths that will match both the current context path and the query.
+
+```js
+      var matches = dale.fil (dataspace, undefined, function (path) {
+```
+
+If our context path has elements and those elements don't match with the prefix of this path we're iterating, we skip this path.
+
+```js
+         if (contextPath.length && ! teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return;
+```
+
+We found a match for the context path! We remove its prefix.
+
+```js
+         path = path.slice (k);
+```
+
+If the path, minus the context prefix (which we sliced in the previous line), matches the query path, we return it. We only return paths for which there is a suffix after the query path.
+
+This completes the inner loop.
+
+```js
+         if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
+      });
+```
+
+If we found matching paths for this context path, we return them and stop the outer loop.
+
+```js
+      if (matches.length > 0) return matches;
+```
+
+We return the matches or an empty array (in case there were none). This closes the function.
+
+```js
+   }) || [];
 }
 ```
 
