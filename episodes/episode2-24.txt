@@ -1,0 +1,9 @@
+
+https://github.com/altocodenl/cell
+
+It's interesting that there are many ways in which fourdata text can be malformed, but very few ways in which fourdata paths can be malformed. Fourdata paths basically are lists of text and path. There are some rules about not having one prefix be multiple types, but that's it.
+Also compare the 130 lines of textToPaths with the 25 of pathsToText.
+
+Quoted texts: texts where quotes are special characters.
+
+In the end, we refactored tests, that's it! But we continue next time with the walking put.

@@ -268,7 +268,7 @@ Otherwise, we return the original text.
    }
 ```
 
-This function takes a `message`, which is text, and returns an array of paths.
+This function takes a `message`, which is text, and returns an array of paths. If it finds a parsing error, it will also return it as a list of paths with one path, where the first element of that path is the text `error`.
 
 ```js
 cell.textToPaths = function (message) {
@@ -496,14 +496,40 @@ We now define `unescaper`, an utility function that takes `text` and also return
          var unescaper = function (text) {
 ```
 
+If we are outside multiline text and there are neither whitespace nor literal double quotes, we'll just return `text` as is.
+
 ```js
-            if (text.match (/\s/) || text.match (/"/) || insideMultilineText) return text.replace (/\/\//g, '/').replace (/\/"/g, '"');
+            if (! (text.match (/\s/) || text.match (/"/) || insideMultilineText)) return text;
 ```
 
-If there's no space or double quote, and we are not inside multiline text, we just return `text` as is and close `dequoter`.
+Otherwise, believe it or not, we are going to do a validation: if the text has literal double quotes or whitespace, every literal slash has to be prepended by another slash. We are going to check for this, and if it's not the case, we will return an error.
+
+We start by unslashing all the literal quotes.
 
 ```js
-            return text;
+            text = text.replace (/\/"/g, '"');
+```
+
+We iterate through the characters of the text and note any slashes that don't come in pairs. I'm too lazy to explain how this works, except that I'll say: one slash washes the other.
+
+```js
+            var unmatchedSlash;
+            dale.go (text.split (''), function (c, k) {
+               if (c !== '/') return;
+               unmatchedSlash = unmatchedSlash === k - 1 ? undefined : k;
+            });
+```
+
+If there is an unmatched slash, we return an error.
+
+```js
+            if (unmatchedSlash !== undefined) return ['error', 'Unmatched slash in text with spaces or double quotes: `' + text + '`'];
+```
+
+Otherwise, we unslash all literal slashes and return that text. This finishes `unescaper`.
+
+```js
+            return text.replace (/\/\//g, '/');
          }
 ```
 
@@ -552,9 +578,12 @@ We set the output text to be the text between the non-literal quotes, unescaped.
          }
 ```
 
-We return `output` and close dequoter.
+If `output.text` is an array, it means that `unescaper` found an error. In this case, we return the second element of the error, which is text describing the error.
+
+Otherwise, we return `output` and close dequoter.
 
 ```js
+         if (type (output.text) === 'array') return output.text [1];
          return output;
       }
 ```
@@ -569,10 +598,13 @@ What makes multiline text particularly interesting is that it *spans* lines. The
 
 We run the `line` through `dequoted`. If there is no non-literal double quote, the entire line belongs to the last element of the last path. There already has to be a path with at least an element there, which was initialized by the beginning of the multiline text we are still processing.
 
-Thereforew, we just append the entire `line` (taking care to use `dequoted.text`, in case there are characters we need to unescape such as slashes and literal double quotes) into the last element of the last path, also taking care of adding the newline that we removed when we started to iterate each of the lines of the original text.
+Therefore, we just append the entire `line` (taking care to use `dequoted.text`, in case there are characters we need to unescape such as slashes and literal double quotes) into the last element of the last path, also taking care of adding the newline that we removed when we started to iterate each of the lines of the original text.
+
+Note that if `dequoted` is text, it must be an error. In that case, we return it directly.
 
 ```js
          var dequoted = dequoter (line);
+         if (type (dequoted) === 'string') return dequoted;
          if (dequoted.start === -1) {
             lastPath [lastPath.length - 1] += dequoted.text + '\n';
 ```
@@ -626,6 +658,12 @@ We first deal with the case where line starts with a non-literal double quote. W
 ```js
          if (line [0] === '"') {
             var dequoted = dequoter (line);
+```
+
+If `dequoted` is text, it must be an error. In that case, we return it directly.
+
+```
+            if (type (dequoted) === 'string') return dequoted;
 ```
 
 If there is no second non-literal double quote, we just opened a new multilinte text! We set the flag.
@@ -722,13 +760,13 @@ This is the last thing we do before closing the iterator function on each `line`
 Outside of the loop that goes line by line, we check whether we got an `error`. If we do , we return it wrapped in a hash.
 
 ```js
-   if (error) return {error: error};
+   if (error) return [['error', error]];
 ```
 
 If the flag that marks we are inside multiline text is still set, there's an error. We report it.
 
 ```js
-   if (insideMultilineText) return {error: 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`'};
+   if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`']];
 ```
 
 If we are here, the parsing was successful. We return `paths` and close `textToPaths`.
