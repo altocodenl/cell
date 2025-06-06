@@ -1,0 +1,20 @@
+Twenty-fifth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, I start late and just have some fun with tests. We're really ready to tackle walking put.
+
+https://github.com/altocodenl/cell
+
+- call validator from textToPaths, but keep it separate so put can use it. [DONE]
+
+TODO:
+
+- Make put walk up.
+- Allow for . in put. Also in get.
+- Reference.
+   - iterate each path after executing the put.
+   - if you find something with an @, take its suffix and run a get on it. all the paths you get, insert them at the prefix of the @ and with a = in the middle.
+- Indirect reference. Jump the =s.
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error.
+- List: take a value, make it into a list of paths.
+- Count.
+
+Quoted text:
