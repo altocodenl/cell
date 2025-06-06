@@ -1,3 +1,4 @@
+Twenty-fourth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we just refactor tests. And have quite some fun with it. It's almost working. Next up is the walking put.
 
 https://github.com/altocodenl/cell
 
