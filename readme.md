@@ -99,6 +99,21 @@ An interesting development of this design is that programming becomes an act of 
 
 Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-1-single-representation-of-data).
 
+In addition to what is specified in TODIS, the following clarification is necessary:
+
+Text that contain white space characters (space, newline, tab, and the like) or double quotes (`"`) are considered *quoted texts*. A quoted text has the following rules:
+1. They must be enclosed in double quotes.
+2. Any double quote inside it must be prepended by a slash (`/`).
+3. Any slash inside it must also be prepended by a slash (`/`).
+
+Examples:
+
+- `hello there` should be written as `"hello there"`
+- `"laser" beams` should be written as `"/"laser beams/""`
+- `/ is a slash` should be written as `"// is a slash"`.
+
+Note that you can have non-quoted text with slashes. For example, `/foo` can simply be written as such.
+
 ## The language
 
 Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-3-call-and-response) and [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-4-logic-is-what-happens-between-call-and-response).
@@ -202,10 +217,12 @@ TODO: everything :)
 ## TODO
 
 - Altocookies: login with email with link or oauth with providers that always provide email (google)
+- Cloud: main implementation in redis, backup in postgres. Option to acknowledge writes only when they're also in postgres.
+- Implement the editor in cell itself, so that it interacts with the cell server through the same mechanisms.
 - Recursive lambdas by referencing itself from inside the loop?
 - Diff by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
 - PWAs out of the box.
-- Encrypted dumps/restores
+- Encrypted dumps/restores.
 - Implementation of U and of pg's lisp interpreter.
 - Self-hosting.
 
@@ -843,6 +860,105 @@ We return the matches or an empty array (in case there were none). This closes t
 
 ```js
    }) || [];
+}
+```
+
+`put` is the function that adds data to the dataspace. It takes a whopping four arguments.
+
+- `paths`: the paths to write to the dataspace.
+- `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
+- `updateDialogue`: a flag that, if truthy, will allow to update the dialogue. This is to protect the `dialogue`, which is a special key. This will be replaced by a better validation mechanism later.
+
+```js
+cell.put = function (paths, get, put, updateDialogue) {
+```
+
+We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` and `v`, we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
+
+```js
+   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
+   if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
+```
+
+We initialize two arrays, one for the "left side" of the assignment (the path that is inside the key `p`) and one for the "right side" (the values (paths) that will go on this path).
+
+```js
+   var leftSide = [], rightSide = [];
+```
+
+We iterate the paths. If the first element of one of these paths is `p`, we take out its first element (`p`) and push the rest as a new path onto `leftSide`. Otherwise, we also take out its first element and push it onto `rightSide`.
+
+```js
+   dale.go (paths, function (path) {
+      (path [0] === 'p' ? leftSide : rightSide).push (path.slice (1));
+   });
+```
+
+If there's more than one path in `leftSide`, we return an error. Inside a `put` call, we can only set one path at a time.
+
+```js
+   if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
+```
+
+We take the sole path inside `leftSide` and set `leftSide` to it.
+
+```js
+   leftSide = leftSide [0];
+```
+
+We forbid overwriting `put`.
+
+```js
+   if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
+```
+
+We forbid overwriting `dialogue` unless the `updateDialogue` flag is passed.
+
+```js
+   if (leftSide [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
+```
+
+We get the entire dataspace onto memory. Isn't inefficiency fun?
+
+```js
+   var dataspace = get ();
+```
+
+We are going to re-create the dataspace by iterating through it. We first filter out any paths that start with `leftSide`.
+
+```js
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
+      return path;
+```
+
+We will then push all the paths in `rightSide` to dataspace. However, before doing this, we will prepend `leftSide` to each of these `rightSide` paths.
+
+```js
+   }).concat (dale.go (rightSide, function (path) {
+      return leftSide.concat (path);
+   }));
+```
+
+Now, the dataspace is updated. We sort it, then validate it.
+
+```js
+   cell.sorter (dataspace);
+   var error = cell.validator (dataspace);
+```
+
+If we got an error, we will return that error. You might ask: what error could happen here? The one type of error that could happen is setting a certain path to a type X when it is already of a type Y (and you haven't fully re-setted the entire thing).
+
+```js
+   if (error.length) return error;
+```
+
+If we're here, then we are ready to persist these changes. We call `put` with the new `dataspace` and return `[['ok']]`. This closes the function.
+
+```js
+   put (dataspace);
+
+   return [['ok']];
 }
 ```
 

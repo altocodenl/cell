@@ -374,36 +374,31 @@ cell.put = function (paths, get, put, updateDialogue) {
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
    if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
 
-   // We keep the pairs in case we want to implement multi put later
-   var pairs = [];
+   var leftSide = [], rightSide = [];
    dale.go (paths, function (path) {
-      if (path [0] === 'p') pairs.push ([path.slice (1), []]);
-      else {
-         teishi.last (pairs) [1].push (teishi.last (pairs) [0].concat (path.slice (1)));
-      }
+      (path [0] === 'p' ? leftSide : rightSide).push (path.slice (1));
    });
+
+   if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
+
+   leftSide = leftSide [0];
+
+   if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
+   if (leftSide [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
 
    var dataspace = get ();
 
-   error = dale.stopNot (pairs, undefined, function (v) {
-      var leftSide = v [0];
-      var rightSide = v [1];
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
+      return path;
+   }).concat (dale.go (rightSide, function (path) {
+      return leftSide.concat (path);
+   }));
 
-      if (v [0] [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
-      if (v [0] [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
+   cell.sorter (dataspace);
 
-      dataspace = dale.fil (dataspace, undefined, function (path) {
-         if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
-         return path;
-      }).concat (rightSide);
-
-      cell.sorter (dataspace);
-
-      var error = cell.validator (dataspace);
-      if (error.length) return error;
-   });
-
-   if (error) return error;
+   var error = cell.validator (dataspace);
+   if (error.length) return error;
 
    put (dataspace);
 
@@ -658,6 +653,7 @@ var test = function () {
 
       {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
       {f: cell.call, input: ['@ put p dialogue', '@ put v 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
+      {f: cell.call, input: ['@ put p foo bar jip', '@ put p foo oh yeah', '@ put v 1'], expected: [['error', 'Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah']]},
    ], false, function (test) {
 
       if (test.reset) return dataspace = test.reset;
