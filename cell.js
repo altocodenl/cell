@@ -344,7 +344,7 @@ cell.call = function (message, get, put) {
 
       return cell.put (dale.go (paths, function (path) {
          return path.slice (2);
-      }), get, put);
+      }), [], get, put);
    }
 
    if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']];
@@ -369,7 +369,7 @@ cell.get = function (queryPath, contextPath, get) {
    }) || [];
 }
 
-cell.put = function (paths, get, put, updateDialogue) {
+cell.put = function (paths, contextPath, get, put, updateDialogue) {
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
    if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
@@ -387,6 +387,17 @@ cell.put = function (paths, get, put, updateDialogue) {
    if (leftSide [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
 
    var dataspace = get ();
+
+   var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
+      var matches = dale.fil (dataspace, undefined, function (path) {
+         if (teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return path;
+      });
+      if (matches.length) return contextPath.slice (0, k);
+   });
+
+   if (contextPathMatch === undefined) contextPathMatch = [];
+
+   leftSide = contextPathMatch.concat (leftSide);
 
    dataspace = dale.fil (dataspace, undefined, function (path) {
       if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
@@ -654,6 +665,23 @@ var test = function () {
       {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
       {f: cell.call, input: ['@ put p dialogue', '@ put v 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
       {f: cell.call, input: ['@ put p foo bar jip', '@ put p foo oh yeah', '@ put v 1'], expected: [['error', 'Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah']]},
+
+      // *** PUT WITH CONTEXT PATH ***
+
+      {reset: [
+         ['foo', 1, 'bar'],
+         ['foo', 2, 'jip'],
+      ]},
+      {f: cell.put, context: ['foo'], input: [['p', 1], ['v', 'joo']], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 1, 'joo'], ['foo', 2, 'jip']]},
+
+      {reset: [
+         ['foo', 1, 'bar'],
+         ['foo', 2, 'jip'],
+      ]},
+      {f: cell.put, context: ['foo', 'something', 'else'], input: [['p', 1], ['v', 'joo']], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 1, 'joo'], ['foo', 2, 'jip']]},
+
    ], false, function (test) {
 
       if (test.reset) return dataspace = test.reset;
@@ -670,7 +698,7 @@ var test = function () {
       }
 
       if (test.f === cell.get)       var result = cell.get (test.query, test.context, get);
-      else if (test.f === cell.put)  var result = cell.put (test.input, get, put);
+      else if (test.f === cell.put)  var result = cell.put (test.input, test.context || [], get, put);
       else if (test.f === cell.call) var result = cell.call (test.input, get, put);
       else                           var result = test.f (test.input);
 

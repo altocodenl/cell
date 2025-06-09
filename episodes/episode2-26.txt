@@ -1,0 +1,61 @@
+Twenty-sixth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! After some more refactoring, we have a walking put! And we have annotated get and put fully (well, not the walking part yet). Clear steps forward.
+
+Hi! (Partially) silent episode today! If you want to know what this is about, check the project out at: https://github.com/altocodenl/cell
+
+We are going to annotate code for `get` and `put`, before we implement the walking `put` and the dot as a "do it here" operator for `get` and `put`.
+
+I'm getting a kick from the notion of having mere data signify things computationally, for the language. It feels deeply right.
+
+Ah, we had the annotated source code for `get`!
+
+I feel like this channel, for those of you watching, feels like Blue's Clues. The kids watching know things before Blue figures it out.
+
+I said five arguments because I'm already foreseeing that we'll need a contextPath in put. But let's comment what we have first.
+
+Interesting duality: `reference` and `assignment`. Got me thinking of the Turing Machine. The configurations come pre-written, but the tape gets written. Aren't these writes on the tapes actually assignments?
+
+We're not going to keep up the pairs. Let's simplify the function all we need to.
+
+Ah, how I wish we could push to a varying variable. Just for fun, how would I do that on cell?
+
+
+@ push leftSide
+(or)
+@ push rightSide
+
+Then, I could do this
+
+@ push p @ if cond @ eq . @ path 1
+                        . p
+              then leftSide
+              else rightSide
+       v path
+
+This would work! The call to @ if would be responded with a = that would give you either leftSide or rightSide, which are the accumulating variables.
+
+Let's ask chatgpt (I'm not even logged in) to see if it gets it.
+
+Hmmm, partial credit. Not bad though. It has no context except what I put there in the page.
+
+I'm excited that I'm starting to be able to write any logic in cell. It doesn't execute, yet. It feels like it takes a few more lines that I'm used to, but it seems to work.
+
+I feel like adding a @ before each call is like the German language capitalizing every noun.
+
+All these years and I still don't get that I should understand the code before I rewrite it...
+
+I found a bug in the original implementation! A left side can only be one path.
+
+How could I break it? I was so close!
+
+Going to call it a night. We're almost there!
+
+(I might be back later, even with sound).
+
+walking put:
+- take a context path
+- walk up until you find > 0 paths
+- when you do, use that context path. If you found none, use the outermost.
+
+Dot mode: if the first element is a dot, don't walk, do it right there.
+
+(idea for later: the editor should have its own cell, with its own state in JS memory, so that all interactions and transformations are expressed as calls).
