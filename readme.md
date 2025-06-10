@@ -811,6 +811,13 @@ We start by getting all the paths in the dataspace.
    var dataspace = get ();
 ```
 
+If the first element of `queryPath` is a dot, this has a special meaning: it means search *right here*, don't walk up. In this case, we will set a variable `dotMode` and remove the dot from `queryPath`.
+
+```js
+   var dotMode = queryPath [0] === '.';
+   if (dotMode) queryPath = queryPath.slice (1);
+```
+
 We will try to find the `queryPath` at the deepest possible level in `contextPath`. The simplest case is when `contextPath` has length 0. In this case, we just go through the entire dataspace once and find any paths that start with the elements in `queryPath` (if `queryPath` is itself empty, we then match every single path in the dataspace!). These are the `matches` we get.
 
 If `contextPath` has more than length 0, we start by finding all the paths that match it. We then shave off the `contextPath` as prefix from each of the matched paths and we go through all of them to find what matches with `queryPath`.
@@ -819,8 +826,10 @@ In this way, the function walks "up" the context path, removing elements from it
 
 We will run a loop that stops on not `undefined` and runs at most the length of contextPath + 1 (the + 1 is to run it against an empty context path).
 
+However, in dot mode, we will just run the loop one time, to prevent "walking up".
+
 ```js
-   return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
+   return dale.stopNot (dale.times (! dotMode ? contextPath.length + 1 : 1, contextPath.length, -1), undefined, function (k) {
 ```
 
 We go through the dataspace and accumulate any paths that will match both the current context path and the query.
@@ -863,14 +872,15 @@ We return the matches or an empty array (in case there were none). This closes t
 }
 ```
 
-`put` is the function that adds data to the dataspace. It takes a whopping four arguments.
+`put` is the function that adds data to the dataspace. It takes a whopping five arguments.
 
 - `paths`: the paths to write to the dataspace.
+- `contextPath`: the path where we're currently standing. For calls that come from outside, this will be an empty list. The exact same as what `cell.get` receives.
 - `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
 - `updateDialogue`: a flag that, if truthy, will allow to update the dialogue. This is to protect the `dialogue`, which is a special key. This will be replaced by a better validation mechanism later.
 
 ```js
-cell.put = function (paths, get, put, updateDialogue) {
+cell.put = function (paths, contextPath, get, put, updateDialogue) {
 ```
 
 We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` and `v`, we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
@@ -924,7 +934,57 @@ We get the entire dataspace onto memory. Isn't inefficiency fun?
    var dataspace = get ();
 ```
 
-We are going to re-create the dataspace by iterating through it. We first filter out any paths that start with `leftSide`.
+As with `cell.get`, if the first step of `leftSide` is a dot, we will be in "dot mode", which is a mode that says we want to set things in the context we have instead of "walking up". In this case, we will set `leftSide` to be the context path plus left side, but removing the dot at the beginning of left side.
+
+```js
+   if (leftSide [0] === '.') leftSide = contextPath.concat (leftSide.slice (1));
+```
+
+Otherwise, we are now going to find a context path for which we get a match on `leftSide`. If `contextPath` is empty, this context path will also be empty. The interesting case is that for which `contextPath` is not empty.
+
+This is best explained with an example. Let's say that `contextPath` is `['foo']`. And that `leftSide` is `['bar']`. If we find a `bar` inside `foo` (and we know we found one if we get one or more paths with that prefix), then the context path will be `['foo']`. Therefore, we will update the `bar` inside `foo`.
+
+Now let's assume that there is no `bar` in `foo`. Then, if we get no matching paths inside `foo`, we will peel away the last element of the context path and get `[]`. Then, we'll set `bar` onto the general dataspace, without a prefix.
+
+This peeling away is done one by one. This is what I refer to as "walking" up.
+
+To implement this walking, we are going to iterate `contextPath.length` times. We will stop the iteration if we find that any prefix of `contextPath` gives us a match.
+
+```js
+   else {
+      var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
+```
+
+We take the context path, remove the last k elements (we start at 0 the first time around) and concatenate the left side to it. This is our `contextPathWithSuffix`.
+
+```js
+         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide);
+```
+
+We find one or more paths that start with this context path with suffix.
+
+
+```js
+         var matches = dale.stop (dataspace, true, function (path) {
+            return teishi.eq (contextPathWithSuffix, path.slice (0, contextPathWithSuffix.length));
+         });
+```
+
+If we found a match, this means that this context path plus the left side already exists. We now have the context path we will use, therefore we will return it.
+
+```js
+         if (matches.length) return contextPath.slice (0, k);
+      });
+```
+
+If we found a context path that gets matches, then we will prepend the `leftSide` wtih it. Otherwise, we'll just put leave `leftSide` as is and put onto the general dataspace.
+
+```js
+      if (contextPathMatch !== undefined) leftSide = contextPathMatch.concat (leftSide);
+    }
+```
+
+By now, `leftSide` has the absolute path where we want to set the value. To do this, we are going to re-create the dataspace by iterating through it. We first filter out any paths that start with `leftSide`.
 
 ```js
    dataspace = dale.fil (dataspace, undefined, function (path) {

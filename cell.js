@@ -352,10 +352,40 @@ cell.call = function (message, get, put) {
    return cell.get (paths [0].slice (1), [], get);
 }
 
+cell.respond = function (get, put) {
+   var dataspace = get ();
+
+   var change = dale.stop (dataspace, true, function (path) {
+      var at = teishi.last (dale.fil (path, undefined, function (v, k) {
+         if (v === '@') return k;
+      }));
+      if (at === undefined) return;
+      var queryPath = path.slice (0, at);
+      var previousValue = cell.get (queryPath.concat ('='), [], get);
+      var currentValue = cell.get (path.slice (at + 1), queryPath, get);
+
+      if (teishi.eq (previousValue, currentValue)) return;
+
+      var pathsToPut = [
+         ['p'].concat (queryPath).concat ('='),
+      ];
+      dale.go (currentValue, function (path) {
+         pathsToPut.push (['v'].concat (path));
+      });
+      cell.put (pathsToPut, [], get, put);
+      return true;
+   });
+
+   if (change) cell.respond (get, put);
+}
+
 cell.get = function (queryPath, contextPath, get) {
    var dataspace = get ();
 
-   return dale.stopNot (dale.times (contextPath.length + 1, contextPath.length, -1), undefined, function (k) {
+   var dotMode = queryPath [0] === '.';
+   if (dotMode) queryPath = queryPath.slice (1);
+
+   return dale.stopNot (dale.times (! dotMode ? contextPath.length + 1 : 1, contextPath.length, -1), undefined, function (k) {
 
       var matches = dale.fil (dataspace, undefined, function (path) {
          if (contextPath.length && ! teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return;
@@ -388,16 +418,18 @@ cell.put = function (paths, contextPath, get, put, updateDialogue) {
 
    var dataspace = get ();
 
-   var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
-      var matches = dale.fil (dataspace, undefined, function (path) {
-         if (teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return path;
+   if (leftSide [0] === '.') leftSide = contextPath.concat (leftSide.slice (1));
+   else {
+      var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
+         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide);
+         var matches = dale.stop (dataspace, true, function (path) {
+            return teishi.eq (contextPathWithSuffix, path.slice (0, contextPathWithSuffix.length));
+         });
+         if (matches) return contextPath.slice (0, k);
       });
-      if (matches.length) return contextPath.slice (0, k);
-   });
 
-   if (contextPathMatch === undefined) contextPathMatch = [];
-
-   leftSide = contextPathMatch.concat (leftSide);
+      if (contextPathMatch !== undefined) leftSide = contextPathMatch.concat (leftSide);
+   }
 
    dataspace = dale.fil (dataspace, undefined, function (path) {
       if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
@@ -412,6 +444,8 @@ cell.put = function (paths, contextPath, get, put, updateDialogue) {
    if (error.length) return error;
 
    put (dataspace);
+
+   cell.respond (get, put);
 
    return [['ok']];
 }
@@ -589,28 +623,26 @@ var test = function () {
          ['inner', 'foo', 20],
          ['inner', 'jip', 'foo', 30],
       ]},
-      {f: cell.get, query: ['foo'], context: [], expected: [
-         [10]
-      ]},
-      {f: cell.get, query: ['foo'], context: ['foo'], expected: [
-         [10]
-      ]},
-      {f: cell.get, query: ['foo'], context: ['bar'], expected: [
-         [10]
-      ]},
+      {f: cell.get, query: ['foo'], context: [], expected: [[10]]},
+      {f: cell.get, query: ['foo'], context: ['foo'], expected: [[10]]},
+      {f: cell.get, query: ['foo'], context: ['bar'], expected: [[10]]},
       {f: cell.get, query: ['bar'], context: ['foo'], expected: []},
-      {f: cell.get, query: ['foo'], context: ['inner'], expected: [
-         [20],
+      {f: cell.get, query: ['foo'], context: ['inner'], expected: [[20]]},
+      {f: cell.get, query: ['foo'], context: ['inner', 'jip'], expected: [[30]]},
+      {f: cell.get, query: ['foo'], context: ['inner', 'jip', 'foo'], expected: [[30]]},
+      {f: cell.get, query: ['foo'], context: ['something', 'else', 'completely'], expected: [[10]]},
+
+      // *** GET WITH DOT ***
+
+      {reset: [
+         ['foo', 10],
+         ['inner', 'foo', 20],
       ]},
-      {f: cell.get, query: ['foo'], context: ['inner', 'jip'], expected: [
-         [30],
-      ]},
-      {f: cell.get, query: ['foo'], context: ['inner', 'jip', 'foo'], expected: [
-         [30],
-      ]},
-      {f: cell.get, query: ['foo'], context: ['something', 'else', 'completely'], expected: [
-         [10],
-      ]},
+      {f: cell.get, query: ['.', 'foo'], context: [], expected: [[10]]},
+      {f: cell.get, query: ['.', 'foo'], context: ['inner'], expected: [[20]]},
+      {f: cell.get, query: ['.', 'inner', 'foo'], context: [], expected: [[20]]},
+      {f: cell.get, query: ['.'], context: ['inner', 'foo'], expected: [[20]]},
+      {f: cell.get, query: ['.', 'foo'], context: ['something', 'else', 'completely'], expected: []},
 
       // *** PUT ***
 
@@ -669,22 +701,56 @@ var test = function () {
       // *** PUT WITH CONTEXT PATH ***
 
       {reset: [
-         ['foo', 1, 'bar'],
-         ['foo', 2, 'jip'],
+         ['foo', 'something'],
       ]},
-      {f: cell.put, context: ['foo'], input: [['p', 1], ['v', 'joo']], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 1, 'joo'], ['foo', 2, 'jip']]},
+      {f: cell.put, context: ['foo'], input: [['p', 'bar'], ['v', 1]], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['bar', 1], ['foo', 'something']]},
 
       {reset: [
-         ['foo', 1, 'bar'],
-         ['foo', 2, 'jip'],
+         ['foo', 'bar', 0],
       ]},
-      {f: cell.put, context: ['foo', 'something', 'else'], input: [['p', 1], ['v', 'joo']], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 1, 'joo'], ['foo', 2, 'jip']]},
+      {f: cell.put, context: ['foo'], input: [['p', 'bar'], ['v', 1]], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 'bar', 1]]},
+
+      {reset: [
+         ['foo', 'bar', 1],
+         ['foo', 'jip', 2],
+         ['foo', 'something', 'else'],
+      ]},
+      {f: cell.put, context: ['foo', 'something', 'else'], input: [['p', 'bar'], ['v', 3]], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 'bar', 3], ['foo', 'jip', 2], ['foo', 'something', 'else']]},
+
+      // *** PUT WITH DOT ***
+
+      {reset: [
+         ['foo', 10],
+         ['inner', 'foo', 20],
+      ]},
+      {f: cell.put, input: [['p', '.', 'foo'], ['v', 20]], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 20]]},
+      {f: cell.put, input: [['p', '.', 'foo'], ['v', 20]], context: ['something', 'else'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 20], ['something', 'else', 'foo', 20]]},
+      {f: cell.put, input: [['p', '.', 'foo'], ['v', 30]], context: ['inner'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 30], ['something', 'else', 'foo', 20]]},
+
+      // *** RESPOND ***
+
+      {reset: [
+         ['foo', 10],
+      ]},
+      {f: cell.call, input: ['@ put p reffoo', '@ put v @ foo'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 10], ['reffoo', '=', 10], ['reffoo', '@', 'foo']]},
+
+      {f: cell.call, input: ['@ put p foo', '@ put v 20'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
+
+      // Even if you overwrite the = keys, they will be overwritten again by cell.respond!
+      {f: cell.call, input: ['@ put p reffoo =', '@ put v 30'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
 
    ], false, function (test) {
 
-      if (test.reset) return dataspace = test.reset;
+      if (test.reset) return dataspace = cell.sorter (test.reset);
 
       if (test.f === cell.textToPaths  && type (test.input)    === 'array') test.input    = test.input.join ('\n');
       if (test.f === cell.call         && type (test.input)    === 'array') test.input    = test.input.join ('\n');

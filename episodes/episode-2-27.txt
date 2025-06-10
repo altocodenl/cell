@@ -1,0 +1,30 @@
+Twenty-seventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We now have references! It just worked, building on the previous pieces. We will continue with indirect references next session.
+
+https://github.com/altocodenl/cell
+
+Instead of "elements" of a path, I'm going to start call them "steps".
+
+Special as non-literal.
+
+TODO
+- Make put walk up. [DONE]
+- Dot mode for get and put. [DONE]
+- Reference: cell.respond, brute force (if there's a change, da capo) [DONE]
+
+What would it be?
+
+foo 10
+something @ foo
+
+should be expanded to:
+
+foo 10
+reffoo = 10
+       @ foo
+
+TODO next:
+- Indirect reference. Jump the =s.
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error.
+- List: take a value, make it into a list of paths.
+- Count.
