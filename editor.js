@@ -189,7 +189,7 @@ views.main = function () {
                }
 
                var parseIfValid = function (v) {
-                  var parsed = cell.parser (v);
+                  var parsed = cell.textToPaths (v);
                   return type (parsed) === 'array' ? parsed : v;
                }
 

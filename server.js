@@ -127,7 +127,7 @@ var routes = [
          if (error && error.code !== 'ENOENT') return reply (rs, 500, {error: error});
          if (error) dataspace = '';
 
-         dataspace = cell.parser (dataspace);
+         dataspace = cell.textToPaths (dataspace);
 
          if (dataspace.error) {
             notify ({priority: 'important', type: 'parse error', error: dataspace.error, id: rq.data.params.id});

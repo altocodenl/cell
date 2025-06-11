@@ -1,0 +1,61 @@
+Twenty-eight episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! A very productive session: we now have indirect references. It's coming together. We will tackle a bug with multiple refs next, and, more fun, conditionals!
+
+https://github.com/altocodenl/cell
+
+Ideas: sequence in the then or else
+
+@ if cond ...
+     then do ...
+
+
+foo 1
+list 1 bar
+reffoo @ list @ foo
+
+becomes:
+
+reffoo = bar
+       @ list = 1
+              @ foo
+
+step 1:
+reffoo @ list @ foo
+adds:
+reffoo @ list = 1
+              @ foo
+
+then we have
+reffoo @ list = 1
+reffoo @ list @ foo
+
+now, we need to leave the bottom one untouched on step 2. if the values match, go to the previous at. then, do the expansion.
+
+We need a put that pushes!
+
+indirect = bar
+indirect @ list = 1
+indirect @ list @ foo
+
+This is a good way to put it: the actual put calls. We see it all as data.
+p indirect @ list =
+v 1
+
+p indirect =
+v bar
+
+I love that you have the formula at the bottom, preserved, and the result at the top, and all the levels in the middle.
+
+conditional:
+
+if cond
+   then
+   else
+
+
+TODO next:
+- Indirect reference. Jump the =s. [DONE]
+- Fix nonexpanded: super @ anzsic @ foo
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error. Add execution if defined inside a conditional.
+- List: take a value, make it into a list of paths.
+- Count.

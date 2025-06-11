@@ -795,6 +795,116 @@ If we are here, the parsing was successful. We return `paths` and close `textToP
 
 // LONG UNCOMMENTED FRAGMENT
 
+We now define `cell.respond`, a function that will be called by `cell.put` when an update takes place. This function expands calls, that is: it takes the response to any calls and puts them in the dataspace.
+
+This function takes just two arguments: `get`, a storage-layer function that gives us the entire dataspace, and `put`, which is the same but for updating the dataspace.
+
+```js
+cell.respond = function (get, put) {
+```
+
+We get the entire dataspace.
+
+```js
+   var dataspace = get ();
+```
+
+The outermost structure of the function is a loop that goes over each `path` on the dataspace and stops at the first change it finds. We will use `true` to signal that a change has happened, as our way to stop.
+
+```js
+   dale.stop (dataspace, true, function (path) {
+```
+
+We find the indexes of all the steps that are equal to `@` in the path.
+
+```js
+      var at = dale.fil (path, undefined, function (v, k) {
+         if (v === '@') return k;
+      });
+```
+
+If there are none, we ignore this path and keep on going.
+
+```js
+      if (at.length === 0) return;
+```
+
+We will work on the `@`s, right to left. We start a while loop.
+
+```js
+      while (at.length) {
+```
+
+We get the index of the rightmost `@` and remove it from the list.
+
+```js
+         var rightmostAt = at.pop ();
+```
+
+We set a `queryPath` to be the prefix (everything to the left) of the rightmost at.
+
+```js
+         var queryPath = path.slice (0, rightmostAt);
+```
+
+We get the current value of the query path plus an `=`. We pass that to `cell.get`.
+
+```js
+         var currentValue = cell.get (queryPath.concat ('='), [], get);
+```
+
+We get the desired value of the suffix (everything to the right of the `@`). Note we remove any `=` from this path. This will be our query path. The reason we remove `=`s from this path is that we want to "jump over" any equals to get the result of something. This is necessary for indirect references.
+
+Now, a tricky thing: the context path for this call to `get` will be our query path! This is a bit mind-bending, but it makes sense. We want the reference (that is after the `@`) to be resolved in the context of `queryPath`!
+
+```js
+         var desiredValue = cell.get (dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v}), queryPath, get);
+```
+
+If the existing value and the desired value are the same, we skip this `@` and restart at the top of the `while` loop.
+
+```js
+         if (teishi.eq (previousValue, currentValue)) continue;
+```
+
+If we are here, we are going to call `cell.put` with the desired value. We start by determining where these new values will be set: in the `queryPath`, appended with an `=`. However, if `queryPath` already ends with `=`, we don't append one.
+
+```js
+         if (teishi.last (queryPath) !== '=') queryPath.push ('=');
+```
+
+We create `pathsToPut`, with the paths that we will pass to `cell.put`.
+
+```js
+         var pathsToPut = [
+            ['p'].concat (queryPath),
+         ];
+```
+
+We iterate the paths in `desiredValue`, prepend them with `v` and add them to `pathsToPush`.
+
+
+```js
+         dale.go (desiredValue, function (path) {
+            pathsToPut.push (['v'].concat (path));
+         });
+```
+
+We call `cell.put` with `pathsToPut` as `paths` and an empty context path. We then return `true` to stop the iteration.
+
+```js
+         cell.put (pathsToPut, [], get, put);
+         return true;
+```
+
+This closes the while, the outer loop and the function.
+
+```js
+      }
+   });
+}
+```
+
 We now define `cell.get`, which performs `reference` for us. It takes three arguments:
 
 - A `queryPath`, which is the path of what we're looking for.
@@ -1013,11 +1123,24 @@ If we got an error, we will return that error. You might ask: what error could h
    if (error.length) return error;
 ```
 
-If we're here, then we are ready to persist these changes. We call `put` with the new `dataspace` and return `[['ok']]`. This closes the function.
+If we're here, then we are ready to persist these changes. We call `put` with the new `dataspace`.
+
 
 ```js
    put (dataspace);
+```
 
+We call `cell.respond` in case some reference needs to be updated. If `cell.respond` finds that changes should happen, it will call `cell.put`. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated.
+
+We don't validate the dataspace after calling `cell.respond` because no expansion of a call should generate an incorrect result: every call defines a hash (because `@` is text), so putting a `=` on the same prefix will not change the type of the prefix. Because of this, the call to `cell.put` from inside `cell.respond` doesn't check for errors returned by `cell.put`.
+
+```js
+   cell.respond (get, put);
+```
+
+We return `[['ok']]`. This closes the function.
+
+```js
    return [['ok']];
 }
 ```

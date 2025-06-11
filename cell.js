@@ -355,28 +355,34 @@ cell.call = function (message, get, put) {
 cell.respond = function (get, put) {
    var dataspace = get ();
 
-   var change = dale.stop (dataspace, true, function (path) {
-      var at = teishi.last (dale.fil (path, undefined, function (v, k) {
+   dale.stop (dataspace, true, function (path) {
+      var at = dale.fil (path, undefined, function (v, k) {
          if (v === '@') return k;
-      }));
-      if (at === undefined) return;
-      var queryPath = path.slice (0, at);
-      var previousValue = cell.get (queryPath.concat ('='), [], get);
-      var currentValue = cell.get (path.slice (at + 1), queryPath, get);
-
-      if (teishi.eq (previousValue, currentValue)) return;
-
-      var pathsToPut = [
-         ['p'].concat (queryPath).concat ('='),
-      ];
-      dale.go (currentValue, function (path) {
-         pathsToPut.push (['v'].concat (path));
       });
-      cell.put (pathsToPut, [], get, put);
-      return true;
-   });
+      if (at.length === 0) return;
 
-   if (change) cell.respond (get, put);
+      while (at.length) {
+         var rightmostAt = at.pop ();
+         var queryPath = path.slice (0, rightmostAt);
+
+         var currentValue = cell.get (queryPath.concat ('='), [], get);
+         var desiredValue = cell.get (dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v}), queryPath, get);
+
+         if (teishi.eq (currentValue, desiredValue)) continue;
+
+         if (teishi.last (queryPath) !== '=') queryPath.push ('=');
+         var pathsToPut = [
+            ['p'].concat (queryPath),
+         ];
+
+         dale.go (desiredValue, function (path) {
+            pathsToPut.push (['v'].concat (path));
+         });
+
+         cell.put (pathsToPut, [], get, put);
+         return true;
+      }
+   });
 }
 
 cell.get = function (queryPath, contextPath, get) {
@@ -747,6 +753,22 @@ var test = function () {
       // Even if you overwrite the = keys, they will be overwritten again by cell.respond!
       {f: cell.call, input: ['@ put p reffoo =', '@ put v 30'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
+
+      {reset: [
+         ['list', 1, 'bar'],
+         ['foo', 1],
+      ]},
+      {f: cell.call, input: ['@ put p indirect', '@ put v @ list @ foo'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 1], ['indirect', '=', 'bar'], ['indirect', '@', 'list', '=', 1], ['indirect', '@', 'list', '@', 'foo'], ['list', 1, 'bar']]},
+
+      {reset: [
+         ['aqualung', 'great'],
+         ['score', 'great', 100]
+      ]},
+      {f: cell.call, input: ['@ put p rrref', '@ put v @ score @ aqualung'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['aqualung', 'great'], ['rrref', '=', 100], ['rrref', '@', 'score', '=', 'great'], ['rrref', '@', 'score', '@', 'aqualung'], ['score', 'great', 100]]},
+
+
 
    ], false, function (test) {
 
