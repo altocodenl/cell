@@ -15,8 +15,11 @@ var map1_n = function (fn, n) {
    });
 }
 
-"map 1 to n" @ : m @ loop call @ m fn
-                          times @ m n
+"map 1 to n" @ do fn n @ loop do @ fn
+                              times @ n
+
+@ "map 1 to n" fn @ do n @ + 1 @ n
+               n 10
 
 (do
    ((x a (+ 1 x)))

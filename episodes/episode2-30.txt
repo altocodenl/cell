@@ -1,0 +1,270 @@
+
+
+Hi! Silent episode today.
+
+If you're just tuning in: https://github.com/altocodenl/cell
+
+Where were we?
+
+Yeah, we have to annotate the changes we did to properly do indirect references. They worked on the first pass but not the second one. They worked on the first pass because of an undetected bug.
+
+I'm going to rename the variables. Again. To previousValue and currentValue.
+
+Getting a coffee...
+
+Now, three interesting cases:
+- Indirect reference pointing to something that also points to a reference. Let's add a test case.
+- Getting a path that's more than one long.
+- Getting more than one path.
+
+Let's think if it'd make sense to get more than one path. I'm almost sure it does not, and that should return an error.
+
+Let's say I'm referencing @ foo @ bar. If I get multiple paths, what would happen?
+
+bar 1 jip
+    2 hey
+
+then, @ foo @ bar would be
+
+@ foo 1 jip
+      2 hey
+
+Wait, this makes absolutely perfect sense. How else am I going to pass a reference to a list for a call?
+
+This generates a more difficult question: how do I avoid executing this twice, once for the @ foo 1 and once for the @ foo 2?
+
+When would I have to skip further calls? Man, this is a bit hard. But no way out of it, and that's good.
+
+Let's write the test cases.
+
+Indirect reference pointing to something that also points to a reference
+Start:
+
+foo bar
+jip @ foo
+joo @ jip
+
+should become
+
+foo bar
+jip = bar
+    @ foo
+joo = bar
+    @ jip
+
+interesting that we are losing information in indirect references. do we want this? Perhaps later we could put the indirect reference in :. Let's go with this now.
+
+Also, a fun case. Referencing something that doesn't exist should just make it empty. Ah, brilliant, we had to cover this!
+
+Hmm, I'm getting:     [ 'joo', '=', '@', 'foo' ]. Why?
+
+Wait, this is way better! And it shows indirect references spreaded to the right! Beautiful! I'd never have thought of this. But it works!
+
+foo bar
+jip = bar
+    @ foo
+joo = = bar
+    = @ foo
+    @ jip
+
+It's beautiful. The indirect references stretch out to the right. Wait, I shouldn't say indirect, more like reference of a reference. But isn't that indirect? Yes, it is. But how is it different from the previous examples?
+
+foo 1
+indirect @ list @ foo
+list 1 bar
+
+becomes
+
+foo 1
+indirect = bar
+indirect @ list = 1
+indirect @ list @ foo
+list 1 bar
+
+The difference is that in the old example, just above, after the @ there's a literal, not another reference. But in the new example, you have joo = @ foo, and then, when you resolve it, you end up with joo = = bar. This is good.
+
+Let's understand this other example we wrote before:
+
+aqualung great
+rrref @ score @ aqualung
+score great 100
+
+becomes
+
+aqualung great
+rrref = 100
+      @ score = great
+              @ aqualung
+score great 100
+
+This is the same structure.
+
+OK, let's do the one with a path that's more than one long.
+
+And we found another bug!
+
+Interesting, it's the multiple paths issue. Wait, maybe not.
+
+How would I do this by hand?
+
+location trompe 1
+pixies trompe 1 "alec eiffel"
+              2 mons
+record @ pixies @ location
+
+this would become
+
+record = "alec eiffel"
+       @ pixies = trompe 1
+                @ location
+
+It's oscillating now:
+
+DEBUG PATH [ 'record', '@', 'pixies', '@', 'location' ]
+DEBUG previous VALUE AT [ 'record', '@', 'pixies', '=' ] [ [ 'trompe', 1 ] ]
+DEBUG current VALUE AT [ 'location' ] [ [ 'trompe', 1 ] ]
+
+OK, this does nothing, it's already set to what it should be.
+
+DEBUG PATH [ 'record', '@', 'pixies', '@', 'location' ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 'alec eiffel' ] ]
+DEBUG current VALUE AT [ 'pixies', '@', 'location' ] [ [ 1, 'alec eiffel' ], [ 2, 'mons' ] ]
+
+This one sets the path from alec eiffel to two entries. This is where it goes wrong.
+
+DEBUG PATH [ 'record', '@', 'pixies', '=', 'trompe', 1 ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 1, 'alec eiffel' ], [ 2, 'mons' ] ]
+DEBUG current VALUE AT [ 'pixies', 'trompe', 1 ] [ [ 'alec eiffel' ] ]
+
+This one sets the path properly again to alec eiffel.
+
+DEBUG PATH [ 'record', '@', 'pixies', '=', 'trompe', 1 ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 'alec eiffel' ] ]
+DEBUG current VALUE AT [ 'pixies', 'trompe', 1 ] [ [ 'alec eiffel' ] ]
+
+This sets the path right again to alec eiffel.
+
+Gonna take a little break...
+
+DEBUG current VALUE AT [ 'pixies', '@', 'location' ] [ [ 1, 'alec eiffel' ], [ 2, 'mons' ] ]
+
+How can the value at pixies @ location be two paths? this makes no sense.
+
+OK, again:
+
+DEBUG PATH [ 'record', '@', 'pixies', '@', 'location' ]
+DEBUG previous VALUE AT [ 'record', '@', 'pixies', '=' ] [ [ 'trompe', 1 ] ]
+DEBUG current VALUE AT [ 'location' ] [ [ 'trompe', 1 ] ]
+
+DEBUG PATH [ 'record', '@', 'pixies', '@', 'location' ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 'alec eiffel' ] ]
+DEBUG current VALUE AT [ 'pixies', 'trompe' ] [ [ 1, 'alec eiffel' ], [ 2, 'mons' ] ]
+
+Ah, it's here. Why is it looking for pixies trompe? And I just realized it.
+
+DEBUG PATH [ 'record', '@', 'pixies', '=', 'trompe', 1 ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 1, 'alec eiffel' ], [ 2, 'mons' ] ]
+DEBUG current VALUE AT [ 'pixies', 'trompe', 1 ] [ [ 'alec eiffel' ] ]
+
+DEBUG PATH [ 'record', '@', 'pixies', '=', 'trompe', 1 ]
+DEBUG previous VALUE AT [ 'record', '=' ] [ [ 'alec eiffel' ] ]
+DEBUG current VALUE AT [ 'pixies', 'trompe', 1 ] [ [ 'alec eiffel' ] ]
+
+Well, that was silly. It was funny how I realized where the bug was in the code in my mind's eye, but only after I saw the problem in the data. The introspection I'm having on this code is still sucking quite a bit.
+
+Alright, a high again! We only have to contend with the multiple paths being resolved in a reference. If we deal with this, and we finish commenting the code changes, then we are really done with reference (at least until something new comes up) and we can move to conditionals.
+
+OK, the final boss.
+
+bar 1 jip
+    2 hey
+jip @ foo @ bar
+
+The big question: what is foo?
+
+If foo is just data, and for now it is (because we have neither conditionals nor sequences) then how would multiple paths work? We could do make them reference things, and then just return it as a list?
+
+foo 1 jip a
+    2 hey b
+
+then:
+jip = 1 a
+      2 b
+    @ foo = 1 jip
+            2 hey
+          @ bar
+
+Basically, multiple paths would get destructured to a list if the target is not itself a call. This feels (or rather smells) a bit problematic, though. Because it would be quite different in the case of a call.
+
+If foo was a sequence, then:
+
+@ foo ...
+
+what we'd want is to do
+
+@ foo 1 jip
+      2 hey
+
+that is, pass the whole thing.
+
+Thinking...
+
+Let's allow multiple paths, as a list. When we get to cond and sequence we'll do it differently.
+
+Yeah, this breaks the piecemeal per path approach. The first path should do all of them, and the rest should not do anything.
+
+OK, I'm back, I added more ideas:
+
+test for this:
+
+foo 1 a
+    2 b
+    = 1 a
+      2 b
+ref @ foo
+
+then, change foo to something simpler, and see the data simplify. (put should overwrite things)
+
+now, for the harder case, when an indirect reference brings more than one path.
+
+bar 1 a A
+    2 b B
+foo 1 a
+    2 b
+jip @ bar @ foo
+
+becomes
+
+jip 1 A
+    2 B
+
+you start with:
+
+jip @ bar = 1 a
+            2 b
+          @ foo
+
+I have the approach:
+
+You still take the query path as what is to the left of the rightmost at, then the value path as what is to the right of it.
+
+No, wait, the query path has to be whatever is to the left of the first at! This was the missing piece! Anything that's a reference doesn't add context, it's a lookup that receives that context. This is subtle but important.
+
+Then, the query path is constant.
+
+Then, the value path starts as an array (we do [valuePath]). And then we iterate that array and expand anything that has an array. If we get multiple paths, we push it. We cannot do this with a while, but we can do it with a functional loop. And then, when we're done, we'll end up with a bunch of paths to put. We sort them before putting them, then we put them.
+
+Actually, we don't need to put them, put does that for us.
+
+And currentValue will be this list of resolved paths, that's it.
+
+OK, see you next episode!!
+
+
+
+TODO next:
+- Fix nonexpanded: it is happening just once, need to call put with flag
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error. Add execution if defined inside a conditional.
+- List: take a value, make it into a list of paths.
+- Count.

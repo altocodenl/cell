@@ -841,33 +841,62 @@ We get the index of the rightmost `@` and remove it from the list.
          var rightmostAt = at.pop ();
 ```
 
-We set a `queryPath` to be the prefix (everything to the left) of the rightmost at.
+We set `queryPath` to be the prefix (everything to the left) of the rightmost at.
 
 ```js
          var queryPath = path.slice (0, rightmostAt);
 ```
 
-We get the current value of the query path plus an `=`. We pass that to `cell.get`.
+We set `queryPath` to be suffix (everything to the right) of the rightmost at. We also remove any `=` steps from it.
 
 ```js
-         var currentValue = cell.get (queryPath.concat ('='), [], get);
+         var valuePath = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {
+            return v;
+         });
 ```
 
-We get the desired value of the suffix (everything to the right of the `@`). Note we remove any `=` from this path. This will be our query path. The reason we remove `=`s from this path is that we want to "jump over" any equals to get the result of something. This is necessary for indirect references.
+We get the previous value of the query path plus an `=`. We pass that to `cell.get`.
 
-Now, a tricky thing: the context path for this call to `get` will be our query path! This is a bit mind-bending, but it makes sense. We want the reference (that is after the `@`) to be resolved in the context of `queryPath`!
+The previous value is whatever is currently set to `queryPath` plus `=`.
 
 ```js
-         var desiredValue = cell.get (dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v}), queryPath, get);
+         var previousValue = cell.get (queryPath.concat ('='), [], get);
 ```
 
-If the existing value and the desired value are the same, we skip this `@` and restart at the top of the `while` loop.
+Now, we need to get the current value that we should place in `queryPath` plus `=`. This is a bit trickier than expected, because of two things:
+- The context path for this call to `get` will be our query path! This is a bit mind-bending, but it makes sense. We want the reference (that is after the `@`) to be resolved in the context of `queryPath`!
+- Indirect references require us to do this in steps, working right to left. For example, if `valuePath` is `foo @ bar`, we need to first get `@ bar`; say it is `1`. Then, `valuePath` will become `foo 1`.
+
+To do this left to right lookup/replacement, we'll do another `while`. We'll stop the minute that there are no more `@`s in `valuePath`.
+
+```js
+         while (valuePath.indexOf ('@') !== -1) {
+```
+
+We find the index of the rightmost `@`. Note we reverse a copy of `valuePath` so that we can search from the left, then do a bit of math to figure out what the actual index is coming from the right.
+
+```js
+            var atIndex = valuePath.length - 1 - teishi.copy (valuePath).reverse ().indexOf ('@');
+```
+
+We get the actual value from the reference.
+
+```js
+            var value = cell.get (valuePath.slice (atIndex + 1), queryPath, get);
+```
+
+
+```js
+            valuePath = valuePath.slice (0, atIndex).concat (value [0] [0]);
+```
+
+If the previous value and the current value are the same, we skip this `@` and restart at the top of the `while` loop.
 
 ```js
          if (teishi.eq (previousValue, currentValue)) continue;
 ```
 
-If we are here, we are going to call `cell.put` with the desired value. We start by determining where these new values will be set: in the `queryPath`, appended with an `=`. However, if `queryPath` already ends with `=`, we don't append one.
+If we are here, we are going to call `cell.put` with the current value. We start by determining where these new values will be set: in the `queryPath`, appended with an `=`. However, if `queryPath` already ends with `=`, we don't append one.
 
 ```js
          if (teishi.last (queryPath) !== '=') queryPath.push ('=');
@@ -881,11 +910,11 @@ We create `pathsToPut`, with the paths that we will pass to `cell.put`.
          ];
 ```
 
-We iterate the paths in `desiredValue`, prepend them with `v` and add them to `pathsToPush`.
+We iterate the paths in `currentValue`, prepend them with `v` and add them to `pathsToPush`.
 
 
 ```js
-         dale.go (desiredValue, function (path) {
+         dale.go (currentValue, function (path) {
             pathsToPut.push (['v'].concat (path));
          });
 ```

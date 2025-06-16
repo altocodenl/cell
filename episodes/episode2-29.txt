@@ -1,0 +1,22 @@
+Twenty-ninth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Unexpected, subtle bugs! But we got to the bottom of it, although we uncovered a couple of unnerving discoveries. We'll get there. Patience. Almost at conditionals.
+
+https://github.com/altocodenl/cell
+
+if:
+- validate keys: cond then else. cond must be present
+- cond is not the case if the value is 0 or ''
+- the call to if is done inside call.resolve when finding @ if? Or what if we actually do the dual reference system and put it in? No, if cannot be done in cell, it's irreducible. Same as sequence.
+
+What's going on?
+- The dialogue is messing up the logic of cell.respond, or rather, showing issues with it.
+- When we got zero paths to put on something, we're calling put but our call doesn't go through. This is not correct.
+
+@ put p hi
+      v @ foo
+
+TODO next:
+- Fix nonexpanded: it is happening just once, need to call put with flag
+- Conditional (if).
+- Sequence (do)? Add logic for stop and error. Add execution if defined inside a conditional.
+- List: take a value, make it into a list of paths.
+- Count.
