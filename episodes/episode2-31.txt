@@ -1,0 +1,59 @@
+Thirty-first episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! We're done with reference (leaving a loose end for now). We're ready for conditionals!
+
+Hello! Another silent episode... I think it will be the last silent for a while.
+
+If you're just tuning in for the first time, better check: https://github.com/altocodenl/cell
+
+I have a big laundry list just below! I had some time to think since the last episode, but I couldn't record myself since I'm travelling.
+
+Alright, where do we start?
+
+Interesting, we're not using the context path!
+
+The context path is everything to the left of the first at.
+
+The query path is everything to the left of the last at.
+
+The value path is everything to the right of the last at.
+
+Cleanup:
+- We're going to use the little trick that we do later for =.
+- We're going to get rid of the while, and just do resolvings one at a time. I think it will work.
+- The one thing we won't support (but will write a commented test out for) is multiple paths obtained while doing an indirecdt reference.
+- Ah, the query path can have a = at the end!
+
+Where was I?
+
+Heh, the test was wrong.
+
+If we implement the multiple paths inside an indirect reference, we need to get possible errors of something not being set properly (like, it's a hash but you're trying to set a list).
+
+Nice music.
+
+Alrite, let's annotate!
+
+TODO:
+- References:
+   - Add test case that converts two paths to one (overwrite). [DONE, it works!]
+   - Add test for context path [DONE]
+   - Remove var result [DONE, this was the var result = cell.put (...)]
+   - Rewrite cell.respond so it's cleaner [DONE]
+   - Add test with multiple paths in indirect reference, comment it out since I cannot figure out how to support it yet. [DONE]
+   - Annotate code. [DONE]
+
+Great, we're done! Let's continue on the next episode. Cheers!
+
+- Conditional (if).
+   - Do it only if @ if is the rightmost reference AND it's the top path of this prefix, so things don't run more than necessary.
+   - Validate
+   - Execute
+- Sequence (do)
+   - Argument: put the argument *somewhere*. If there's a named argument, prepend it with that. If not, destructure it. But where do we put this argument?
+   - Take the steps one at a time and get their results.
+   - If there's a stop, stop; then shave the stop from the beginning and put it as the value of the outer. (consecutive stops are shaved one at a time)
+   - If there's an error, stop; then put it as the value of the outer.
+   - If you make it to the end, put the last value at the =.
+   - Put the expansion in :.
+   - To refer to a partial, use the colon, to get its value.
+   - List: take a value, make it into a list of paths.
+   - Retrofit it in cond, so that it works there too.

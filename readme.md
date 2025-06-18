@@ -815,121 +815,80 @@ The outermost structure of the function is a loop that goes over each `path` on 
    dale.stop (dataspace, true, function (path) {
 ```
 
-We find the indexes of all the steps that are equal to `@` in the path.
+If there are no `@` in this path, there are no calls. There's nothing to do, so we ignore this path.
 
 ```js
-      var at = dale.fil (path, undefined, function (v, k) {
-         if (v === '@') return k;
-      });
+      if (path.indexOf ('@') === -1) return;
 ```
 
-If there are none, we ignore this path and keep on going.
+We define a `contextPath`, which is the prefix (everything to the left) of the first `@` in the path.
 
 ```js
-      if (at.length === 0) return;
+      var contextPath = path.slice (0, path.indexOf ('@'));
 ```
 
-We will work on the `@`s, right to left. We start a while loop.
+We find the index of the rightmost `@`. Note we reverse a copy of `path` so that we can search from the left, then do a bit of math to figure out what the actual index is coming from the right.
 
 ```js
-      while (at.length) {
+      var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
 ```
 
-We get the index of the rightmost `@` and remove it from the list.
+We define `queryPath` to be everything to the left of the rightmost `@`. We also add an `=` to its end. This is the path where we will set the value. We call it `queryPath` because we will also get/query its value to see if it's what it should be.
 
 ```js
-         var rightmostAt = at.pop ();
+      var queryPath   = path.slice (0, rightmostAt).concat ('=');
 ```
 
-We set `queryPath` to be the prefix (everything to the left) of the rightmost at.
+`valuePath` is the suffix of the rightmost `@`, that is: everything to the right of the last `@`. This is going to be the path where we look for the value that should go into `queryPath`. Notice that we remove any `=` steps from it, since we want to "jump over" them. This enables indirect references.
 
 ```js
-         var queryPath = path.slice (0, rightmostAt);
+      var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 ```
 
-We set `queryPath` to be suffix (everything to the right) of the rightmost at. We also remove any `=` steps from it.
+We get the previous value (the value at `queryPath`) and current value (the value at `valuePath`). A subtle and important details: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js
-         var valuePath = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {
-            return v;
-         });
+      var previousValue = cell.get (queryPath, contextPath, get);
+      var currentValue  = cell.get (valuePath, contextPath, get);
 ```
 
-We get the previous value of the query path plus an `=`. We pass that to `cell.get`.
-
-The previous value is whatever is currently set to `queryPath` plus `=`.
+If we got no paths in `currentValue`, we set it to a single path with a single empty text.
 
 ```js
-         var previousValue = cell.get (queryPath.concat ('='), [], get);
+      if (currentValue.length === 0) currentValue = [['']];
 ```
 
-Now, we need to get the current value that we should place in `queryPath` plus `=`. This is a bit trickier than expected, because of two things:
-- The context path for this call to `get` will be our query path! This is a bit mind-bending, but it makes sense. We want the reference (that is after the `@`) to be resolved in the context of `queryPath`!
-- Indirect references require us to do this in steps, working right to left. For example, if `valuePath` is `foo @ bar`, we need to first get `@ bar`; say it is `1`. Then, `valuePath` will become `foo 1`.
-
-To do this left to right lookup/replacement, we'll do another `while`. We'll stop the minute that there are no more `@`s in `valuePath`.
+If the previous value and the current value are the same, we don't have to do anything, so we return.
 
 ```js
-         while (valuePath.indexOf ('@') !== -1) {
+      if (teishi.eq (previousValue, currentValue)) return;
 ```
 
-We find the index of the rightmost `@`. Note we reverse a copy of `valuePath` so that we can search from the left, then do a bit of math to figure out what the actual index is coming from the right.
+If we're here, we will update the dataspace. We create `pathsToPut`, with the paths that we will pass to `cell.put`.
 
 ```js
-            var atIndex = valuePath.length - 1 - teishi.copy (valuePath).reverse ().indexOf ('@');
-```
-
-We get the actual value from the reference.
-
-```js
-            var value = cell.get (valuePath.slice (atIndex + 1), queryPath, get);
-```
-
-
-```js
-            valuePath = valuePath.slice (0, atIndex).concat (value [0] [0]);
-```
-
-If the previous value and the current value are the same, we skip this `@` and restart at the top of the `while` loop.
-
-```js
-         if (teishi.eq (previousValue, currentValue)) continue;
-```
-
-If we are here, we are going to call `cell.put` with the current value. We start by determining where these new values will be set: in the `queryPath`, appended with an `=`. However, if `queryPath` already ends with `=`, we don't append one.
-
-```js
-         if (teishi.last (queryPath) !== '=') queryPath.push ('=');
-```
-
-We create `pathsToPut`, with the paths that we will pass to `cell.put`.
-
-```js
-         var pathsToPut = [
-            ['p'].concat (queryPath),
-         ];
+      var pathsToPut = [['p'].concat (queryPath)];
 ```
 
 We iterate the paths in `currentValue`, prepend them with `v` and add them to `pathsToPush`.
 
 
 ```js
-         dale.go (currentValue, function (path) {
-            pathsToPut.push (['v'].concat (path));
-         });
+      dale.go (currentValue, function (path) {
+         pathsToPut.push (['v'].concat (path));
+      });
 ```
 
 We call `cell.put` with `pathsToPut` as `paths` and an empty context path. We then return `true` to stop the iteration.
 
 ```js
-         cell.put (pathsToPut, [], get, put);
-         return true;
+      cell.put (pathsToPut, [], get, put);
+      return true;
 ```
 
-This closes the while, the outer loop and the function.
+This finishes the loop and the function.
 
 ```js
-      }
    });
 }
 ```

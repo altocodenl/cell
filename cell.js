@@ -356,49 +356,28 @@ cell.respond = function (get, put) {
    var dataspace = get ();
 
    dale.stop (dataspace, true, function (path) {
-      var at = dale.fil (path, undefined, function (v, k) {
-         if (v === '@') return k;
+      if (path.indexOf ('@') === -1) return;
+
+      var contextPath = path.slice (0, path.indexOf ('@'));
+      var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
+      var queryPath   = path.slice (0, rightmostAt).concat ('=');
+      var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
+
+      var previousValue = cell.get (queryPath, contextPath, get);
+      var currentValue  = cell.get (valuePath, contextPath, get);
+
+      if (currentValue.length === 0) currentValue = [['']];
+
+      if (teishi.eq (previousValue, currentValue)) return;
+
+      var pathsToPut = [['p'].concat (queryPath)];
+
+      dale.go (currentValue, function (path) {
+         pathsToPut.push (['v'].concat (path));
       });
-      if (at.length === 0) return;
 
-      while (at.length) {
-         var rightmostAt = at.pop ();
-         var queryPath = path.slice (0, rightmostAt);
-         var valuePath = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {
-            return v;
-         });
-
-         var previousValue = cell.get (queryPath.concat ('='), [], get);
-         while (valuePath.indexOf ('@') !== -1) {
-            var atIndex = valuePath.length - 1 - teishi.copy (valuePath).reverse ().indexOf ('@');
-            var value = cell.get (valuePath.slice (atIndex + 1), queryPath, get);
-            // TODO: what if you get multiple paths?! That should be forbidden.
-            valuePath = valuePath.slice (0, atIndex).concat (value [0]);
-         }
-         var currentValue = cell.get (valuePath, queryPath, get);
-
-         //clog ('DEBUG PATH', path);
-         //clog ('DEBUG previous VALUE AT', queryPath.concat ('='), previousValue);
-         //clog ('DEBUG current VALUE AT', dale.fil (valuePath.concat ('='), '=', function (v) {return v}), currentValue);
-
-         if (currentValue.length === 0) currentValue = [['']];
-
-         if (teishi.eq (previousValue, currentValue)) continue;
-
-         if (teishi.last (queryPath) !== '=') queryPath.push ('=');
-         var pathsToPut = [
-            ['p'].concat (queryPath),
-         ];
-
-         if (currentValue.length === 0) currentValue = [['']];
-
-         dale.go (currentValue, function (path) {
-            pathsToPut.push (['v'].concat (path));
-         });
-
-         var result = cell.put (pathsToPut, [], get, put);
-         return true;
-      }
+      cell.put (pathsToPut, [], get, put);
+      return true;
    });
 }
 
@@ -801,6 +780,33 @@ var test = function () {
       ]},
       {f: cell.call, input: ['@ put p record', '@ put v @ pixies @ location'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['location', 'trompe', 1], ['pixies', 'trompe', 1, 'alec eiffel'], ['pixies', 'trompe', 2, 'mons'], ['record', '=', 'alec eiffel'], ['record', '@', 'pixies', '=', 'trompe', 1], ['record', '@', 'pixies', '@', 'location']]},
+
+      {reset: [
+         ['foo', 1, 'bar'],
+         ['foo', 2, 'jip'],
+      ]},
+      {f: cell.call, input: ['@ put p ref', '@ put v @ foo'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 1, 'bar'], ['foo', 2, 'jip'], ['ref', '=', 1, 'bar'], ['ref', '=', 2, 'jip'], ['ref', '@', 'foo']]},
+      {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['ref', '=', 'bar'], ['ref', '@', 'foo']]},
+
+      {reset: [
+         ['context', 'foo', 20],
+         ['foo', 10],
+      ]},
+      {f: cell.call, input: ['@ put p context ref', '@ put v @ foo'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['context', 'foo', 20], ['context', 'ref', '=', 20], ['context', 'ref', '@', 'foo'], ['foo', 10]]},
+
+      {reset: [
+         ['bar', 1, 'a', 'A', 'C'],
+         ['bar', 2, 'b', 'B', 'D'],
+         ['foo', 1, 'a'],
+         ['foo', 2, 'b'],
+      ]},
+      // TODO: implement or forbid this
+      //{f: cell.call, input: ['@ put p jip', '@ put v @ bar @ foo'], expected: [['ok']]},
+      //{f: cell.call, input: ['@'], expected: [['bar', 1, 'a', 'A', 'C'], ['bar', 2, 'b', 'B', 'D'], ['foo', 1, 'a'], ['foo', 2, 'b'], ['jip', '=', 'A', 'C'], ['jip', '=', 'B', 'D'], ['jip', '@', 'bar', '=', 1, 'a'], ['jip', '@', 'bar', '=', 2, 'b'], ['jip', '@', 'bar', '@', 'foo']]},
+
 
    ], false, function (test) {
 

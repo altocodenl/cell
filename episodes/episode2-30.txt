@@ -1,4 +1,4 @@
-
+Thirtieth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! More indirect references, but the code is taking shape. This stuff is subtle.
 
 Hi! Silent episode today.
 
@@ -259,7 +259,6 @@ Actually, we don't need to put them, put does that for us.
 And currentValue will be this list of resolved paths, that's it.
 
 OK, see you next episode!!
-
 
 
 TODO next:
