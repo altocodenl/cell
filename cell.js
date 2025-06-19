@@ -364,7 +364,13 @@ cell.respond = function (get, put) {
       var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 
       var previousValue = cell.get (queryPath, contextPath, get);
-      var currentValue  = cell.get (valuePath, contextPath, get);
+
+      if (valuePath [0] === 'if') {
+         var currentValue = cell.if (queryPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+      }
+      else {
+         var currentValue = cell.get (valuePath, contextPath, get);
+      }
 
       if (currentValue.length === 0) currentValue = [['']];
 
@@ -379,6 +385,21 @@ cell.respond = function (get, put) {
       cell.put (pathsToPut, [], get, put);
       return true;
    });
+}
+
+cell.if = function (queryPath, contextPath, get) {
+
+   var paths = cell.get (queryPath, contextPath, get);
+
+   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
+   if (teishi.v (['topLevelKeys', topLevelKeys, ['cond', 'do', 'else'], 'eachOf', teishi.test.equal], true) !== true) return [['error', 'An if call has to be a hash with keys `cond`, `do` and `else`.']];
+   if (topLevelKeys.indexOf ('cond') === -1) return [['error', 'An if call has to contain a `cond` key.']];
+
+   var cond = cell.get (queryPath.concat ('cond'), contextPath, get);
+   var result = dale.fil (cond [0], '=', function (v) {return v})
+   var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
+
+   return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
 }
 
 cell.get = function (queryPath, contextPath, get) {
@@ -806,6 +827,74 @@ var test = function () {
       // TODO: implement or forbid this
       //{f: cell.call, input: ['@ put p jip', '@ put v @ bar @ foo'], expected: [['ok']]},
       //{f: cell.call, input: ['@'], expected: [['bar', 1, 'a', 'A', 'C'], ['bar', 2, 'b', 'B', 'D'], ['foo', 1, 'a'], ['foo', 2, 'b'], ['jip', '=', 'A', 'C'], ['jip', '=', 'B', 'D'], ['jip', '@', 'bar', '=', 1, 'a'], ['jip', '@', 'bar', '=', 2, 'b'], ['jip', '@', 'bar', '@', 'foo']]},
+
+      // *** COND ***
+
+      {reset: []},
+      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do yes!', '@ put v @ if finally no!'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['result', '=', 'error', 'An if call has to be a hash with keys `cond`, `do` and `else`.'],
+          ['result', '@', 'if', 'cond', '=', ''],
+          ['result', '@', 'if', 'cond', '@', 'count'],
+          ['result', '@', 'if', 'do', 'yes!'],
+          ['result', '@', 'if', 'finally', 'no!']
+      ]},
+
+      {reset: []},
+      {f: cell.call, input: ['@ put p result', '@ put v @ if do yes!', '@ put v @ if else no!'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['result', '=', 'error', 'An if call has to contain a `cond` key.'],
+          ['result', '@', 'if', 'do', 'yes!'],
+          ['result', '@', 'if', 'else', 'no!']
+      ]},
+
+      {reset: [
+         ['count', 1],
+      ]},
+      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do yes!', '@ put v @ if else no!'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 1],
+          ['result', '=', 'yes!'],
+          ['result', '@', 'if', 'cond', '=', 1],
+          ['result', '@', 'if', 'cond', '@', 'count'],
+          ['result', '@', 'if', 'do', 'yes!'],
+          ['result', '@', 'if', 'else', 'no!']
+      ]},
+      {f: cell.call, input: ['@ put p count', '@ put v 0'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 0],
+          ['result', '=', 'no!'],
+          ['result', '@', 'if', 'cond', '=', 0],
+          ['result', '@', 'if', 'cond', '@', 'count'],
+          ['result', '@', 'if', 'do', 'yes!'],
+          ['result', '@', 'if', 'else', 'no!']
+      ]},
+
+      {reset: [
+         ['count', 1],
+      ]},
+      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if else no!'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 1],
+          ['result', '=', ''],
+          ['result', '@', 'if', 'cond', '=', 1],
+          ['result', '@', 'if', 'cond', '@', 'count'],
+          ['result', '@', 'if', 'else', 'no!']
+      ]},
+
+      {reset: [
+         ['count', 0],
+         ['inner', 'count', 1],
+      ]},
+      {f: cell.call, input: ['@ put p inner result', '@ put v @ if cond @ count', '@ put v @ if else no!'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 0],
+          ['inner', 'count', 1],
+          ['inner', 'result', '=', ''],
+          ['inner', 'result', '@', 'if', 'cond', '=', 1],
+          ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
+          ['inner', 'result', '@', 'if', 'else', 'no!']
+      ]},
 
 
    ], false, function (test) {

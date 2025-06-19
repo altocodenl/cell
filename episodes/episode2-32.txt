@@ -1,0 +1,53 @@
+Thirty-second episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! In one episode, conditionals came together. Unbelievable. Sometimes, it's just a breeze. Next episode, we go with sequences.
+
+https://github.com/altocodenl/cell
+
+OK, let's continue mutely.
+
+We'd be too lazy if we didn't stop this if from running four times, we can do this easily.
+
+Ah, this is harder to detect than I thought. You could have =s, or not. How do we know that we're in the first cond? Let's leave this optimization for later.
+
+Interesting consequence: we don't have to put in the error what we got as input, because the error will be put as a result of the if with invalid data. This is great! This already shows that, even if they are native, these methods are higher level than cell.get and cell.put.
+
+I wonder if I should really use the contextPath to get the if data. Why not? Originally, I thought that this was too "literal". But why? Let's pass the context path.
+
+Can I get away with a 10 line cell.if?
+
+IT WORKED!
+
+(It's tricky that teishi.v makes you change the sign of the truthy/falsy)
+
+Why did it break? OK, it's working now.
+
+We need to skip over equals!
+And that condition of length 1 doesn't apply if there's a call, unless we put an =. But there might not be =, so we need to cover for both cases. We can just look at the top value.
+
+Now, a new favorite: if with else and no do.
+
+It just works! Are we really done with conditionals? I think so! Let's add a context path test, then annotate the code, and close the episode.
+
+OK, let's annotate!
+
+We forgot to validate that there should be at least one path in cond.
+
+We have conditionals. Unbelievable. But it's there! On the next episode, we'll push onwards and go to sequence. Can't wait!
+
+Thank you for watching.
+
+TODO:
+
+- Conditional (if).
+   - Do it only if @ if is the rightmost reference AND it's the top path of this prefix, so things don't run more than necessary. [WONT DO]
+   - Validate [DONE]
+   - Execute [DONE]
+- Sequence (do)
+   - Argument: put the argument *somewhere*. If there's a named argument, prepend it with that. If not, destructure it. But where do we put this argument?
+   - Take the steps one at a time and get their results.
+   - If there's a stop, stop; then shave the stop from the beginning and put it as the value of the outer. (consecutive stops are shaved one at a time)
+   - If there's an error, stop; then put it as the value of the outer.
+   - If you make it to the end, put the last value at the =.
+   - Put the expansion in :.
+   - To refer to a partial, use the colon, to get its value.
+   - List: take a value, make it into a list of paths.
+   - Retrofit it in cond, so that it works there too.

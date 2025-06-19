@@ -845,11 +845,23 @@ We define `queryPath` to be everything to the left of the rightmost `@`. We also
       var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 ```
 
-We get the previous value (the value at `queryPath`) and current value (the value at `valuePath`). A subtle and important details: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
+We get the previous value (the value at `queryPath`). A subtle and important details: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js
       var previousValue = cell.get (queryPath, contextPath, get);
-      var currentValue  = cell.get (valuePath, contextPath, get);
+```
+
+We get the `currentValue` (the value at `valuePath`). We also pass `contextPath`. Note that if we find an `if` just after the `@`, we will call `cell.if`, passing to it the `queryPath` minus the `=`, plus `@` and `if` - this path is the path to get the data for the `if`.
+
+Otherwise, we just call `cell.get` directly.
+
+```js
+      if (valuePath [0] === 'if') {
+         var currentValue = cell.if (queryPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+      }
+      else {
+         var currentValue = cell.get (valuePath, contextPath, get);
+      }
 ```
 
 If we got no paths in `currentValue`, we set it to a single path with a single empty text.
@@ -890,6 +902,64 @@ This finishes the loop and the function.
 
 ```js
    });
+}
+```
+
+We now define `cell.if`, the function that performs conditional logic. It takes three arguments:
+
+- A `queryPath`, which is the path that contains the data for the if.
+- A `contextPath`, which is the path of where we're currently standing.
+- `get`, a storage-layer function that gives us the entire dataspace.
+
+```js
+cell.if = function (queryPath, contextPath, get) {
+```
+
+We get all the paths inside the `if` and store them in `paths`.
+
+```js
+   var paths = cell.get (queryPath, contextPath, get);
+```
+
+We find the top level keys inside `paths` and make sure they are just `cond`, `do` and `else`. If any key is here that is not among these, we return an error.
+
+```js
+   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
+   if (teishi.v (['topLevelKeys', topLevelKeys, ['cond', 'do', 'else'], 'eachOf', teishi.test.equal], true) !== true) return [['error', 'An if call has to be a hash with keys `cond`, `do` and `else`.']];
+```
+
+We validate that there's a `cond` key; if there's not, we return an error.
+
+```js
+   if (topLevelKeys.indexOf ('cond') === -1) return [['error', 'An if call has to contain a `cond` key.']];
+```
+
+We get all the paths belonging to `cond`.
+
+```js
+   var cond = cell.get (queryPath.concat ('cond'), contextPath, get);
+```
+
+Now for a tricky one: we want to process what the result of `cond` was. We will take just the first path (which should be the first path of the actual value if there was no reference; if there was a reference, it should be the first path of its result (`=`)). We remove any `=` from it.
+
+```js
+   var result = dale.fil (cond [0], '=', function (v) {return v})
+```
+
+If we got no paths in `cond`, or the first path in `cond` (minus `=`) is a lone `0` or `''`, we consider the condition to be false. Otherwise, we consider it to be true.
+
+```js
+   var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
+```
+
+Depending on whether the condition is true or not, we call `cell.get` with `queryPath` plus `do` (or `queryPath` plus `else`), also passing the `contextPath` and `get`. We simply return its result.
+
+This will also work if `do` or `else` are not present, because in these cases we will get an empty list of paths.
+
+This closes the function.
+
+```
+   return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
 }
 ```
 
