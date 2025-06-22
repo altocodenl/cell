@@ -1,0 +1,196 @@
+Thirty-third episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today we design sequence. There's quite a few things to put together, but it's coming along nicely. We'll have it working soon!
+
+Hi! Silent episode today again. Back home, but tired. Time to play around with cell and get started with sequence!
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+OK, so what's sequence for? Do two or more calls, potentially (could be that because of a condition, you end up doing just one). But if you know you'll just do one, you don't need @ do.
+
+The structure of do:
+
+@ do ARGUMENT_NAME 1 ...
+                   2 ...
+                   ...
+
+Yeah, let's go first with the most rigid version of it, which is: argument name is mandatory, and just one. No destructuring, no omission.
+
+To respond the first question: where do we put the argument? We basically can check any gets done that start with that name and put it there. But is there a better way?
+
+Let's say that do is placed inside a hash...
+
+Wait. do defines a call, so it acts like a "freezer" already.
+
+"add 10" @ do value 1 + . value
+                      . 10
+
+then:
+
+eleven @ "add 10" 1
+
+OK, we have a big problem here. How are we not referencing key 1 of "add 10" if "add 10" is a list? Perhaps Lisp separating namespaces for variables and functions makes a bit more sense now. But no, let's see it all at runtime.
+
+If "add 10" has a @ do next ot it, it is not a list, it is a call. Therefore, whatever it has to its right is the single argument. What if it's multiple things? Well, it'd be have to be a single line? Not really, it could be a hash, or a list. Then we'll just pass it.
+
+What if we do something like this?
+
+add 1 @ do value 1 + . value
+                     . 1
+add 2 @ do value 1 + . value
+                     . 2
+
+(never mind that it is silly)
+
+then, if you have:
+
+@ eleven @ add 10 1
+
+Then we need to look up add 10 1 and somehow figure out that what we want is add 10 (1). how could we do this walking inside the @?
+
+Why don't we experience this on the cond? Because it is directly defined there, whereas with @ do it's not, it's in a definition that can be looked up. The cond doesn't receive arguments from outside, it's created all in place like an object literal. Interesting.
+
+Going back to the problem, when you're looking at the rightmost at, you'd try to get add 10 1. If you don't get anything, you get add 10. If you get something with do (which you will, here), you make the 1 the argument and expand that as do.
+
+Do we really need the 1 if there's just a single call? Let's leave it, for now. It's more explicit. And, I made a mistake. Two. Let's fix them.
+
+add 1 @ do value 1 @ + . @ value
+                       . 1
+    2 @ do value 1 @ + . @ value
+                       . 2
+      = 3
+      : 1 = 3
+          @ + . = 1
+                @ value
+              . 2
+three @ add 2 1
+
+I like how this looks.
+
+Where do we put this argument, now?
+
+:, the expansion, is a list. So we cannot put list arguments there because they clash with the sequence; and we cannot put a hash either. The actual place in the dataspace where the call is done cannot be modified either by the argument, because it doesn't belong there. So I need a mechanism that gives me a "floating" argument, like if it was at the top level. We can do this.
+
+Before I implement, let me try something:
+
+Given an integer n, return a string array answer (1-indexed) where:
+
+answer[i] == "FizzBuzz" if i is divisible by 3 and 5.
+answer[i] == "Fizz" if i is divisible by 3.
+answer[i] == "Buzz" if i is divisible by 5.
+answer[i] == i (as a string) if none of the above conditions are true.
+
+Wait, a better implementation...
+
+fizzbuzz @ do int 1 @ put p . output
+                          v ""
+                  2 @ if cond @ eq . @ % . @ int
+                                         . 3
+                                   . 0
+                         then @ push p . output
+                                     v Fizz
+                  3 @ if cond @ eq . @ % . @ int
+                                         . 5
+                                   . 0
+                         then @ push p . output
+                                     v Buzz
+                  4 @ if cond @ eq . @ output
+                                     = ""
+                         then @ text @ int
+                         else @ output
+fizzbuzz15 = FizzBuzz
+           : 1 = ok
+               @ put p . output
+                     v ""
+             2 ...
+           @ fizzbuzz 15
+
+What do I do for equality? = is for result, and it will be confusing to use it as an equality operator. What about | ? No. Let's use eq.
+
+Also, local variables (put p . ...) are also in this pseudospace. Should it be more explicit? I think so. But where?
+
+I'll continue later!
+
+OK, I'm back.
+
+I thought it over, and this "somewhere" has to be inside `:`. Adding yet another key would be just too much. : is where the expansion happens. It is what is between @ and =.
+
+Another thing: I will only use symbols for math, and for @/:/=, but nothing else. Comparison of equality will be eq/neq, logicals will be and/or/not. More readable and still short.
+
+The dot has a double role: to say "here" in get and set, and to stand for numbers in lists where we don't care about the order. A bit of ambiguity, or rather, contextuality. It cannot be ambiguous because get and post get a single path at a time.
+
+So, where do we store the argument? In :? Yes, we can put it at the top of it. And where do we put the sequence? At `s`.
+
+It'd be interesting if put would return the previous value of what you put, to have a "diff". Let's apply that to the expansion.
+
+Also, I want it to be "redis-like", in that if you push to something that doesn't exist, you create it. If you push to something that doesn't exist and you push a string, what do we make it? A list or text? Let's have a method per type. We can use append instead.
+
+(what blows my mind is that these base calls can be rewritten with little effort by anyone). And because you see the results there, you can pick it up. That, and you have the LLM right there too.
+
+OK, again:
+
+fizzbuzz @ do int 1 @ if cond @ eq . @ % . @ int
+                                         . 3
+                                   . 0
+                         then @ append p . output
+                                       v Fizz
+                  2 @ if cond @ eq . @ % . @ int
+                                         . 5
+                                   . 0
+                         then @ append p . output
+                                       v Buzz
+                  3 @ if cond @ eq . @ output
+                                     = ""
+                         then @ text @ int
+                         else @ output
+fizzbuzz15 = FizzBuzz
+           : int 15
+             output FizzBuzz
+             seq 1 = ""
+                   @ if cond = 1
+                             @ eq . = 0
+                                    @ % . = 15
+                                          @ int
+                                        . 3
+                                  . 0
+                         then = ""
+                              @ append p . output
+                                       v Fizz
+                 2 = Fizz
+                   @ if cond = 1
+                             @ eq . = 0
+                                    @ % . = 15
+                                          @ int
+                                        . 5
+                                  . 0
+                         then = Fizz
+                              @ append p . output
+                                       v Buzz
+                    = FizzBuzz
+                  3 @ if cond = 0
+                              @ eq . = FizzBuzz
+                                     @ output
+                                     = ""
+                         then @ text @ int
+                              = FizzBuzz
+                         else @ output
+           @ fizzbuzz 15
+
+What's the return value of an if? The condition, I think? No, it's the then or else result!
+
+I wonder: will it become easier to get acquainted with this notation? It feels natural enough, but still my eye is going here and there trying to find its footing.
+
+An interesting requirement: let's say we reference output (or should it be . output? No, it should be output.), in an intermediate step, when you get output, you show it at that moment, not how it will be later. That's mighty useful, you need those intermediate steps.
+
+Next episode we'll continue with sequence. Thanks for watching!
+
+TODO:
+
+- Sequence (do)
+   - Argument: put the argument *somewhere*. If there's a named argument, prepend it with that. If not, destructure it. But where do we put this argument?
+   - Take the steps one at a time and get their results.
+   - If there's a stop, stop; then shave the stop from the beginning and put it as the value of the outer. (consecutive stops are shaved one at a time)
+   - If there's an error, stop; then put it as the value of the outer.
+   - If you make it to the end, put the last value at the =.
+   - Put the expansion in :.
+   - To refer to a partial, use the colon, to get its value.
+   - List: take a value, make it into a list of paths.
+   - Retrofit it in cond, so that it works there too.
