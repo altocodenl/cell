@@ -1,3 +1,4 @@
+Thirty-fourth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today we start to implement sequence. We have a workable example, plus a hint of the walking logic. We're starting to get there.
 
 Hi! Today's episode starts mute, then will become a talkie.
 
