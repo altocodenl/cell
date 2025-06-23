@@ -1,0 +1,78 @@
+
+Hi! Today's episode starts mute, then will become a talkie.
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+Today we start to implement sequence!
+
+(reviewing the notes on the previous episode)
+
+The structure of do:
+
+@ do ARGUMENT_NAME 1 ...
+                   ...
+
+It is good that we have this structure. I think it will be clear enough.
+
+Interestingly enough, do really is a sort of frozen sequence that we then execute. What does it return, do?
+
+definition = argument_name sequence_length
+           @ do ...
+
+Yeah, that's a good default. The argument name, plus the length of the sequence.
+
+Now, this is tricky: how do we know when to execute it?
+
+execution = explosion!
+          @ definition boom?
+
+This is tricky. If we see a @ do, we put the argument name and the length of the sequence. If a reference returns a @ do, then we execute it!
+
+We still have to do this subtle thing to distinguish where the reference to the sequence ends and where it argument begins, by walking up.
+
+@ eleven @ add 10 1
+
+From S2E33: "Going back to the problem, when you're looking at the rightmost at, you'd try to get add 10 1. If you don't get anything, you get add 10. If you get something with do (which you will, here), you make the 1 the argument and expand that as do."
+
+We need this walking only for when executing, not when defining.
+
+Thinking ahead to macros, functions really freeze calls, so macros probably are about selectively unfreezing parts of them.
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1
+
+becomes:
+
+eleven = 11
+       : int 10
+         seq . = 11
+               @ + . = 10
+                     @ int
+                   . 1
+       @ plus1 10
+plus1 = int 1
+      @ do int . @ + . @ int
+                       = 1
+
+It's funny that I love variadic functions and yet, in cell, you can only pass one argument (message) to a call.
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1
+
+When processing eleven @ plus1 10
+- Get plus1 10, you get nothing
+- Then get plus1. If you get something (replacing the last = with @), and that something starts with do, take that value and go into actual cell.do mode.
+- If you get something that is not a call, still return '', because we only do the walking up for calls.
+- But if the call is direct to @ do, put the message name and the number of steps. Or a validation error.
+
+- Sequence (do) TODO:
+   - Validate that it receives a hash (the argument name must be text) that is a list with consecutive keys starting at 1.
+   - Argument: put the argument at :, with the provided name.
+   - Take the steps one at a time and get their results.
+   - If there's a stop, stop; then shave the stop from the beginning and put it as the value of the outer. (consecutive stops are shaved one at a time)
+   - If there's an error, stop; then put it as the value of the outer.
+   - If you make it to the end, put the last value at the =.
+   - Put the expansion in : seq.
+   - To refer to a partial, use : seq, to get its value.

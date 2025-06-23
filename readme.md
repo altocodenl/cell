@@ -845,6 +845,8 @@ We define `queryPath` to be everything to the left of the rightmost `@`. We also
       var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 ```
 
+Now, you may be asking: what happens when a path has *two* (or more) `@`s? How do we deal with these paths, if our logic just looks at the rightmost `@` only? The answer is the following: the rightmost `@` will get a new path on top of it that has an `=`. It is this path that will get the next-to-last rightmost `@` expanded. This can happen until all `@`s in one path get expanded, path by path, onto one that has only `=`s.
+
 We get the previous value (the value at `queryPath`). A subtle and important details: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js

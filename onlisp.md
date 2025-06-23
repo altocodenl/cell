@@ -85,8 +85,8 @@ function (x) {
 = . 11
   . 12
   . 13
-@ call do x . loop do @ + . x
-                          . 10
+@ call do x . loop do v @ + . @ v
+                            . 10
        v . 1
          . 2
          . 3

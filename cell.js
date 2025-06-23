@@ -368,8 +368,18 @@ cell.respond = function (get, put) {
       if (valuePath [0] === 'if') {
          var currentValue = cell.if (queryPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
       }
+      else if (valuePath [0] === 'do') {
+         var currentValue = cell.do ('define', queryPath.slice (0, -1).concat (['@', 'do']), contextPath, get);
+      }
       else {
          var currentValue = cell.get (valuePath, contextPath, get);
+         if (currentValue.length === 0) {
+            var walkingValue = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
+               var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
+               if (value.length) return value;
+            });
+            // call cell.do ('execute', ...);
+         }
       }
 
       if (currentValue.length === 0) currentValue = [['']];
@@ -400,6 +410,15 @@ cell.if = function (queryPath, contextPath, get) {
    var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
 
    return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
+}
+
+cell.do = function (op, queryPath, contextPath, get) {
+   if (op === 'define') {
+      return [['']];
+   }
+   if (op === 'execute') {
+      return [['']];
+   }
 }
 
 cell.get = function (queryPath, contextPath, get) {
@@ -894,6 +913,32 @@ var test = function () {
           ['inner', 'result', '@', 'if', 'cond', '=', 1],
           ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
           ['inner', 'result', '@', 'if', 'else', 'no!']
+      ]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 0],
+          ['inner', 'count', 1],
+          ['inner', 'result', '=', ''],
+          ['inner', 'result', '@', 'if', 'cond', '=', 1],
+          ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
+          ['inner', 'result', '@', 'if', 'else', 'no!']
+      ]},
+
+      // *** SEQUENCE ***
+
+      {reset: []},
+      {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int . @ + . @ int', '@ put v @ do int . @ + . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['eleven', '=', 11],
+          ['eleven', ':', 'int', 10],
+          ['eleven', ':', 'seq', 1, '=', 11],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
+          ['eleven', ':', 'seq', 1, '@', '+', 2, 1],
+          ['eleven', '@', 'plus1', 10],
+          ['plus1', '=', 'int', 1],
+          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
+          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, 1],
       ]},
 
 
