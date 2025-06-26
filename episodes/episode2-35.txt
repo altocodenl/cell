@@ -1,0 +1,32 @@
+Thirty-fifth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today we continue with sequence. We are now ready to start calling the steps one at a time.
+
+https://github.com/altocodenl/cell
+
+Can we have nested definitions?
+
+@ do m 1 @ do n 1
+
+No, the @ do to the right is frozen!
+
+How do we know which one to expand into a = int 1?
+
+It's the leftmost @ do on the path. We need to check that we are at the head of it.
+
+I can be inefficient and not have th check the head of it, just do it on every single one.
+
+Once again:
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1
+
+Let's start with the easy one: plus1.
+
+- Ignore any @s that have @ do to its left. Just process the leftmost @ do.
+
+When seeing
+plus1 @ do int . @ + . @ int
+
+contextPath is plus1
+targetPath is plus1 =
+valuePath should be plus1 =

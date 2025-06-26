@@ -1,0 +1,27 @@
+Thirty-sixth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, more sequence. We actually restructure cell.respond.
+
+Unfortunately the video froze half way...
+
+https://github.com/altocodenl/cell
+
+What happens when you reference a call without giving it a message? Would that just give you the value?
+
+Let's list our problems (hence, our solutions):
+- we need to remove the argument name from the definition [DONE]
+- we have this: [ [ 1, '@', '+', 1, '@', 'int' ], [ 1, '@', '+', 2, 1 ] ]
+- we need to iterate each of the steps [DONE]
+- For each step, get the entire definition of the step. Then, apply cell.respond (the inner part) to it.
+
+It makes sense to rewrite cell.respond to take a single path at a time.
+
+OK, we did it! But we need to pass the entire path to cell.do, to know where to update it with a recursive call.
+
+- Sequence (do) TODO:
+   - Validate that it receives a hash (the argument name must be text) that is a list with consecutive keys starting at 1. [DONE]
+   - Argument: put the argument at :, with the provided name. [DONE]
+   - Take the steps one at a time and get their results.
+   - If there's a stop, stop; then shave the stop from the beginning and put it as the value of the outer. (consecutive stops are shaved one at a time)
+   - If there's an error, stop; then put it as the value of the outer.
+   - If you make it to the end, put the last value at the =.
+   - Put the expansion in : seq.
+   - To refer to a partial, use : seq, to get its value.

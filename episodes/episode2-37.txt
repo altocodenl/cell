@@ -1,0 +1,9 @@
+Thirty-seventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, yet more sequence. We spend some time getting proper logs in fourdata, then tackle the conundrum of how to do the proper expansion of a call. Warning: slooow progress.
+
+Unfortunately the video recording froze half way...
+
+https://github.com/altocodenl/cell
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1

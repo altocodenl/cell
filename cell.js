@@ -10,6 +10,11 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 
 var clog = console.log, type = teishi.type;
 
+var pretty = function (label, paths) {
+   if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
+   teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
+}
+
 // *** MAIN FUNCTIONS ***
 
 cell.toNumberIfNumber = function (text) {
@@ -194,6 +199,10 @@ cell.sorter = function (paths) {
       if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
       if (types [0] === 'number') return v1 - v2;
 
+      // = goes before :
+      if (v1 === '=' && v2 === ':') return -1;
+      if (v1 === ':' && v2 === '=') return 1;
+
       // Sort uppercase and lowercase separately: aA bB cC. Lowercase goes up.
       return dale.stopNot (dale.times (Math.max (v1.length, v2.length), 0), 0, function (k) {
          var chars = [
@@ -352,50 +361,114 @@ cell.call = function (message, get, put) {
    return cell.get (paths [0].slice (1), [], get);
 }
 
-cell.respond = function (get, put) {
-   var dataspace = get ();
+cell.respond = function (path, get, put) {
 
-   dale.stop (dataspace, true, function (path) {
-      if (path.indexOf ('@') === -1) return;
+   if (path.indexOf ('@') === -1) return;
 
-      var contextPath = path.slice (0, path.indexOf ('@'));
-      var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
-      var queryPath   = path.slice (0, rightmostAt).concat ('=');
-      var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
+   var leftmostAt  = path.indexOf ('@');
+   var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
+   // Make the leftmost @ do be the rightmost @
+   dale.stopNot (path, undefined, function (v, k) {
+      if (v === '@' && path [k + 1] === 'do') return rightmostAt = k;
+   });
 
-      var previousValue = cell.get (queryPath, contextPath, get);
+   var contextPath = path.slice (0, leftmostAt);
+   var targetPath  = path.slice (0, rightmostAt).concat ('=');
+   var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 
-      if (valuePath [0] === 'if') {
-         var currentValue = cell.if (queryPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
-      }
-      else if (valuePath [0] === 'do') {
-         var currentValue = cell.do ('define', queryPath.slice (0, -1).concat (['@', 'do']), contextPath, get);
-      }
-      else {
-         var currentValue = cell.get (valuePath, contextPath, get);
-         if (currentValue.length === 0) {
-            var walkingValue = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
-               var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
-               if (value.length) return value;
-            });
-            // call cell.do ('execute', ...);
+   var previousValue = cell.get (targetPath, contextPath, get);
+
+   if (valuePath [0] === 'if') {
+      var currentValue = cell.if (targetPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+   }
+   else if (valuePath [0] === 'do') {
+      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), null, contextPath, get);
+   }
+   // TODO: move this to an area of cell calls
+   else if (valuePath [0] === '+') {
+
+   }
+   else {
+      var currentValue = cell.get (valuePath, contextPath, get);
+      if (currentValue.length === 0) {
+         var call = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
+            var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
+            if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
+         });
+         if (call) {
+            currentValue = cell.do ('execute', call.definitionPath, call.message, contextPath, get);
+            if (currentValue [0] [0] === '=') targetPath = targetPath.slice (0, -1);
          }
       }
+   }
 
-      if (currentValue.length === 0) currentValue = [['']];
+   if (currentValue.length === 0) currentValue = [['']];
 
-      if (teishi.eq (previousValue, currentValue)) return;
+   if (teishi.eq (previousValue, currentValue)) return;
 
-      var pathsToPut = [['p'].concat (queryPath)];
+   clog ();
+   pretty ('path', [path]);
+   pretty ('context path', [contextPath]);
+   pretty ('target path', [targetPath]);
+   pretty ('value path', [valuePath]);
+   pretty ('previous value', previousValue);
+   pretty ('current value', currentValue);
 
-      dale.go (currentValue, function (path) {
-         pathsToPut.push (['v'].concat (path));
-      });
+   var pathsToPut = [['p'].concat (targetPath)];
 
-      cell.put (pathsToPut, [], get, put);
-      return true;
+   dale.go (currentValue, function (path) {
+      pathsToPut.push (['v'].concat (path));
    });
+
+   cell.put (pathsToPut, [], get, put);
+   return true;
 }
+
+cell.do = function (op, definitionPath, message, contextPath, get) {
+
+   var definition = cell.get (definitionPath, contextPath, get);
+
+   if (definition.length === 0) return [['error', 'The definition of a sequence must contain a message name and at least one step.']];
+
+   if (type (definition [0] [0]) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+
+   if (dale.keys (cell.pathsToJS (definition)).length !== 1) return [['error', 'The definition of a sequence can only contain a single name for its message.']];
+
+   if (definition [0] [1] !== 1) return [['error', 'The definition of a sequence must start with step number 1.']];
+   var error = dale.stopNot (definition, undefined, function (path, k) {
+      if (definition [k - 1] && path [1] - 1 > definition [k - 1] [1]) return [['error', 'The definition of a sequence cannot have non-consecutive steps.']];
+   });
+
+   if (error) return error;
+
+   if (op === 'define') return [[definition [0] [0], teishi.last (definition) [1]]];
+
+   var output = [];
+
+   definition = dale.go (definition, function (v) {return v.slice (1)});
+   var length = teishi.last (definition) [0];
+   var responses = [];
+   dale.stopNot (dale.times (length, 1), undefined, function (step) {
+      step = dale.fil (definition, undefined, function (path) {
+         if (path [0] === step) return path.slice (1);
+      });
+      // @ + 1 @ int
+      //     2 1
+      // call this in the context of contextPath + ':'
+      // then, set the result on contextPath + ':', because that's where it goes
+
+      pretty ('step', step);
+
+      var response = '...';
+      responses.push (response);
+      if (response [0] === 'error' || response [0] === 'stop') return true;
+   });
+
+   output.push (['=', 'foo']);
+   output.push ([':', definition [0] [0]].concat (message));
+   return output;
+}
+
 
 cell.if = function (queryPath, contextPath, get) {
 
@@ -410,15 +483,6 @@ cell.if = function (queryPath, contextPath, get) {
    var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
 
    return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
-}
-
-cell.do = function (op, queryPath, contextPath, get) {
-   if (op === 'define') {
-      return [['']];
-   }
-   if (op === 'execute') {
-      return [['']];
-   }
 }
 
 cell.get = function (queryPath, contextPath, get) {
@@ -485,9 +549,14 @@ cell.put = function (paths, contextPath, get, put, updateDialogue) {
    var error = cell.validator (dataspace);
    if (error.length) return error;
 
+   pretty ('before put', get ());
    put (dataspace);
+   pretty ('pathsToPut', paths);
+   pretty ('after put', get ());
 
-   cell.respond (get, put);
+   dale.stop (dataspace, true, function (path) {
+      return cell.respond (path, get, put);
+   });
 
    return [['ok']];
 }
@@ -576,6 +645,8 @@ var test = function () {
       {f: cell.sorter, input: [['Foo', 'jip', 1], ['foo', 'jip', 1]], expected: [['foo', 'jip', 1], ['Foo', 'jip', 1]]},
       {f: cell.sorter, input: [['foo', 'jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'jip', 1]]},
       {f: cell.sorter, input: [['foo', 'Jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'Jip', 1]]},
+      {f: cell.sorter, input: [[':', 'foo'], ['=', 'bar']], expected: [['=', 'bar'], [':', 'foo']]},
+      {f: cell.sorter, input: [[':foo'], ['=bar']], expected: [[':foo'], ['=bar']]},
 
       {f: cell.validator, input: [['foo', 'jip']], expected: []},
       {f: cell.validator, input: [['foo', 'bar', 1]], expected: []},
@@ -926,8 +997,54 @@ var test = function () {
       // *** SEQUENCE ***
 
       {reset: []},
+      {f: cell.call, input: ['@ put p ref', '@ put v @ invalid 1'], expected: [['ok']]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The definition of a sequence must contain a message name and at least one step.'],
+         ['invalid', '@', 'do'],
+         // Because there's nothing after the @ do, if we reference it (`@ invalid 1`) we won't get a definition, so there's no error either.
+         ['ref', '=', ''],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do 1 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
+         ['invalid', '@', 'do', 1, 1],
+         ['ref', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 1', '@ put v @ do bar 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The definition of a sequence can only contain a single name for its message.'],
+         ['invalid', '@', 'do', 'bar', 2],
+         ['invalid', '@', 'do', 'foo', 1],
+         ['ref', '=', 'error', 'The definition of a sequence can only contain a single name for its message.'],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The definition of a sequence must start with step number 1.'],
+         ['invalid', '@', 'do', 'foo', 2],
+         ['ref', '=', 'error', 'The definition of a sequence must start with step number 1.'],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 1 1', '@ put v @ do foo 3 3'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The definition of a sequence cannot have non-consecutive steps.'],
+         ['invalid', '@', 'do', 'foo', 1, 1],
+         ['invalid', '@', 'do', 'foo', 3, 3],
+         ['ref', '=', 'error', 'The definition of a sequence cannot have non-consecutive steps.'],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {reset: []},
       {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int . @ + . @ int', '@ put v @ do int . @ + . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
           ['eleven', '=', 11],
           ['eleven', ':', 'int', 10],
@@ -938,9 +1055,8 @@ var test = function () {
           ['eleven', '@', 'plus1', 10],
           ['plus1', '=', 'int', 1],
           ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
-          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, 1],
+          ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
       ]},
-
 
    ], false, function (test) {
 
@@ -964,6 +1080,8 @@ var test = function () {
 
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {input: test.input, expected: test.expected, obtained: result});
+      pretty ('expected', test.expected);
+      pretty ('result', result);
       return false;
    });
    if (errorFound) clog ('A test did not pass');
