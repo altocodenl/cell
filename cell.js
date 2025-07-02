@@ -11,6 +11,7 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 var clog = console.log, type = teishi.type;
 
 var pretty = function (label, paths) {
+   return;
    if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
    teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
 }
@@ -18,7 +19,7 @@ var pretty = function (label, paths) {
 // *** MAIN FUNCTIONS ***
 
 cell.toNumberIfNumber = function (text) {
-   if (text.match (/^-?(\d+\.)?\d+/) !== null) return parseFloat (text);
+   if (text.match (/^-?(\d+\.)?\d+$/) !== null) return parseFloat (text);
    return text;
 }
 
@@ -27,7 +28,7 @@ cell.unparseElement = function (v) {
    if (type (v) !== 'string') return v + '';
    if (v.length === 0) return '""';
 
-   if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+   if (v.match (/^-?(\d+\.)?\d+$/) !== null) return '"' + v + '"';
    if (v.match ('"') || v.match (/\s/)) {
       return '"' + v.replace (/\//g, '//').replace (/"/g, '/"') + '"';
    }
@@ -406,6 +407,8 @@ cell.respond = function (path, get, put) {
 
    if (teishi.eq (previousValue, currentValue)) return;
 
+   /*
+   clog ();
    clog ();
    pretty ('path', [path]);
    pretty ('context path', [contextPath]);
@@ -413,6 +416,7 @@ cell.respond = function (path, get, put) {
    pretty ('value path', [valuePath]);
    pretty ('previous value', previousValue);
    pretty ('current value', currentValue);
+   */
 
    var pathsToPut = [['p'].concat (targetPath)];
 
@@ -426,11 +430,17 @@ cell.respond = function (path, get, put) {
 
 cell.do = function (op, definitionPath, message, contextPath, get) {
 
+   pretty ('sabbra cadabra', [contextPath]);
+
    var definition = cell.get (definitionPath, contextPath, get);
 
    if (definition.length === 0) return [['error', 'The definition of a sequence must contain a message name and at least one step.']];
 
-   if (type (definition [0] [0]) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+   var messageName = definition [0] [0];
+
+   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+
+   if (messageName === 'seq') return [['error', 'The name of the message cannot be `seq`.']];
 
    if (dale.keys (cell.pathsToJS (definition)).length !== 1) return [['error', 'The definition of a sequence can only contain a single name for its message.']];
 
@@ -441,23 +451,36 @@ cell.do = function (op, definitionPath, message, contextPath, get) {
 
    if (error) return error;
 
-   if (op === 'define') return [[definition [0] [0], teishi.last (definition) [1]]];
+   if (op === 'define') return [[messageName, teishi.last (definition) [1]]];
 
    var output = [];
 
    definition = dale.go (definition, function (v) {return v.slice (1)});
    var length = teishi.last (definition) [0];
    var responses = [];
-   dale.stopNot (dale.times (length, 1), undefined, function (step) {
-      step = dale.fil (definition, undefined, function (path) {
-         if (path [0] === step) return path.slice (1);
+   var tempDataspace = [], modifiedGet = function () {
+      return get ().concat (tempDataspace);
+   }, modifiedPut = function (v) {
+      // clog ('I am putting', v);
+      tempDataspace = v;
+   };
+
+   dale.stopNot (dale.times (length, 1), undefined, function (stepNumber) {
+      var step = dale.fil (definition, undefined, function (path) {
+         if (path [0] === stepNumber) return ['v'].concat (path.slice (1));
       });
+
+      var update = [['p'].concat (contextPath).concat ([':', 'seq', stepNumber])].concat (step);
+      pretty ('update', update);
+      //teishi.clog ('WAIT\n\n');
+      cell.put (update, [], modifiedGet, modifiedPut);
+      //teishi.clog ('DONE\n\n');
       // @ + 1 @ int
       //     2 1
       // call this in the context of contextPath + ':'
       // then, set the result on contextPath + ':', because that's where it goes
 
-      pretty ('step', step);
+      pretty ('now', modifiedGet ());
 
       var response = '...';
       responses.push (response);
@@ -465,10 +488,9 @@ cell.do = function (op, definitionPath, message, contextPath, get) {
    });
 
    output.push (['=', 'foo']);
-   output.push ([':', definition [0] [0]].concat (message));
+   output.push ([':', messageName].concat (message));
    return output;
 }
-
 
 cell.if = function (queryPath, contextPath, get) {
 
@@ -597,6 +619,7 @@ var test = function () {
          [['"i am text', '', '', 'yep"'], [['i am text\n\n\nyep']]],
          ['foo "bar"', [['foo', 'bar']], {nonreversible: true}],
          ['foo "bar yep"', [['foo', 'bar yep']]],
+         ['date 2025-01-01', [['date', '2025-01-01']]],
          ['empty "" indeed', [['empty', '', 'indeed']]],
          [['"just multiline', '', '"'], [['just multiline\n\n']]],
          [['"just multiline', '', '"foo'], [['error', 'No space after a quote in line `"foo`']]],
@@ -1013,6 +1036,14 @@ var test = function () {
          ['invalid', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
          ['invalid', '@', 'do', 1, 1],
          ['ref', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
+         ['ref', '@', 'invalid', 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p invalid', '@ put v @ do seq 1 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['invalid', '=', 'error', 'The name of the message cannot be `seq`.'],
+         ['invalid', '@', 'do', 'seq', 1, 1],
+         ['ref', '=', 'error', 'The name of the message cannot be `seq`.'],
          ['ref', '@', 'invalid', 1],
       ]},
 

@@ -15,7 +15,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 My contention is: if you want to build data systems using AI, you need to do three things:
 
 1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
-2. **Control** the system. AIs, like humans, are fallible and inconsistent. It is very important to have rigid parts in the system that enforce constraints.
+2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that maintain important constraints.
 3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
 
 Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence. This simplicity comes from seven powerups.
@@ -260,10 +260,10 @@ If this is an empty text, return two double quotes.
    if (v.length === 0) return '""';
 ```
 
-If the value is text, and the text "looks" like a number (can start with a minus, can have one or more digits before a dot with a dot (or no dot), and has a bunch of digits after that), we return it surrounded by double quotes.
+If the value is text, and the text "looks" like a number (can start with a minus, can have one or more digits before a dot with a dot (or no dot), and has a bunch of digits after that, and nothing else), we return it surrounded by double quotes.
 
 ```js
-   if (v.match (/^-?(\d+\.)?\d+/) !== null) return '"' + v + '"';
+   if (v.match (/^-?(\d+\.)?\d+$/) !== null) return '"' + v + '"';
 ```
 
 If there is a literal double quote or whitespace inside the element, the element must be surrounded with double quotes. Therefore, we need to do the following:

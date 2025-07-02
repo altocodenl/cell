@@ -1,0 +1,51 @@
+Thirty-eight episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we boldly inch forward and tackle an approach with a modified get and put, to have a "working area", much like Turing's E-squares. Not a slog, not a breakthrough. The only bad session is the one that doesn't happen.
+
+https://github.com/altocodenl/cell
+
+op @ put p foo
+         v bar
+result foo bar
+
+op 1 put p eleven
+         v @ plus1 10
+op 2 put p plus1
+         v @ do int 1 @ + . @ int
+result eleven = 11
+              : int 10
+                seq 1 = 11
+                      @ + 1 = 10
+                            @ int
+              @ plus1 10
+       plus1 = int 1
+             @ do int 1 @ + . @ int
+                            . 1
+
+The goal/challenge: implement the above
+
+- modify cell.respond
+- modify cell.get: we are going to pass a list of "extra" paths to it, that are going to be appended to what get considers to be the dataspace.
+
+
+What's the magic that happens inside eleven?
+
+1: : int 10
+2: : seq 1 @ + 1 @ int
+               2 1
+3: : seq 1 @ + 1 = 10
+                 @ int
+               2 1
+4: : seq 1 = 11
+           @ + 1 = 10
+                 @ int
+               2 1
+5: = 11
+
+current flow:
+- cell.put updates the dataspace
+- cell.put loops through all the paths in the updated dataspace and calls cell.respond on each of them
+- cell.respond calls cell.put for any paths that require to modify the dataspace
+
+
+Interesting consequence: since we only pass one message per call, every reference that's not the message is a free variable.
+
+If the context path when executing is plus1 (instead of eleven), wouldn't this be lexical scope?
