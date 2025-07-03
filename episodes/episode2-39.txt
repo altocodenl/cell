@@ -1,0 +1,45 @@
+Thirty-ninth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we might have seen the light. cell.do can be recursive, after all, if we are smart enough inside of it, and, at the same time, we respect its context. We'll find out soon enough.
+
+https://github.com/altocodenl/cell
+
+How can we do this with the same elegant one-at-a-time algorithm that expands paths one at a time?
+
+For
+eleven = 11
+
+We can check if there's an @ and a :, we look at the last result or the whole shebang and determine what the result is based on :.
+
+For the steps?
+
+First, add the message in :. Also perhaps add the first step on that call.
+
+Let the first step be expanded.
+
+When you go back, you check how many steps. If there is only one, put a second one depending on the result of the first one (no error, no stop).
+
+
+what did we learn, really, on the last 5-7 sessions?
+- we can freeze everything to the right of the leftmost @ do by setting that leftmost @ do as the rightmost one.
+- we can perhaps do this one path at a time.
+
+how?
+
+recursive @ do:
+- we won't have special logic for the =. we'll let the one about @ do decide.
+- decide if this is the first time you go in, by the absence of :. if : doesn't exist, start by putting the message and the first step of the sequence there. stop.
+- if this is not the first time you go in, take the result of the last step. if it has no result, don't do anything, because the result will eventually come.
+- once the last item has a result: if it's a final result (stop/error OR this is the last step in the definition), put it in =. if it's not, put the next step.
+
+How would the data be returned? THis was behind what was tripping me all this time: we'd have to return multiple modifications (multiple paths) at once. How do we do this idempotently?
+
+We can return a list of paths. We then let the caller compare them with what's there and decide whether to call cell.put or not.
+
+We return everything: the @, the : and the =, and let that be compared with what's already there in the caller. End of story.
+
+
+
+
+
+inefficient and correct!
+
+Recursion as self-similarity.
