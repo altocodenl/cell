@@ -1,0 +1,86 @@
+Hello Earth! Silent episode, today. Then we'll move to a talkie.
+
+We're going to think through and implement the logic for the recursive cell.do, which we "saw" last episode.
+
+## 1: We start with:
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1
+
+## 1-1: processing the first path
+
+We realize it's a call (execute), not a definition. Interestingly enough, we don't need to have plus1 processed in any way to use it. We can reference it wholesale.
+
+eleven @ plus1 10
+
+will become:
+
+eleven : int 10
+         seq 1 @ + . @ int
+                   . 1
+       @ plus1 10
+
+Then we start from the top. When we see the three paths starting with `eleven :`, we don't do anything about them. Wait, we do!
+
+eleven : int 10
+(nothing to do here)
+
+eleven : seq 1 @ + . @ int
+
+will become
+
+eleven : seq 1 @ + . = 10
+                     @ int
+
+eleven : seq 1 @ + . 1
+(nothing to do here)
+
+then we need to implement + so that this:
+
+eleven : seq 1 @ + . @ int
+
+will become:
+
+eleven : seq 1 = 11
+               @ ...
+
+But, so far, we've only had to do the first step in cell.do, which is to put the message and the first step in :. That's it.
+
+Now, when we re-enter, we do the following:
+- Count the steps in the definition.
+- If the last expanded step has no result (=), don't do anything, we need to wait until it's resolved. Return.
+- If we are at the last step, or the last expanded step has a stop or an error, we put it as the general = and don't do anything else.
+- Otherwise, put another step from the definition into : N
+
+How do we let the caller when there's no work to do? We could just return nothing. But, for that, we need to get the overall value. But don't we have it already?
+
+Let's continue:
+
+## 1-2: When the result comes to the +, we put it in eleven =, because it's the last one.
+
+But how do we know if things changed? We would have to do the whole thing from scratch again!
+
+Maybe that's possible:
+- Check that the message is the same. If so, move on.
+- Check that the first step is the same (minus expansions). Perhaps, just the @. If it's the same, move on. If not, overwrite and stop.
+
+Is the first step of a sequence always a call?
+
+Implicitly, you could, say, put a hash on 1, or 2, and then reference it like so: @ : 2 foo. It might be better to give it a nicer name, but you could actually do that! You could do something like
+
+@ do 1 superlist foo bar
+                 something else
+
+And then, you skip the @ put p . ...
+
+So, how do we compare what we have to what is there?
+- If the step doesn't have an @ in the first step of one of its paths, compare it literally.
+- Otherwise, compare just the @ and ignore the rest (because those are :).
+
+OK, but now, make it more fun. How do you compare the expansion?
+
+plus1 @ do int . @ + . @ int
+                     . 1
+
+So, whatever is in the first step, you'd have, but you have to filter out any paths that have = replacing an @, because you won't have that now because you haven't done your own expansion yet!

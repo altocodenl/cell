@@ -11,7 +11,6 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 var clog = console.log, type = teishi.type;
 
 var pretty = function (label, paths) {
-   return;
    if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
    teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
 }
@@ -397,6 +396,15 @@ cell.respond = function (path, get, put) {
             if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
          });
          if (call) {
+            /*
+            teishi.clog ('contextPath', contextPath);
+            teishi.clog ('targetPath', targetPath);
+            teishi.clog ('valuePath', valuePath);
+            */
+
+            // this currentValue will be a list of paths with : and perhaps =. Not more than that.
+            // I want to avoid having to copy part of what's there and just add more.
+            // I want to set, for example, : seq 2 to X, rather than having to bring the entire thing back
             currentValue = cell.do ('execute', call.definitionPath, call.message, contextPath, get);
             if (currentValue [0] [0] === '=') targetPath = targetPath.slice (0, -1);
          }
@@ -430,8 +438,6 @@ cell.respond = function (path, get, put) {
 
 cell.do = function (op, definitionPath, message, contextPath, get) {
 
-   pretty ('sabbra cadabra', [contextPath]);
-
    var definition = cell.get (definitionPath, contextPath, get);
 
    if (definition.length === 0) return [['error', 'The definition of a sequence must contain a message name and at least one step.']];
@@ -455,35 +461,33 @@ cell.do = function (op, definitionPath, message, contextPath, get) {
 
    var output = [];
 
+   // If we are executing, we do two things: update : gradually, and return a value for =, which will be put by the caller (cell.respond)
+
    definition = dale.go (definition, function (v) {return v.slice (1)});
    var length = teishi.last (definition) [0];
-   var responses = [];
-   var tempDataspace = [], modifiedGet = function () {
-      return get ().concat (tempDataspace);
-   }, modifiedPut = function (v) {
-      // clog ('I am putting', v);
-      tempDataspace = v;
-   };
+
+   pretty ('def', definition);
+
+   // We check what's there in :.
+
+   var currentExpansion = cell.get (contextPath.concat (':'), [], get);
+   var currentValue = cell.get (contextPath.concat ('='), [], get);
+
+   pretty ('currexp', currentExpansion);
+
+
 
    dale.stopNot (dale.times (length, 1), undefined, function (stepNumber) {
       var step = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return ['v'].concat (path.slice (1));
       });
 
-      var update = [['p'].concat (contextPath).concat ([':', 'seq', stepNumber])].concat (step);
-      pretty ('update', update);
-      //teishi.clog ('WAIT\n\n');
-      cell.put (update, [], modifiedGet, modifiedPut);
-      //teishi.clog ('DONE\n\n');
-      // @ + 1 @ int
-      //     2 1
       // call this in the context of contextPath + ':'
       // then, set the result on contextPath + ':', because that's where it goes
+      var update = [['p'].concat (contextPath).concat ([':', 'seq', stepNumber])].concat (step);
+      pretty ('update', update);
+      cell.put (update, [], modifiedGet, modifiedPut);
 
-      pretty ('now', modifiedGet ());
-
-      var response = '...';
-      responses.push (response);
       if (response [0] === 'error' || response [0] === 'stop') return true;
    });
 
@@ -571,10 +575,7 @@ cell.put = function (paths, contextPath, get, put, updateDialogue) {
    var error = cell.validator (dataspace);
    if (error.length) return error;
 
-   pretty ('before put', get ());
    put (dataspace);
-   pretty ('pathsToPut', paths);
-   pretty ('after put', get ());
 
    dale.stop (dataspace, true, function (path) {
       return cell.respond (path, get, put);
