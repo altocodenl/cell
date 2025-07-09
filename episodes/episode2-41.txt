@@ -1,0 +1,71 @@
+Forty-oneth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, it starts as a slog and then we almost get to working code. It's taking shape.
+
+Unfortunately, the video freezes at minute 37 or so.
+
+https://github.com/altocodenl/cell
+
+TASK 1: INITIAL
+
+This:
+
+eleven @ plus1 10
+plus1 @ do int . @ + . @ int
+                     . 1
+
+Should become:
+
+eleven = 11
+       : int 10
+         seq 1 = 11
+               @ + . = 10
+                     @ int
+                   . 1
+       @ plus1 10
+plus1 = int 1
+      @ do int . @ + . @ int
+                     . 1
+
+TASK 2: CHANGE
+
+If we now set
+
+plus1 @ do num . @ + . @ num
+                     . 2
+
+We will get:
+
+eleven = 12
+       : num 10
+         seq 1 = 12
+               @ + . = 10
+                     @ num
+                   . 2
+       @ plus1 10
+plus1 = num 1
+      @ do num . @ + . @ num
+                     . 2
+
+
+Let's work didactically, and focus first on STEP 1, no updates, we assume the definition at plus1 is fixed.
+
+- The general idea is that you go step by step. You only move to the next step if the previous step is already done properly before in the paths.
+- The moment that we "do" something, we do one thing and stop. We let a future call to cell.do do the remaining work.
+
+More in detail (with no updates):
+- Check if : "<message name>" is there. If it's not, set it and be done.
+- Check if the first step is there. If it's not there, put it there and be done.
+- If the first step is there and it has a result, and it's a stopping result (stop/error), put it as the = to the general thing.
+- Repeat with the second step onwards, until you run out of steps or you have a stopping value.
+
+Now, how would it be with updates?
+
+- Check if : "<message name>" is there. If it's not, set it and be done. If it's there and it changed, remove the other one (or just return the new one) and be done.
+- ??
+
+Something that was torturing me but shouldn't: return a current value with = and :. Solution: return the = value, but not the :. Let the function call : directly. If it does, it will recursively call put and cell.respond, so it should all work in the same recursive, self-similar way.
+
+palos en la rueda:
+- implement + (it's ok)
+- what if a step in a definition is NOT a call? It could just be a literal, in which case we want to take the whole thing, not just what's in the =. We will just check if there's an @ as the first element of the last path, if so, it has to be a call.
+
+I wonder if a path giving you more paths is a sort of algebraically closed group.

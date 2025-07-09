@@ -405,7 +405,8 @@ cell.respond = function (path, get, put) {
             // this currentValue will be a list of paths with : and perhaps =. Not more than that.
             // I want to avoid having to copy part of what's there and just add more.
             // I want to set, for example, : seq 2 to X, rather than having to bring the entire thing back
-            currentValue = cell.do ('execute', call.definitionPath, call.message, contextPath, get);
+            // Solution: return the value for =, but let cell.do modify directly :
+            currentValue = cell.do ('execute', call.definitionPath, call.message, contextPath, get, put);
             if (currentValue [0] [0] === '=') targetPath = targetPath.slice (0, -1);
          }
       }
@@ -436,7 +437,7 @@ cell.respond = function (path, get, put) {
    return true;
 }
 
-cell.do = function (op, definitionPath, message, contextPath, get) {
+cell.do = function (op, definitionPath, message, contextPath, get, put) {
 
    var definition = cell.get (definitionPath, contextPath, get);
 
@@ -459,40 +460,64 @@ cell.do = function (op, definitionPath, message, contextPath, get) {
 
    if (op === 'define') return [[messageName, teishi.last (definition) [1]]];
 
-   var output = [];
+   var output = [['']];
+
+   return output;
 
    // If we are executing, we do two things: update : gradually, and return a value for =, which will be put by the caller (cell.respond)
 
    definition = dale.go (definition, function (v) {return v.slice (1)});
    var length = teishi.last (definition) [0];
 
-   pretty ('def', definition);
-
    // We check what's there in :.
 
    var currentExpansion = cell.get (contextPath.concat (':'), [], get);
    var currentValue = cell.get (contextPath.concat ('='), [], get);
 
+   pretty ('def', definition);
    pretty ('currexp', currentExpansion);
 
+   // First, we do the message name
 
+   // TODO: check for existing, renamed key
+   if (currentExpansion.length === 0) return cell.put ([
+      ['p'].concat (contextPath).concat ([':', messageName]),
+   ].concat (dale.go (message, function (v) {
+      return ['v'].concat (v);
+   })), [], get, put);
 
    dale.stopNot (dale.times (length, 1), undefined, function (stepNumber) {
-      var step = dale.fil (definition, undefined, function (path) {
-         if (path [0] === stepNumber) return ['v'].concat (path.slice (1));
+
+      var stepInExecution = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+
+      var stepInDefinition = dale.fil (definition, undefined, function (path) {
+         if (path [0] === stepNumber) return path.slice (1);
       });
 
-      // call this in the context of contextPath + ':'
-      // then, set the result on contextPath + ':', because that's where it goes
-      var update = [['p'].concat (contextPath).concat ([':', 'seq', stepNumber])].concat (step);
-      pretty ('update', update);
-      cell.put (update, [], modifiedGet, modifiedPut);
+      if (stepInExecution.length === 0) return cell.put ([
+         ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
+      ].concat (dale.go (stepInDefinition, function (v) {
+         return ['v'].concat (v);
+      })), [], get, put);
 
-      if (response [0] === 'error' || response [0] === 'stop') return true;
+      // TODO: here, compare if step in definition is different from step in execution. If so, replace it and be done. Combine that with the put above, to save lines.
+
+      var isLiteral = teishi.last (stepInExecution) [0] !== '@';
+      var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
+      if (! isLiteral) existingValuePath.push ('=');
+
+      var existingValue = cell.get (existingValuePath);
+
+      // No value yet, give up!
+      if (existingValue.length === 0) return true;
+
+      if (['error', 'stop'].includes (existingValue [0] [0])) {
+         // We have a stopping value!
+         output = existingValue;
+         return true;
+      }
    });
 
-   output.push (['=', 'foo']);
-   output.push ([':', messageName].concat (message));
    return output;
 }
 
@@ -1088,6 +1113,20 @@ var test = function () {
           ['plus1', '=', 'int', 1],
           ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
           ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
+      ]},
+
+      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['eleven', '=', 12],
+          ['eleven', ':', 'int', 10],
+          ['eleven', ':', 'seq', 1, '=', 12],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
+          ['eleven', ':', 'seq', 1, '@', '+', 2, 2],
+          ['eleven', '@', 'plus1', 10],
+          ['plus1', '=', 'int', 1],
+          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
+          ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 2],
       ]},
 
    ], false, function (test) {

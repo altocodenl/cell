@@ -1,3 +1,5 @@
+Fortieth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, slow progress with the recursive definition of cell.do.
+
 Hello Earth! Silent episode, today. Then we'll move to a talkie.
 
 We're going to think through and implement the logic for the recursive cell.do, which we "saw" last episode.
