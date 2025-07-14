@@ -1,0 +1,6 @@
+Forty-second episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, the breakthrough. The ideas of the previous episode, plus the equal-and-colon-stripper idea for comparison, are getting the job done. We need to implement addition. And clean up the code while annotating it, because it's quite unreadable now. But we have our breakthrough. This is going to work!
+
+https://github.com/altocodenl/cell
+
+- Cleaning mechanism: for every path that has a = or :, look ahead to see if there's one with @ and the same prefix. If so, don't return it (filter it out). The lookahead will be quite efficient because it will be afterwards, not far, just start with the current index onwards. Do it on the leftmost, re-enter. Then you have the actual definitions. Then, compare that. If it's the same, carry on, if it's not, overwrite fully. If not fully, doesn't matter, it will be picked up by the recursive call to cell.do, but perhaps easier to do it right away? Nah.
+- Literals can have calls afterwards, use the cleaning mechanism on it as well. This also goes for the message.

@@ -206,6 +206,8 @@ TODO: everything :)
 - automatic email by project
 - local vs remote reference
 
+macros: can be completely runtime, in the language. we can use `replace`, which takes a `target`, `what` and `with`. `@@` are like lisp commas, that turn off the quoting, so you can resolve references at define time.
+
 ### departures of cell from lisp
 
 - Include hashes as a base type

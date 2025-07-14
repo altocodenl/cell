@@ -1,3 +1,5 @@
+// Section 1.4
+
 (mapcar
    fn
    (do*
@@ -15,11 +17,14 @@ var map1_n = function (fn, n) {
    });
 }
 
-"map 1 to n" @ do fn n @ loop do @ fn
-                              times @ n
+"map 1 to n" @ do m . @ loop do @ m fn
+                             times @ m n
 
-@ "map 1 to n" fn @ do n @ + 1 @ n
-               n 10
+= 1 2
+  2 3
+@ "map 1 to n" fn @ do n @ + . @ n
+                               1
+               n 2
 
 (do
    ((x a (+ 1 x)))
@@ -33,9 +38,9 @@ var do_ab = function (a, b) {
    });
 }
 
-"do a b" @ : m @ loop call @ : v @ print @ v
-                      times @ - 1 @ m b
-                                2 @ m a
+"do a b" @ do m @ loop call @ do v @ print @ v
+                       times @ - 1 @ m b
+                                 2 @ m a
 
 (defun double (x) (* x 2))
 

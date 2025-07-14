@@ -1,4 +1,4 @@
-Forty-oneth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, it starts as a slog and then we almost get to working code. It's taking shape.
+Forty-first episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, it starts as a slog and then we almost get to working code. It's taking shape.
 
 Unfortunately, the video freezes at minute 37 or so.
 
