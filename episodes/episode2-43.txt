@@ -1,0 +1,8 @@
+Forty-third episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we improve the feng shui of the whole thing by annotating the source code for `cell.respond`, taking the time to understand what is already working. We have at least one more session of this.
+
+https://github.com/altocodenl/cell
+
+- Clean everything up: annotate source code (cell.respond and cell.do).
+- Figure out + and other native functions.
+
+I had to discover a recursive pattern twice in cell.respond. First, with doing only the rightmost @s, one at a time. And then, with cell.do, in doing the steps of the expansion also one at a time.

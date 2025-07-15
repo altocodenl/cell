@@ -11,7 +11,6 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 var clog = console.log, type = teishi.type;
 
 var pretty = function (label, paths) {
-   return;
    if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
    teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
 }
@@ -368,7 +367,7 @@ cell.respond = function (path, get, put) {
 
    var leftmostAt  = path.indexOf ('@');
    var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
-   // Make the leftmost @ do be the rightmost @
+
    dale.stopNot (path, undefined, function (v, k) {
       if (v === '@' && path [k + 1] === 'do') return rightmostAt = k;
    });
@@ -383,15 +382,10 @@ cell.respond = function (path, get, put) {
       var currentValue = cell.if (targetPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
    }
    else if (valuePath [0] === 'do') {
-      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), null, contextPath, get);
+      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), contextPath, null, get);
    }
    // TODO: move this to an area of cell calls
    else if (valuePath [0] === '+') {
-      /*
-      teishi.clog ('debug path', path);
-      teishi.clog ('debug where', targetPath.slice (0, -1).concat (['@', '+']));
-      pretty ('gimme', cell.get (targetPath.slice (0, -1).concat (['@', '+']), [], get));
-      */
       var currentValue = [[5]];
    }
    else {
@@ -401,37 +395,14 @@ cell.respond = function (path, get, put) {
             var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
             if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
          });
-         if (call) {
-            /*
-            teishi.clog ('contextPath', contextPath);
-            teishi.clog ('targetPath', targetPath);
-            teishi.clog ('valuePath', valuePath);
-            */
 
-            // this currentValue will be a list of paths with : and perhaps =. Not more than that.
-            // I want to avoid having to copy part of what's there and just add more.
-            // I want to set, for example, : seq 2 to X, rather than having to bring the entire thing back
-            // Solution: return the value for =, but let cell.do modify directly :
-            currentValue = cell.do ('execute', call.definitionPath, call.message, contextPath, get, put);
-            if (currentValue [0] [0] === '=') targetPath = targetPath.slice (0, -1);
-         }
+         if (call) currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
       }
    }
 
    if (currentValue.length === 0) currentValue = [['']];
 
    if (teishi.eq (previousValue, currentValue)) return;
-
-   /*
-   clog ();
-   clog ();
-   pretty ('path', [path]);
-   pretty ('context path', [contextPath]);
-   pretty ('target path', [targetPath]);
-   pretty ('value path', [valuePath]);
-   pretty ('previous value', previousValue);
-   pretty ('current value', currentValue);
-   */
 
    var pathsToPut = [['p'].concat (targetPath)];
 
@@ -443,7 +414,22 @@ cell.respond = function (path, get, put) {
    return true;
 }
 
-cell.do = function (op, definitionPath, message, contextPath, get, put) {
+cell.if = function (queryPath, contextPath, get) {
+
+   var paths = cell.get (queryPath, contextPath, get);
+
+   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
+   if (teishi.v (['topLevelKeys', topLevelKeys, ['cond', 'do', 'else'], 'eachOf', teishi.test.equal], true) !== true) return [['error', 'An if call has to be a hash with keys `cond`, `do` and `else`.']];
+   if (topLevelKeys.indexOf ('cond') === -1) return [['error', 'An if call has to contain a `cond` key.']];
+
+   var cond = cell.get (queryPath.concat ('cond'), contextPath, get);
+   var result = dale.fil (cond [0], '=', function (v) {return v})
+   var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
+
+   return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
+}
+
+cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    var definition = cell.get (definitionPath, contextPath, get);
 
@@ -481,8 +467,8 @@ cell.do = function (op, definitionPath, message, contextPath, get, put) {
       if (path [0] !== 'seq') return path;
    });
 
-   pretty ('def', definition);
-   pretty ('currexp', currentExpansion);
+   //pretty ('def', definition);
+   // pretty ('currexp', currentExpansion);
 
    // Strip : and = from a set of paths
    var stripper = function (paths) {
@@ -518,8 +504,8 @@ cell.do = function (op, definitionPath, message, contextPath, get, put) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 
-      pretty ('step in exec', stepInExecution);
-      pretty ('step in def', stepInDefinition);
+      //pretty ('step in exec', stepInExecution);
+      //pretty ('step in def', stepInDefinition);
 
       if (! teishi.eq (stripper (stepInExecution), stripper (stepInDefinition))) return cell.put ([
          ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
@@ -546,21 +532,6 @@ cell.do = function (op, definitionPath, message, contextPath, get, put) {
    return output;
 }
 
-cell.if = function (queryPath, contextPath, get) {
-
-   var paths = cell.get (queryPath, contextPath, get);
-
-   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
-   if (teishi.v (['topLevelKeys', topLevelKeys, ['cond', 'do', 'else'], 'eachOf', teishi.test.equal], true) !== true) return [['error', 'An if call has to be a hash with keys `cond`, `do` and `else`.']];
-   if (topLevelKeys.indexOf ('cond') === -1) return [['error', 'An if call has to contain a `cond` key.']];
-
-   var cond = cell.get (queryPath.concat ('cond'), contextPath, get);
-   var result = dale.fil (cond [0], '=', function (v) {return v})
-   var truthy = (cond.length === 0 || teishi.eq (result, [0]) || teishi.eq (result, [''])) ? false : true;
-
-   return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
-}
-
 cell.get = function (queryPath, contextPath, get) {
    var dataspace = get ();
 
@@ -583,7 +554,7 @@ cell.get = function (queryPath, contextPath, get) {
 
 cell.put = function (paths, contextPath, get, put, updateDialogue) {
 
-   pretty ('paths to put', paths);
+   //pretty ('paths to put', paths);
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
    if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];

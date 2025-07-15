@@ -236,7 +236,9 @@ macros: can be completely runtime, in the language. we can use `replace`, which 
 
 ### cell.js
 
-This function takes a value `v` that's either a number or text. We know it is a number or text because we only pass to it path elements, which by design can only be text or number. It will then return the text that, when parsed, becomes the element.
+#### `cell.unparseElement`
+
+`unparseElement` takes a value `v` that's either a number or text. We know it is a number or text because we only pass to it path elements, which by design can only be text or number. It will then return the text that, when parsed, becomes the element.
 
 for example: a number `1` becomes `1`; a text `1` becomes `"1"`; a text ` ` becomes `" "`. In essence, the unparser adds back non-literal quotes and slashes that escape literal quotes.
 
@@ -287,7 +289,11 @@ Otherwise, we return the original text.
    }
 ```
 
+#### `cell.textToPaths`
+
 This function takes a `message`, which is text, and returns an array of paths. If it finds a parsing error, it will also return it as a list of paths with one path, where the first element of that path is the text `error`.
+
+This is the main parsing function.
 
 ```js
 cell.textToPaths = function (message) {
@@ -795,119 +801,203 @@ If we are here, the parsing was successful. We return `paths` and close `textToP
 }
 ```
 
-// LONG UNCOMMENTED FRAGMENT
+#### `cell.dedotter`
+
+TODO
+
+#### `cell.sorter`
+
+TODO
+
+#### `cell.pathsToText`
+
+TODO
+
+#### `cell.JSToPaths`
+
+TODO
+
+#### `cell.pathsToJS`
+
+TODO
+
+#### `cell.validator`
+
+TODO
+
+#### `cell.call`
+
+TODO
+
+#### `cell.respond`
 
 We now define `cell.respond`, a function that will be called by `cell.put` when an update takes place. This function expands calls, that is: it takes the response to any calls and puts them in the dataspace.
 
-This function takes just two arguments: `get`, a storage-layer function that gives us the entire dataspace, and `put`, which is the same but for updating the dataspace.
+This function takes three arguments: a `path`, `get`, a storage-layer function that gives us the entire dataspace, and `put`, which is the same but for updating the dataspace.
 
 ```js
-cell.respond = function (get, put) {
+cell.respond = function (path, get, put) {
 ```
 
-We get the entire dataspace.
+If there is no `@` in this path, there are no calls. Therefore, there's nothing to do, so we ignore this path.
 
 ```js
-   var dataspace = get ();
+   if (path.indexOf ('@') === -1) return;
 ```
 
-The outermost structure of the function is a loop that goes over each `path` on the dataspace and stops at the first change it finds. We will use `true` to signal that a change has happened, as our way to stop.
+We define two variables, each of them with an index. `leftmostAt` will have the index of the leftmost `@`. And `rightmostAt` will have the index of the rightmost `@`.
+
+Note we reverse a copy of `path` so that we can search from the left, then do a bit of math to figure out what the actual index is coming from the right.
 
 ```js
-   dale.stop (dataspace, true, function (path) {
+   var leftmostAt  = path.indexOf ('@');
+   var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
 ```
 
-If there are no `@` in this path, there are no calls. There's nothing to do, so we ignore this path.
+We go through the entire path, finding the leftmost `@` step that has a `do` step immediately after it. If we find it, we set `rightmostAt` to the index of that `@`.
+
+Why do we do this? In effect, what we are doing is considering the leftmost `@ do` as the *first* thing we want to expand. We want to avoid expanding a definition here -- that's going to be the job of `cell.do`, which we'll call in a few lines.
 
 ```js
-      if (path.indexOf ('@') === -1) return;
+   dale.stopNot (path, undefined, function (v, k) {
+      if (v === '@' && path [k + 1] === 'do') return rightmostAt = k;
+   });
 ```
 
-We define a `contextPath`, which is the prefix (everything to the left) of the first `@` in the path.
+Three very important variables, all of them paths:
+
+- The **context path** is everything to the left of `leftmostAt`. That is, everything that's not a reference, is our context.
+- The **target path** is everything to the left of `rightmostAt`, plus an `=`. This is the common prefix of all the paths we are going to create or update. Think of it as the left part of our assignment. If the path we are looking at is `foo @ ...`, then we know that all the paths we will set are going to be of the shape `foo = ...`.
+- The **value path** is everything to the right of `rightmostAt`. This is the right part of our assignment, where we're getting the value from. Note we actually remove any `=` from it; this allows us to "go get" the values of calls that have been responded already.
+
 
 ```js
-      var contextPath = path.slice (0, path.indexOf ('@'));
-```
-
-We find the index of the rightmost `@`. Note we reverse a copy of `path` so that we can search from the left, then do a bit of math to figure out what the actual index is coming from the right.
-
-```js
-      var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
-```
-
-We define `queryPath` to be everything to the left of the rightmost `@`. We also add an `=` to its end. This is the path where we will set the value. We call it `queryPath` because we will also get/query its value to see if it's what it should be.
-
-```js
-      var queryPath   = path.slice (0, rightmostAt).concat ('=');
-```
-
-`valuePath` is the suffix of the rightmost `@`, that is: everything to the right of the last `@`. This is going to be the path where we look for the value that should go into `queryPath`. Notice that we remove any `=` steps from it, since we want to "jump over" them. This enables indirect references.
-
-```js
-      var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
+   var contextPath = path.slice (0, leftmostAt);
+   var targetPath  = path.slice (0, rightmostAt).concat ('=');
+   var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 ```
 
 Now, you may be asking: what happens when a path has *two* (or more) `@`s? How do we deal with these paths, if our logic just looks at the rightmost `@` only? The answer is the following: the rightmost `@` will get a new path on top of it that has an `=`. It is this path that will get the next-to-last rightmost `@` expanded. This can happen until all `@`s in one path get expanded, path by path, onto one that has only `=`s.
 
-We get the previous value (the value at `queryPath`). A subtle and important details: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
+We get the previous value (the value at `targetPath`). A subtle and important detail: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js
-      var previousValue = cell.get (queryPath, contextPath, get);
+   var previousValue = cell.get (targetPath, contextPath, get);
 ```
 
-We get the `currentValue` (the value at `valuePath`). We also pass `contextPath`. Note that if we find an `if` just after the `@`, we will call `cell.if`, passing to it the `queryPath` minus the `=`, plus `@` and `if` - this path is the path to get the data for the `if`.
+We will now discover what the `currentValue` (that is, a list of paths that will have the prefix of `targetPath`), should be.
+
+We first deal with the case where there's an `if` at the beginning of `valuePath`. We do so by invoking `cell.if`. To this function, we pass the `targetPath`, minus the `=` at its end, plus a `@ if`. So, for example, if `targetPath` is `foo =`, we will pass `foo @ if`. We also pass `contextPath`.
+
+`cell.if` will return a list of paths that we store in `currentValue`.
+
+```js
+   if (valuePath [0] === 'if') {
+      var currentValue = cell.if (targetPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+   }
+```
+
+If there's a `do` at the beginning of `valuePath`, this is a sequence definition. We then invoke `cell.do` and save the paths returned by it in `currentValue`.
+
+As for the arguments we pass to `cell.do`, we pass a `define` text to let it know this is a definition (not an execution). We also pass a modified `targetPath` (like we did to `cell.if`) except that it would be instead `foo @ do`. We also pass a `null` that is a placeholder for something we'll only need when `executing` a call.
+
+```js
+   else if (valuePath [0] === 'do') {
+      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), contextPath, null, get);
+   }
+```
 
 Otherwise, we just call `cell.get` directly.
 
 ```js
-      if (valuePath [0] === 'if') {
-         var currentValue = cell.if (queryPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
-      }
-      else {
-         var currentValue = cell.get (valuePath, contextPath, get);
-      }
+   else {
+      var currentValue = cell.get (valuePath, contextPath, get);
 ```
 
-If we got no paths in `currentValue`, we set it to a single path with a single empty text.
+Now for the interesting bit. If we get no paths from our call to `cell.get`, there could be a sequence call in the `valuePath`. So we are going to figure out if that's the case.
 
 ```js
-      if (currentValue.length === 0) currentValue = [['']];
+      if (currentValue.length === 0) {
+```
+
+Imagine that our `valuePath` is something like this: `bar 10`. Imagine that `bar` is a sequence, defined elsewhere, that takes a single number as its message. This could be a sequence call!
+
+Now imagine that we have a path that is `bar cocktail 5`. We may have `bar cocktail` defined as a sequence (and we'd pass `5` as its message) or we may have `bar` as a sequence (and we'd pass `cocktail 5`) as a message. All we know is that, if any of these is a possible call, there has to be a valid point in which to split the left part from the right part.
+
+So we are going to find out like this: we are going to iterate as many times as there are steps in `valuePath`. We start by getting the `valuePath`, chopping of n elements (starting with `n` as `1`), and concatenating `@ do` to that path. We then `cell.get` that path, using our `contextPath`.
+
+If we didn't get something, we just keep on trying until the iteration finishes.
+
+If we did get something, that means that we found a prefix of `valuePath` where there's a sequence definition. We will consider that to be our `definitionPath` and consider whatever is to its right (in the `valuePath`) to be the `message`.
+
+```js
+         var call = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
+            var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
+            if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
+         });
+```
+
+If there is indeed a call to a sequence in our `valuePath`, we invoke `cell.do`, passing the `definitionPath`, the `contextPath`, and the message (whatever is to the right of `definitionPath` inside `valuePath`.
+
+```js
+         if (call) {
+            currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+```
+
+`cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate it.
+
+```js
+         if (call) currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+      }
+   }
+```
+
+By now, we have a `currentValue`. If we got no paths in `currentValue`, we set it to a single path with a single empty text. This will allow us to have paths like `foo = ""`, which is more illustrative (and correct) thatn `foo =`.
+
+```js
+   if (currentValue.length === 0) currentValue = [['']];
 ```
 
 If the previous value and the current value are the same, we don't have to do anything, so we return.
 
 ```js
-      if (teishi.eq (previousValue, currentValue)) return;
+   if (teishi.eq (previousValue, currentValue)) return;
 ```
 
 If we're here, we will update the dataspace. We create `pathsToPut`, with the paths that we will pass to `cell.put`.
 
 ```js
-      var pathsToPut = [['p'].concat (queryPath)];
+   var pathsToPut = [['p'].concat (targetPath)];
 ```
 
 We iterate the paths in `currentValue`, prepend them with `v` and add them to `pathsToPush`.
 
 
 ```js
-      dale.go (currentValue, function (path) {
-         pathsToPut.push (['v'].concat (path));
-      });
+   dale.go (currentValue, function (path) {
+      pathsToPut.push (['v'].concat (path));
+   });
 ```
 
-We call `cell.put` with `pathsToPut` as `paths` and an empty context path. We then return `true` to stop the iteration.
+We call `cell.put` with `pathsToPut` as `paths` and an empty context path.
 
 ```js
-      cell.put (pathsToPut, [], get, put);
-      return true;
+   cell.put (pathsToPut, [], get, put);
+```
+
+We then return `true` to stop the iteration. What iteration, you may ask? Well, `cell.put` is calling `cell.respond` on each of the paths of the dataspace, one at a time. When one of these calls to `cell.respond` triggers a call to `cell.put`, we don't want the outer call to `cell.put` redoing all the work; we'll just leave that to the inner call to `cell.put`. Returning `true` is a way to stop the outer loop. This is only done for efficiency purposes.
+
+```js
+   return true;
 ```
 
 This finishes the loop and the function.
 
 ```js
-   });
 }
 ```
+
+#### `cell.if`
 
 We now define `cell.if`, the function that performs conditional logic. It takes three arguments:
 
@@ -966,6 +1056,12 @@ This closes the function.
    return cell.get (queryPath.concat (truthy ? 'do' : 'else'), contextPath, get);
 }
 ```
+
+#### `cell.do`
+
+
+
+#### `cell.get`
 
 We now define `cell.get`, which performs `reference` for us. It takes three arguments:
 
@@ -1044,7 +1140,9 @@ We return the matches or an empty array (in case there were none). This closes t
 }
 ```
 
-`put` is the function that adds data to the dataspace. It takes a whopping five arguments.
+#### `cell.put`
+
+`cell.put` is the function that adds data to the dataspace. It takes a whopping five arguments.
 
 - `paths`: the paths to write to the dataspace.
 - `contextPath`: the path where we're currently standing. For calls that come from outside, this will be an empty list. The exact same as what `cell.get` receives.
