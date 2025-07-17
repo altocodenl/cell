@@ -437,7 +437,7 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    var messageName = definition [0] [0];
 
-   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a textual name for its message.']];
 
    if (messageName === 'seq') return [['error', 'The name of the message cannot be `seq`.']];
 
@@ -447,30 +447,12 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    var error = dale.stopNot (definition, undefined, function (path, k) {
       if (definition [k - 1] && path [1] - 1 > definition [k - 1] [1]) return [['error', 'The definition of a sequence cannot have non-consecutive steps.']];
    });
-
    if (error) return error;
 
    if (op === 'define') return [[messageName, teishi.last (definition) [1]]];
 
    var output = [['']];
 
-   // If we are executing, we do two things: update : gradually, and return a value for =, which will be put by the caller (cell.respond)
-
-   definition = dale.go (definition, function (v) {return v.slice (1)});
-   var length = teishi.last (definition) [0];
-
-   // We check what's there in :.
-
-   var currentExpansion = cell.get (contextPath.concat (':'), [], get);
-   var currentValue = cell.get (contextPath.concat ('='), [], get);
-   var currentMessage = dale.fil (currentExpansion, undefined, function (path) {
-      if (path [0] !== 'seq') return path;
-   });
-
-   //pretty ('def', definition);
-   // pretty ('currexp', currentExpansion);
-
-   // Strip : and = from a set of paths
    var stripper = function (paths) {
       return dale.fil (paths, undefined, function (path, pathIndex) {
          var firstEqualOrColon = dale.stopNot (path, undefined, function (v, k) {
@@ -478,13 +460,18 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
          });
          if (firstEqualOrColon === undefined) return path;
          var lookaheadCall = dale.stop (paths.slice (pathIndex), true, function (lookaheadPath) {
-            return teishi.eq (lookaheadPath.slice (0, pathIndex), path.slice (0, pathIndex));
+            return teishi.eq (lookaheadPath.slice (0, firstEqualOrColon + 1), path.slice (0, firstEqualOrColon).concat ('@'));
          });
          if (! lookaheadCall) return path;
       });
    }
 
-   if (! teishi.eq (stripper (currentMessage), stripper (dale.go (message, function (path) {
+   var previousExpansion = cell.get (contextPath.concat (':'), [], get);
+   var previousMessage = dale.fil (previousExpansion, undefined, function (path) {
+      if (path [0] !== 'seq') return path;
+   });
+
+   if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
       cell.put ([
@@ -496,34 +483,30 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
       return output;
    }
 
-   dale.stopNot (dale.times (length, 1), undefined, function (stepNumber) {
+   definition = dale.go (definition, function (v) {return v.slice (1)});
+   var sequenceLength = teishi.last (definition) [0];
 
-      var stepInExecution = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+   dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 
-      var stepInDefinition = dale.fil (definition, undefined, function (path) {
+      var previousStep = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+
+      var currentStep = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 
-      //pretty ('step in exec', stepInExecution);
-      //pretty ('step in def', stepInDefinition);
-
-      if (! teishi.eq (stripper (stepInExecution), stripper (stepInDefinition))) return cell.put ([
+      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
          ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
-      ].concat (dale.go (stepInDefinition, function (v) {
+      ].concat (dale.go (currentStep, function (v) {
          return ['v'].concat (v);
       })), [], get, put);
 
-      var isLiteral = teishi.last (stepInExecution) [0] !== '@';
       var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
-      if (! isLiteral) existingValuePath.push ('=');
-
+      if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
       var existingValue = cell.get (existingValuePath, [], get);
 
-      // No value yet, give up and come back later!
       if (existingValue.length === 0) return true;
 
-      if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === length) {
-         // We have a stopping value!
+      if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === sequenceLength) {
          output = existingValue;
          return true;
       }
@@ -553,8 +536,6 @@ cell.get = function (queryPath, contextPath, get) {
 }
 
 cell.put = function (paths, contextPath, get, put, updateDialogue) {
-
-   //pretty ('paths to put', paths);
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
    if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
@@ -1057,9 +1038,9 @@ var test = function () {
 
       {f: cell.call, input: ['@ put p invalid', '@ put v @ do 1 1'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
+         ['invalid', '=', 'error', 'The definition of a sequence must contain a textual name for its message.'],
          ['invalid', '@', 'do', 1, 1],
-         ['ref', '=', 'error', 'The definition of a sequence must contain a name for its message.'],
+         ['ref', '=', 'error', 'The definition of a sequence must contain a textual name for its message.'],
          ['ref', '@', 'invalid', 1],
       ]},
 

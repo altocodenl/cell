@@ -1059,7 +1059,260 @@ This closes the function.
 
 #### `cell.do`
 
+We now define `cell.do`, the function in charge of two things: 1) giving back the result (`=`) of the call to a sequence; 2) performing the expansion (`:`) of the call to a sequence.
 
+As for the arguments:
+
+- `op` can be either `'define'` or `'execute'`.
+- `definitionPath` is the path where the sequence is defined, which we'll use to get its definition (which is, really, its value).
+- `contextPath` is the context path, always.
+- `message` is present only for the case when `op` is `'execute'`. It is the message sent in the call to the sequence.
+
+```js
+cell.do = function (op, definitionPath, contextPath, message, get, put) {
+```
+
+We start by getting the `definition` to the sequence. Note we pass the `contextPath`.
+
+```js
+   var definition = cell.get (definitionPath, contextPath, get);
+```
+
+If the definition is empty, we return an error.
+
+```js
+   if (definition.length === 0) return [['error', 'The definition of a sequence must contain a message name and at least one step.']];
+```
+
+We expect that every definition of a sequence has a single text step sandwiched between `@ do` and the list of steps of the sequence. For example: `@ do message_name 1 ...`.
+
+We get the name of the message. If it's not text, we return an error.
+
+```js
+   var messageName = definition [0] [0];
+   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+```
+
+We forbid `seq` to be the name of the message. We already are going to use `seq` to show the expansion of each step of the sequence, and we want to avoid overwriting it.
+
+```js
+   if (messageName === 'seq') return [['error', 'The name of the message cannot be `seq`.']];
+```
+
+We forbid that there should be multiple messages.
+
+```js
+   if (dale.keys (cell.pathsToJS (definition)).length !== 1) return [['error', 'The definition of a sequence can only contain a single name for its message.']];
+```
+
+The definition of a sequence has to start with a list that starts at element 1. We also check that the sequence has only consecutive steps. If any of these conditions is violated, we return an error.
+
+```js
+   if (definition [0] [1] !== 1) return [['error', 'The definition of a sequence must start with step number 1.']];
+   var error = dale.stopNot (definition, undefined, function (path, k) {
+      if (definition [k - 1] && path [1] - 1 > definition [k - 1] [1]) return [['error', 'The definition of a sequence cannot have non-consecutive steps.']];
+   });
+   if (error) return error;
+```
+
+If we're just defining the sequence, we return a single path that has two steps: the message name and the number of steps in the sequence.
+
+```js
+   if (op === 'define') return [[messageName, teishi.last (definition) [1]]];
+```
+
+If we are here, we are executing a sequence. We start by defining `output` to be a single path with a single step (an empty text).
+
+```js
+   var output = [['']];
+```
+
+If we are executing a sequence, we need to do two things. We need to compute the expansion of this execution, and we need to return a value for its response. We are not going to do this at once, but by steps. This is not unlike the way that `cell.respond` gradually expands paths that have multiple calls.
+
+We have already decided that the final value (response) to the execution will be returned in `output`. We have also decided that any changes to the expansion will be performed not by returning those, but rather by calling `cell.put` directly.
+
+If we think of our requirements for a `cell.do` execution, they are the following:
+- Put the message in `:` using the message name and the actual value of it.
+- Take the steps in the definition and expand them one at a time. If one of them responds with a path that starts with `stop` or `error`, we stop and don't go further.
+- Take the value of the last step of the sequence and return that as `output`.
+
+There are two more things that makes this even trickier:
+- We must "wait" until any recursive calls (`@`s to the right, in our message or our steps) have results.
+- The definition can be updated, so we need to ensure that we are using the latest one.
+
+How are we going to tackle all of this? It took a while to figure out. Here it is:
+
+- We consider the message to be a sort of step zero of the definition. Basically, we treat it like a step.
+- We write a function `stripper` that takes the message, or a step of the sequence, and removes everything that's either an expansion or a response from it. This allows us to compare two sets of paths and decide whether the definition used is correct or stale.
+- We run each of the steps (starting with the message) through the stripper and compare them to the definition. If one is different, we replace it with the one from the definition and stop - a later call will proceed with the work. When we stop, we return that empty `output` we defined above. Otherwise, we carry on.
+- If we make it all the way to the end, or find a stopping value (`stop` or `error`), we have a response, so we return `output`.
+
+Let's define `stripper`:
+
+```js
+   var stripper = function (paths) {
+```
+
+For a change, we have implemented this function quite efficiently. Because responses (`=`) and expansions (`:`) are before its calls (`@`), we can look ahead to see if there's a path that has the same prefix and an `@`, and if so we just filter out the path with `=` or `:`. Note we don't filter out paths with `=` or `:` that don't have those keys coming from calls (you might have literal colons or equals).
+
+```js
+      return dale.fil (paths, undefined, function (path, pathIndex) {
+```
+
+We track the index of the first equal or colon. If there's none, we don't ignore this path.
+
+```js
+         var firstEqualOrColon = dale.stopNot (path, undefined, function (v, k) {
+            if (v === '=' || v === ':') return k;
+         });
+         if (firstEqualOrColon === undefined) return path;
+```
+
+We look ahead to find a path with a similar prefix plus an `@`. Note that we only look for paths after `pathIndex` -- we just look ahead.
+
+
+```js
+         var lookaheadCall = dale.stop (paths.slice (pathIndex), true, function (lookaheadPath) {
+```
+
+When comparing against the lookahead path, we slice the prefix plus one (which should be the `@`) and compare it to our own prefix plus the equal or colon concatenated with `@`.
+
+```js
+            return teishi.eq (lookaheadPath.slice (0, firstEqualOrColon + 1), path.slice (0, firstEqualOrColon).concat ('@'));
+         });
+```
+
+if there's no lookahead call, we return this path. Otherwise, we don't and therefore, filter it out. This closes the outer loop and the function.
+
+```js
+         if (! lookaheadCall) return path;
+      });
+   }
+```
+
+We get the previous expansion by getting what's currently at `contextPath` plus `:`. From there, we remove `seq` and just get the previous message.
+
+```js
+   var previousExpansion = cell.get (contextPath.concat (':'), [], get);
+   var previousMessage = dale.fil (previousExpansion, undefined, function (path) {
+      if (path [0] !== 'seq') return path;
+   });
+```
+
+We compare the stripped previous message with the stripped message we received as an argument.
+
+```js
+   if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
+      return [messageName].concat (path);
+   })))) {
+```
+
+If they are not the same, that can be because of two reasons:
+
+1. This is the first time that this call is being responded.
+2. The message name, or its value, changed.
+
+In both cases, the required action is the same: we will then set `contextPath` plus `:` to the new message. We do this through a direct call to `cell.put`.
+
+```js
+      cell.put ([
+         ['p'].concat (contextPath).concat (':'),
+      ].concat (dale.go (message, function (v) {
+         return ['v', messageName].concat (v);
+      })), [], get, put);
+```
+
+We then return `output` (which will be a single path with an empty text) and close the case where the message has changed.
+
+```js
+      return output;
+   }
+```
+
+If we are here, we're ready to look at the steps of the sequence. We start by stripping the first step out of the paths of the definition, since they are all the message name, for which we no longer have use.
+
+```js
+   definition = dale.go (definition, function (v) {return v.slice (1)});
+```
+
+We also note the length of the sequence.
+
+```js
+   var sequenceLength = teishi.last (definition) [0];
+```
+
+We are ready to start iterating the steps of the sequence.
+
+We will iterate up to n times, where `n` is the length of the sequence. We will use anything that's not `undefined` as a way to break out of the loop early.
+
+```js
+   dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
+```
+
+The previous step is the step already stored at `contextPath` plus `: seq <step number>`. It's "previous" in the same way we earlier referred to `previousExpansion` vs `currentExpansion`, not as in step `n - 1`.
+
+```js
+      var previousStep = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+```
+
+We also get the current step from the definition, slicing the number from the front.
+
+```js
+      var currentStep = dale.fil (definition, undefined, function (path) {
+         if (path [0] === stepNumber) return path.slice (1);
+      });
+```
+
+As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`.
+
+```js
+      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
+         ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
+      ].concat (dale.go (currentStep, function (v) {
+         return ['v'].concat (v);
+      })), [], get, put);
+```
+
+Note that in the body of the conditional above, we are returning the result of `cell.put`, which will stop the loop early because it's not `undefined`.
+
+We will now get the value of this step. To do this, we need to:
+
+- See if the value of the step contains a call.
+- If it does, concatenate a `=` to its path, so we can get the proper value.
+- If it doesn't, the step itself is the value.
+
+```js
+      var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
+      if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
+      var existingValue = cell.get (existingValuePath, [], get);
+```
+
+If there's no value yet (because the call hasn't been expanded), just give up (by returning `true`) and come back later.
+
+```js
+      if (existingValue.length === 0) return true;
+```
+
+If we're here, there's an existing value already.
+
+If that existing value is a stopping value (a hash with a key error or stop), or we are at the last step of the sequence, we set `output` to `existingValue`. We also return `true` to stop the sequence. We don't really need to return `true` if we are at the last step of the sequence, but since we're using a joint conditional to do the same if we find a stopping value, we just return `true` always anyway.
+
+```js
+      if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === sequenceLength) {
+         // We have a stopping value!
+         output = existingValue;
+         return true;
+      }
+```
+
+We close the iteration over the steps of the sequence, return `output` and close the function.
+
+```js
+   });
+
+   return output;
+}
+```
 
 #### `cell.get`
 
@@ -1290,12 +1543,16 @@ If we're here, then we are ready to persist these changes. We call `put` with th
    put (dataspace);
 ```
 
-We call `cell.respond` in case some reference needs to be updated. If `cell.respond` finds that changes should happen, it will call `cell.put`. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated.
+We will now iterate the dataspace, running `cell.respond` of each of the paths, until we either finish iterating the paths or `cell.respond` returns `true`.
+
+We call `cell.respond` in case some reference needs to be updated. If `cell.respond` finds that changes should happen, it will call `cell.put` in turn. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated. The `true` that `cell.respond` is only to make things more efficient and avoid unnecessary calls.
 
 We don't validate the dataspace after calling `cell.respond` because no expansion of a call should generate an incorrect result: every call defines a hash (because `@` is text), so putting a `=` on the same prefix will not change the type of the prefix. Because of this, the call to `cell.put` from inside `cell.respond` doesn't check for errors returned by `cell.put`.
 
 ```js
-   cell.respond (get, put);
+   dale.stop (dataspace, true, function (path) {
+      return cell.respond (path, get, put);
+   });
 ```
 
 We return `[['ok']]`. This closes the function.
