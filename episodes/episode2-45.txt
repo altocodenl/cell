@@ -1,0 +1,16 @@
+Forty-fith episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finish annotating the new code and actually come up with a good design for "native" calls (for math, comparison and logic).
+
+https://github.com/altocodenl/cell
+
+- Let users overwrite + if they want to.
+
+We need to do three things:
+- When you are looking at the first path of a call with multiple paths, get all those values and pass them.
+- If you are at the second path or further of a call with multiple paths, don't do anything.
+- Make + call the js function.
+
+How to know if you're the first one?
+- If it's a list, just check for 1. But no, it could also be 1 foo and 1 bar.
+- It could be a hash.
+
+OK, we can do a lookbehind! The paths are sorted. If you don't find an earlier one, go for it. If you do, don't do anything.

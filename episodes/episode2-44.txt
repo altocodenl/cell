@@ -1,0 +1,12 @@
+Forty-fourth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we keep on annotating the code for `cell.respond`.
+
+https://github.com/altocodenl/cell
+
+A call can be three things:
+- A call to a sequence.
+- A call to a conditional.
+- A call to something that is neither a sequence or a conditional. We call this a reference.
+
+Another way to say this is that a sequence or a conditional are special forms of reference.
+
+Do we support multiple paths in the message in an execution? I don't think so.
