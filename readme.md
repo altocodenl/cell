@@ -1,12 +1,28 @@
 # cell
 
-> Your data and your logic, together at last.
+## Motivation
 
-## Introduction
+Programming is currently much harder than writing prose. Reading programs is also much harder than reading prose.
 
-Cell is a tool that allows you to create [data systems](https://github.com/altocodenl/todis) (think spreadsheets, apps, pages) with ease. Particularly if you don't consider yourself to be a programmer.
+The goal of cell is to make programming easier, so that it is only as demanding as writing prose. By making programming more accessible to more writers and readers, we hope to empower more humans to create and own their own [information systems](https://github.com/altocodenl/todis).
 
-Cell allows you to allow you to transform your data into a system that perfectly fits your needs.
+## How
+
+The core understanding behind cell is this: originally, we developed computers to get the result of various mathematical calculations. But this is not the case anymore: most of our systems now are not concerned with calculations, but rather, with the management of data. More precisely, we use computers to store, communicate and transform data. In short, computers and programs are only valuable because they let us work with data. **The game is data.**
+
+Cell attempts to make programming like natural language through two innovations:
+
+- Putting the code in the same place as data (and with the same structure).
+- Putting the result of each piece of code literally on top of the code that generated it.
+
+It also helps that cell uses very few symbols, choosing instead to use regular letters and numbers. Things that can be pronounced are generally more memorable and graspable.
+
+Here's an illustration:
+
+```
+= 15
+@ plus10 5
+```
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
@@ -18,19 +34,48 @@ My contention is: if you want to build data systems using AI, you need to do thr
 2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that maintain important constraints.
 3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
 
-Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence. This simplicity comes from seven powerups.
+Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence.
 
 ## The seven powerups
 
-Cell employs seven powerups to make programming as easy as possible:
+Cell employs seven powerups to make programming as easy (or hard) as writing prose:
 
-1. **Fourdata**: a simple way to **represent data with text**. This allows you to look directly at any data.
+1. **Fourdata**: a simple way to **represent data with text**. This allows you to look directly at any data that comes your way.
 2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location.
 3. **Dialogue**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
 4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
 5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
 6. **Integrated editor**: language, database, API and UI are in one editor that runs in your web browser.
 7. **Generative AI**: automatic intelligence that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
+
+## TODO
+
+### Editor
+
+- modal approach
+- cursor that jumps to the next distinct element at the depth that you are.
+- shrink to screen, no horizontal scroll, instead use ellipses
+- quick search (macro?)
+- table view?
+
+### Language
+
+- do
+- loop
+- error (catch)
+- replace (macro)
+
+### Database
+
+- Fast get
+
+### Service
+
+- ai
+- outbound http
+- email
+- auth
+- domain
 
 ## Use cases
 
