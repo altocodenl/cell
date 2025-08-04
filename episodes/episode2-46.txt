@@ -1,0 +1,37 @@
+
+Hello Earth! Silent episode today, since I'm travelling.
+
+We will debug the issue that kept cell going and going. Also, here's what's next:
+
+- Also get multiple paths for non-native calls.
+- Start implementing some native calls.
+
+Let's improve the logs, so I can understand what's going on.
+
+Why it keeps on going when we look at the second path?
+
+Ah, maybe because we need to *do nothing* in this case!
+
+Alright! Thinking did the trick. I still don't fully understand what was happening there, but likely there was some value being set by the second path of the call that was overwriting what the first did.
+
+OK, let's get the multiple paths for the native calls, we have to do that and I forgot to mention it above. We can do that with a lookahead, rather than a lookbehind. But let's do it so that it works for both native and non-native calls.
+
+Actually, we can do it afterwards, both branches of the conditional fall (converge, really) on the lookahead
+
+It's tricky, because we have three cases, and we cannot return early from the one where there's no call and no native.
+
+And what we did also assumes that native calls have only a prefix of one, so we're not "walking" them.
+
+----
+
+Messages with multiple paths:
+- Works for if: it doesn't check if this is the first path of cond (and ignore the rest, so it's inefficient) but it does get messages with multiple paths that are inside do or else.
+- Doesn't work for normal execution. We just pass a single valuePath.
+
+Let's do the efficient solution (find first path with this call prefix) and get the other paths with the same prefix to build up the message.
+
+Wherever I see pathsToJS, I am relieved from looking for all the paths with a similar prefix.
+
+TODO next session:
+- Write test with message with multiple path for non-native call, see that it fails without the collection of further paths, uncomment code and see that it works.
+- Add tests for native calls.

@@ -1,4 +1,4 @@
-Forty-fith episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finish annotating the new code and actually come up with a good design for "native" calls (for math, comparison and logic).
+Forty-fifth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finish annotating the new code and actually come up with a good design for "native" calls (for math, comparison and logic).
 
 https://github.com/altocodenl/cell
 
