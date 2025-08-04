@@ -1,3 +1,4 @@
+Forty-sixth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we start silent and then make it into a talkie. After a lot of puttering and stalling, we suddenly have native calls, plus a mechanism for supporting messages with multiple calls.
 
 Hello Earth! Silent episode today, since I'm travelling.
 
