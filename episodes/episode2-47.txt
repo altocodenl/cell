@@ -1,0 +1,10 @@
+Forty-seventh episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, short episode, we make some progress with native calls and annotating code we find possibilities for efficiency and even bugs.
+
+https://github.com/altocodenl/cell
+
+TODO:
+
+- See if there's a bug with fixed length prefix for the "walking" case.
+- Improve efficiency of message retrieving by stopping when not finding a match and accumulating outside.
+- Annotate native, perhaps even get the message paths with common code.
+- Add tests for native calls.

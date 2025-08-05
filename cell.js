@@ -11,6 +11,7 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 var clog = console.log, type = teishi.type;
 
 var pretty = function (label, paths) {
+   if (type (paths [0]) !== 'array') paths = [paths];
    if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
    teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
 }
@@ -376,6 +377,14 @@ cell.respond = function (path, get, put) {
    var targetPath  = path.slice (0, rightmostAt).concat ('=');
    var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 
+   var prefix = targetPath.slice (0, -1).concat (['@', valuePath [0]]);
+   var paths = get ();
+   var index = dale.stopNot (paths, undefined, function (v, k) {
+      if (teishi.eq (path, v)) return k;
+   });
+   var firstPath = index === 0 || paths [index - 1].length < prefix.length || ! teishi.eq (paths [index - 1].slice (0, prefix.length), prefix);
+   if (! firstPath) return;
+
    var previousValue = cell.get (targetPath, contextPath, get);
 
    if (valuePath [0] === 'if') {
@@ -383,10 +392,6 @@ cell.respond = function (path, get, put) {
    }
    else if (valuePath [0] === 'do') {
       var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), contextPath, null, get);
-   }
-   // TODO: move this to an area of cell calls
-   else if (valuePath [0] === '+') {
-      var currentValue = [[5]];
    }
    else {
       var currentValue = cell.get (valuePath, contextPath, get);
@@ -396,7 +401,29 @@ cell.respond = function (path, get, put) {
             if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
          });
 
-         if (call) currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+         if (call) {
+            call.message = dale.fil (paths.slice (index), undefined, function (v) {
+               if (v.length < prefix.length) return;
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
+            });
+            currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+         }
+         else {
+            var nativeCalls = [
+               '+', '-', '*', '/', '%', // Math
+               'eq', '>', '<', '>=', '<=', // Comparison
+               'and', 'or', 'not' // Logical
+            ];
+
+            if (nativeCalls.indexOf (valuePath [0]) > -1) {
+               var message = dale.fil (paths.slice (index), undefined, function (v) {
+                  if (v.length < prefix.length) return;
+                  if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
+               });
+
+               currentValue = cell.native (valuePath [0], message);
+            }
+         }
       }
    }
 
@@ -413,6 +440,31 @@ cell.respond = function (path, get, put) {
    cell.put (pathsToPut, [], get, put);
    return true;
 }
+
+cell.native = function (call, message) {
+   // Ignore definitions, jump to values
+   var stripper = function (paths) {
+      return dale.fil (paths, undefined, function (path) {
+         if (path.indexOf ('@') !== -1) return;
+         return dale.fil (path, undefined, function (v) {
+            if (v !== '=') return v;
+         });
+      });
+   }
+
+   call = {eq: '=', and: '&&', or: '||', not: '!'} [call] || call;
+
+   message = cell.pathsToJS (stripper (message))
+
+   try {
+      var result = eval (message.join (call));
+      return [[result]];
+   }
+   catch (error) {
+      return [['error', error.toString ()]];
+   }
+}
+
 
 cell.if = function (queryPath, contextPath, get) {
 
@@ -1021,6 +1073,19 @@ var test = function () {
           ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
           ['inner', 'result', '@', 'if', 'else', 'no!']
       ]},
+      {reset: [
+         ['count', 1],
+      ]},
+      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do bar 1', '@ put v @ if do foo 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['count', 1],
+          ['result', '=', 'bar', 1],
+          ['result', '=', 'foo', 2],
+          ['result', '@', 'if', 'cond', '=', 1],
+          ['result', '@', 'if', 'cond', '@', 'count'],
+          ['result', '@', 'if', 'do', 'bar', 1],
+          ['result', '@', 'if', 'do', 'foo', 2],
+      ]},
 
       // *** SEQUENCE ***
 
@@ -1082,13 +1147,9 @@ var test = function () {
       {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
       {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
-          // TODO: fix
-          //['eleven', '=', 11],
-          ['eleven', '=', 5],
+          ['eleven', '=', 11],
           ['eleven', ':', 'int', 10],
-          // TODO: fix
-          //['eleven', ':', 'seq', 1, '=', 11],
-          ['eleven', ':', 'seq', 1, '=', 5],
+          ['eleven', ':', 'seq', 1, '=', 11],
           ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
           ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
           ['eleven', ':', 'seq', 1, '@', '+', 2, 1],
@@ -1100,13 +1161,9 @@ var test = function () {
 
       {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 2'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
-         // TODO: fix
-          //['eleven', '=', 12],
-          ['eleven', '=', 5],
+          ['eleven', '=', 12],
           ['eleven', ':', 'int', 10],
-          // TODO: fix
-          //['eleven', ':', 'seq', 1, '=', 12],
-          ['eleven', ':', 'seq', 1, '=', 5],
+          ['eleven', ':', 'seq', 1, '=', 12],
           ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
           ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
           ['eleven', ':', 'seq', 1, '@', '+', 2, 2],
@@ -1116,6 +1173,22 @@ var test = function () {
           ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 2],
       ]},
 
+      {reset: []},
+      {f: cell.call, input: ['@ put p def', '@ put v @ do message 1 @ message'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p call', '@ put v @ def bar 1', '@ put v @ def foo 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+         ['call', '=', 'bar', 1],
+         ['call', '=', 'foo', 2],
+         ['call', ':', 'message', 'bar', 1],
+         ['call', ':', 'message', 'foo', 2],
+         ['call', ':', 'seq',  1, '=',    'bar', 1],
+         ['call', ':', 'seq',  1, '=',    'foo', 2],
+         ['call', ':', 'seq', 1, '@', 'message'],
+         ['call', '@', 'def', 'bar', 1],
+         ['call', '@', 'def', 'foo', 2],
+         ['def', '=', 'message', 1],
+         ['def', '@', 'do', 'message', 1, '@', 'message']
+      ]},
    ], false, function (test) {
 
       if (test.reset) return dataspace = cell.sorter (test.reset);

@@ -61,13 +61,18 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 ### Language
 
 - do
+   - mulitple paths in message for non-native call
+   - native calls: test each of them, also with multiple arguments
+   - recursive calls
 - loop
 - error (catch)
 - replace (macro)
 
 ### Database
 
-- Fast get
+- Sublinear get
+   - Set from a path to all its following steps (just the next one)
+   - Set from a step (by value) to all its prefixes
 
 ### Service
 
@@ -77,7 +82,14 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 - auth
 - domain
 
-## Use cases
+## Illustrated use cases
+
+- Civ2 analyzer
+- Rent a crud
+- Back tester for stocks
+- Fitness companion for phone
+
+## Other use cases
 
 - Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
 - Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
@@ -280,6 +292,19 @@ macros: can be completely runtime, in the language. we can use `replace`, which 
 ## Annotated source code (fragments)
 
 ### cell.js
+
+#### `cell.toNumberIfNumber`
+
+This function takes text and, if it matches something that looks like a number, returns it as a JS number. Otherwise, it returns it as text.
+
+A number is defined as an optional - followed by an optional one or more digits followed by an optional dot, follwed by a mandatory one or more digits, with nothing else before or after.
+
+```js
+cell.toNumberIfNumber = function (text) {
+   if (text.match (/^-?(\d+\.)?\d+$/) !== null) return parseFloat (text);
+   return text;
+}
+```
 
 #### `cell.unparseElement`
 
@@ -924,6 +949,35 @@ Three very important variables, all of them paths:
 
 Now, you may be asking: what happens when a path has *two* (or more) `@`s? How do we deal with these paths, if our logic just looks at the rightmost `@` only? The answer is the following: the rightmost `@` will get a new path on top of it that has an `=`. It is this path that will get the next-to-last rightmost `@` expanded. This can happen until all `@`s in one path get expanded, path by path, onto one that has only `=`s.
 
+If we are here, we know we are dealing with a call. A call has a message that could have one or more paths. We don't want to execute this call for the second or subsequent paths with the same prefix of the same call, just for the first one. Therefore, we now write some logic to see if this path is indeed the first for its call.
+
+To do this, we first take the prefix of the path, which is the target path without the `=` at its end, plus `@` and the first element of the `valuePath`.
+
+```js
+   var prefix = targetPath.slice (0, -1).concat (['@', valuePath [0]]);
+```
+
+We then get all the paths and see what's the position of this path in all of them. This is currently extremely inefficient, but when we decide to improve `get`, we can also do this in a more efficient way.
+
+```js
+   var paths = get ();
+   var index = dale.stopNot (paths, undefined, function (v, k) {
+      if (teishi.eq (path, v)) return k;
+   });
+```
+
+We only need to check if the previous path also matches this prefix. If there's no previous path, or if the previous path has a length than prefix, or if its prefix doesn't match the prefix we have here, then this is the first path for this call.
+
+```js
+   var firstPath = index === 0 || paths [index - 1].length < prefix.length || ! teishi.eq (paths [index - 1].slice (0, prefix.length), prefix);
+```
+
+If this is not the first path for this call, we return and do nothing else, to avoid unnecessary execution.
+
+```js
+   if (! firstPath) return;
+```
+
 We get the previous value (the value at `targetPath`). A subtle and important detail: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js
@@ -984,15 +1038,25 @@ If we did get something, that means that we found a prefix of `valuePath` where 
 
 If there is indeed a call to a sequence in our `valuePath`, we invoke `cell.do`, passing the `definitionPath`, the `contextPath`, and the message (whatever is to the right of `definitionPath` inside `valuePath`.
 
+But before we do that, we need to collect all the paths inside the message, which could be many. For that, we iterate all the paths after path that have the same prefix as this one, and return whatever is after the prefix.
+
+`cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate `cell.do`.
+
 ```js
          if (call) {
+            call.message = dale.fil (paths.slice (index), undefined, function (v) {
+               if (v.length < prefix.length) return;
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
+            });
             currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+         }
 ```
 
-`cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate it.
+TODO: add annotated source code for native calls.
+
+This concludes the case of neither `if` or `do`.
 
 ```js
-         if (call) currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
       }
    }
 ```
