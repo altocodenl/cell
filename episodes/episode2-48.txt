@@ -1,0 +1,3 @@
+Forty-eight episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, another short episode, we fix the bug with variable length prefixes and write a test that catches it.
+
+https://github.com/altocodenl/cell

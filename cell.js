@@ -402,9 +402,15 @@ cell.respond = function (path, get, put) {
          });
 
          if (call) {
-            call.message = dale.fil (paths.slice (index), undefined, function (v) {
+            if (call.definitionPath.length > 3) prefix = prefix.concat (call.definitionPath.slice (1).slice (0, -2));
+
+            call.message = [];
+            dale.stopNot (paths.slice (index), true, function (v) {
                if (v.length < prefix.length) return;
-               if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) {
+                  call.message.push (v.slice (prefix.length));
+                  return true;
+               }
             });
             currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
          }
@@ -461,7 +467,7 @@ cell.native = function (call, message) {
       return [[result]];
    }
    catch (error) {
-      return [['error', error.toString ()]];
+      return [['error', error.toString ()], ['native call', message.join (call)]];
    }
 }
 
@@ -1143,6 +1149,7 @@ var test = function () {
          ['ref', '@', 'invalid', 1],
       ]},
 
+      // Valid sum
       {reset: []},
       {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
       {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
@@ -1159,6 +1166,7 @@ var test = function () {
           ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
       ]},
 
+      // Update value, the sum should update
       {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 2'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
           ['eleven', '=', 12],
@@ -1173,6 +1181,24 @@ var test = function () {
           ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 2],
       ]},
 
+      // Call to definition with a location of two
+      {reset: []},
+      {f: cell.call, input: ['@ put p eleven', '@ put v @ nested plus1 10'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p nested plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [
+          ['eleven', '=', 11],
+          ['eleven', ':', 'int', 10],
+          ['eleven', ':', 'seq', 1, '=', 11],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
+          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
+          ['eleven', ':', 'seq', 1, '@', '+', 2, 1],
+          ['eleven', '@', 'nested', 'plus1', 10],
+          ['nested', 'plus1', '=', 'int', 1],
+          ['nested', 'plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
+          ['nested', 'plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
+      ]},
+
+      // Call with message with two paths
       {reset: []},
       {f: cell.call, input: ['@ put p def', '@ put v @ do message 1 @ message'], expected: [['ok']]},
       {f: cell.call, input: ['@ put p call', '@ put v @ def bar 1', '@ put v @ def foo 2'], expected: [['ok']]},

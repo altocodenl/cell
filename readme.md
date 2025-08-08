@@ -61,11 +61,19 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 ### Language
 
 - do
-   - mulitple paths in message for non-native call
-   - native calls: test each of them, also with multiple arguments
-   - recursive calls
+   - multiple paths in message for non-native call
+   - native calls
+      - remove eval from native calls
+      - add validations
+      - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
+      - test each of them, also with multiple arguments
+   - test nested calls
+   - test recursive calls
+   - test descending funarg (pass function)
+   - test ascending funarg (return function)
 - loop
 - error (catch)
+- query (general call to get matching paths)
 - replace (macro)
 
 ### Database
@@ -1036,18 +1044,33 @@ If we did get something, that means that we found a prefix of `valuePath` where 
          });
 ```
 
+
+
 If there is indeed a call to a sequence in our `valuePath`, we invoke `cell.do`, passing the `definitionPath`, the `contextPath`, and the message (whatever is to the right of `definitionPath` inside `valuePath`.
 
-But before we do that, we need to collect all the paths inside the message, which could be many. For that, we iterate all the paths after path that have the same prefix as this one, and return whatever is after the prefix.
-
-`cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate `cell.do`.
+First, we might need to change `prefix` to reflect the fact that `definitionPath` is more than three steps long. This could happen if we are invoking something available at `x y` (instead of just at `x`). In that case, the `y` should also be added to the prefix, so it can be removed from the message.
 
 ```js
          if (call) {
-            call.message = dale.fil (paths.slice (index), undefined, function (v) {
+            if (call.definitionPath.length > 3) prefix = prefix.concat (call.definitionPath.slice (1).slice (0, -2));
+```
+
+We also need to collect all the paths inside the message, which could be many. For that, we iterate all the paths after path that have the same prefix as this one, and return whatever is after the prefix. This is the reason, by the way, for us updating the prefix just above.
+
+```js
+            call.message = [];
+            dale.stopNot (paths.slice (index), true, function (v) {
                if (v.length < prefix.length) return;
-               if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) {
+                  call.message.push (v.slice (prefix.length));
+                  return true;
+               }
             });
+```
+
+OK, now we're ready. `cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate `cell.do`.
+
+```js
             currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
          }
 ```
