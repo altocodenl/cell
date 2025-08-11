@@ -60,13 +60,15 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ### Language
 
+- change dot to dash for placeholders of list
 - do
-   - multiple paths in message for non-native call
    - native calls
       - remove eval from native calls
       - add validations
       - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
       - test each of them, also with multiple arguments
+   - test two step calls
+   - test stop
    - test nested calls
    - test recursive calls
    - test descending funarg (pass function)
@@ -75,6 +77,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 - error (catch)
 - query (general call to get matching paths)
 - replace (macro)
+- wall (block walking up, but not down)
 
 ### Database
 
@@ -1061,10 +1064,7 @@ We also need to collect all the paths inside the message, which could be many. F
             call.message = [];
             dale.stopNot (paths.slice (index), true, function (v) {
                if (v.length < prefix.length) return;
-               if (teishi.eq (v.slice (0, prefix.length), prefix)) {
-                  call.message.push (v.slice (prefix.length));
-                  return true;
-               }
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return call.message.push (v.slice (prefix.length));
             });
 ```
 
@@ -1075,7 +1075,24 @@ OK, now we're ready. `cell.do` will return a set of paths that we will set on th
          }
 ```
 
-TODO: add annotated source code for native calls.
+If there's no call, we check to see if this is a native call. We get the message using the same mechanism we did in the previous block.
+
+```js
+         else {
+            var message = [];
+            dale.stop (paths.slice (index), undefined, function (v) {
+               if (v.length < prefix.length) return;
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
+            });
+```
+
+Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `currentValue`.
+
+```js
+            var nativeResponse = cell.native (valuePath [0], message);
+            if (nativeResponse !== false) currentValue = nativeResponse;
+         }
+```
 
 This concludes the case of neither `if` or `do`.
 

@@ -1,0 +1,7 @@
+Forty-ninth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we finally finish the calling code to cell.native, and start implementing some fun stuff. We manage to keep the tests working. The road ahead is clear and we have a good amount of native code (in JS) to write, as well as tests.
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Optimize message for native [DONE]
+- Annotate native [DONE]

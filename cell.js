@@ -405,30 +405,20 @@ cell.respond = function (path, get, put) {
             if (call.definitionPath.length > 3) prefix = prefix.concat (call.definitionPath.slice (1).slice (0, -2));
 
             call.message = [];
-            dale.stopNot (paths.slice (index), true, function (v) {
+            dale.stop (paths.slice (index), undefined, function (v) {
                if (v.length < prefix.length) return;
-               if (teishi.eq (v.slice (0, prefix.length), prefix)) {
-                  call.message.push (v.slice (prefix.length));
-                  return true;
-               }
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return call.message.push (v.slice (prefix.length));
             });
             currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
          }
          else {
-            var nativeCalls = [
-               '+', '-', '*', '/', '%', // Math
-               'eq', '>', '<', '>=', '<=', // Comparison
-               'and', 'or', 'not' // Logical
-            ];
-
-            if (nativeCalls.indexOf (valuePath [0]) > -1) {
-               var message = dale.fil (paths.slice (index), undefined, function (v) {
-                  if (v.length < prefix.length) return;
-                  if (teishi.eq (v.slice (0, prefix.length), prefix)) return v.slice (prefix.length);
-               });
-
-               currentValue = cell.native (valuePath [0], message);
-            }
+            var message = [];
+            dale.stop (paths.slice (index), undefined, function (v) {
+               if (v.length < prefix.length) return;
+               if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
+            });
+            var nativeResponse = cell.native (valuePath [0], message);
+            if (nativeResponse !== false) currentValue = nativeResponse;
          }
       }
    }
@@ -448,6 +438,14 @@ cell.respond = function (path, get, put) {
 }
 
 cell.native = function (call, message) {
+   var nativeCalls = [
+      '+', '-', '*', '/', '%', // Math
+      'eq', '>', '<', '>=', '<=', // Comparison
+      'and', 'or', 'not' // Logical
+   ];
+
+   if (nativeCalls.indexOf (call) === -1) return false;
+
    // Ignore definitions, jump to values
    var stripper = function (paths) {
       return dale.fil (paths, undefined, function (path) {
@@ -458,17 +456,27 @@ cell.native = function (call, message) {
       });
    }
 
-   call = {eq: '=', and: '&&', or: '||', not: '!'} [call] || call;
-
    message = cell.pathsToJS (stripper (message))
 
-   try {
-      var result = eval (message.join (call));
-      return [[result]];
+   var types = [];
+   dale.go (message, function (v) {
+      var t = {float: 'number', integer: 'number', string: 'text', object: 'hash', array: 'list'} [type (v)];
+      if (types.indexOf (t) === -1) types.push (t);
+   });
+
+   if (call === '+') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types.length > 1 && ! teishi.eq (types.sort, ['number', 'text'])) return [['error', 'Cannot mix these elements:', types.join (', ')]];
+
+      if (types.indexOf ('list') === -1 && types.indexOf ('hash') === -1) return [[dale.acc (message, function (a, b) {return a + b})]];
+
+      if (types.indexOf ('list') === 0) {}
+      // math ops with lists is about values. + concatenates values. - removes values from the first one (if you have three or more, all against the first, but in order), remove all instances of that value. [2, 2] - [2] yields [].
+      // maths ops with hashes is about keys. + combines two hashes. - removes keys from the hash. because keys are unique, there's no need to be concerned about instances of multiple things.
    }
-   catch (error) {
-      return [['error', error.toString ()], ['native call', message.join (call)]];
-   }
+
+   // +: can mix text and numbers, but nothing else. or it can be all lists or hashes.
+   // - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
 }
 
 
