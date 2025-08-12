@@ -1,0 +1,68 @@
+Fiftieth episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we experiment with writing test cases in pure fourdata (see below). Then we implement some native calls.
+
+https://github.com/altocodenl/cell
+
+"test cases" 1 description Reference
+               initial foo 10
+                       reffoo @ foo
+               result foo 10
+                      reffoo = 10
+                             @ foo
+             2 description "Indirect reference to a hash"
+               initial aqualung great
+                       rrref @ score @ aqualung
+                       score great 100
+               result aqualung great
+                      rrref = 100
+                            @ score = great
+                                    @ aqualung
+                      score great 100
+             3 description "Sequence with sum"
+               initial eleven @ plus1 10
+                       plus1 @ do int 1 @ + . @ int
+                                            . 1
+               result eleven = 11
+                             : int 10
+                               seq 1 = 11
+                                     @ + 1 = 10
+                                           @ int
+                                         2 1
+                             @ plus1 10
+                      plus1 = int 1
+                            @ do int 1 @ + . @ int
+                                           . 1
+
+trying dashes
+
+             3 description "Sequence with sum"
+               initial eleven @ plus1 10
+                       plus1 @ do int 1 @ + - @ int
+                                            - 1
+               result eleven = 11
+                             : int 10
+                               seq 1 = 11
+                                     @ + 1 = 10
+                                           @ int
+                                         2 1
+                             @ plus1 10
+                      plus1 = int 1
+                            @ do int 1 @ + - @ int
+                                           - 1
+
+             4 description "Call with message with two paths"
+
+               initial call @ def bar 1
+                                  foo 2
+                       def @ do message 1 @ message
+
+               result call = bar 1
+                             foo 2
+                           : message bar 1
+                                     foo 2
+                             seq 1 = bar 1
+                                     foo 2
+                                   @ message
+                           @ def bar 1
+                                 foo 2
+                       def = message 1
+                           @ do message 1 @ message

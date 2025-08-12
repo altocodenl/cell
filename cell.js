@@ -464,19 +464,57 @@ cell.native = function (call, message) {
       if (types.indexOf (t) === -1) types.push (t);
    });
 
+   var round = function (n) {
+      return Math.round (n * 1000000000) / 1000000000;
+   }
+
    if (call === '+') {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types.length > 1 && ! teishi.eq (types.sort, ['number', 'text'])) return [['error', 'Cannot mix these elements:', types.join (', ')]];
 
-      if (types.indexOf ('list') === -1 && types.indexOf ('hash') === -1) return [[dale.acc (message, function (a, b) {return a + b})]];
+      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {return a.concat (b)}));
 
-      if (types.indexOf ('list') === 0) {}
-      // math ops with lists is about values. + concatenates values. - removes values from the first one (if you have three or more, all against the first, but in order), remove all instances of that value. [2, 2] - [2] yields [].
-      // maths ops with hashes is about keys. + combines two hashes. - removes keys from the hash. because keys are unique, there's no need to be concerned about instances of multiple things.
+      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         dale.go (b, function (v, k) {a [k] = b});
+         return a;
+      }));
+
+      return [[dale.acc (message, function (a, b) {return a + b})]];
    }
+   if (call === '-') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
+      if (types.length > 1) return [['error', 'Cannot mix these elements:', types.join (', ')]];
 
-   // +: can mix text and numbers, but nothing else. or it can be all lists or hashes.
-   // - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
+      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         return dale.fil (a, undefined, function (v) {
+            if (! dale.stop (b, true, function (v2) {
+               return teishi.eq (v, v2);
+            })) return v;
+         });
+      }));
+
+      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         dale.go (b, function (v, k) {delete a [k]});
+         return a;
+      }));
+
+      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a - b})]];
+   }
+   if (call === '*' || call === '/') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] !== 'number') return [['error', 'Operation only defined for number.']];
+
+      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
+   }
+   if (call === '%') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
+
+      // % for intersection of list and hash (values vs keys)
+
+      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
+   }
 }
 
 
@@ -1215,8 +1253,8 @@ var test = function () {
          ['call', '=', 'foo', 2],
          ['call', ':', 'message', 'bar', 1],
          ['call', ':', 'message', 'foo', 2],
-         ['call', ':', 'seq',  1, '=',    'bar', 1],
-         ['call', ':', 'seq',  1, '=',    'foo', 2],
+         ['call', ':', 'seq',  1, '=', 'bar', 1],
+         ['call', ':', 'seq',  1, '=', 'foo', 2],
          ['call', ':', 'seq', 1, '@', 'message'],
          ['call', '@', 'def', 'bar', 1],
          ['call', '@', 'def', 'foo', 2],
