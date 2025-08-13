@@ -371,12 +371,14 @@ views.cell = function () {
                ]]
             ]]
          ]],
+         /*
          ['input', {
             class: 'code w-50 pa3 ba br3 mb3 db center',
             onchange: B.ev ('search', [], {raw: 'this.value'}),
             oninput: B.ev ('search', [], {raw: 'this.value'}),
             value: search || '',
          }],
+         */
          views.datagrid (paths, true)
       ]];
    });

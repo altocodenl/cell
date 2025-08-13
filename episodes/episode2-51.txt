@@ -1,0 +1,36 @@
+Fifty-first episode of season 2! I'm building a programming environment from scratch while recording myself. Watch me struggle figuring out how to make it useful! Today, we design the editor. Short and mute episode, but I think that it is setting a direction.
+
+Hi! Silent episode today. Might make it a talkie later.
+
+I'm going to spend some time designing the editor, and, really, the cursor.
+
+I'm already here inside an editor. I want to take what works from here and build upon it. Because there's more to do.
+
+I'm thinking now on the left side, when you're directly working on cell. The idea of just interfacing with cell through the dialogue is out of the window. Sometimes, you need to work on things directly. It is still messaging, but more direct. Just putting things one at a time through the dialogue feels stodgy. So let's explore this.
+
+1. Whether you see data on the left or not, there has to be a cursor somewhere, or something that, when clicked, makes a cursor appear.
+2. Let's think of a blank slate. It is easier. The left part has no data.
+3. You start typing. The moment you hit a space, two things happen: you move to the next step, and the previous step is shown outside of the text area!
+4. If you go back with the arrow keys, you go back to the previous (initial) step, and the second step you did is out of the textarea/input. So, really, the input moves left and right.
+5. If you go back with the backspace, you join the two steps into one.
+6. If you press on escape, you select the step but there's no longer an input.
+7. When you click enter on the step, the input is opened again.
+8. When you are in normal (nonediting) mode on the data, you can delete a step (which might delete several paths) through backspace.
+9. To create a new path, when you are at a step, click on down, that will send you one down, to a potentially new path with the same prefix. If you click on down on the last step of a path, it won't let you go down, you can only go down in a non-terminal step.
+10. If you enter something that is resorted, it is resorted but you don't lose sight of it, and the input remains open there. The view could scroll to that.
+11. You still have paths folded and expanded. But now the fold can be done at different depths, not just at depth 1.
+
+Ops:
+- Write a path, see steps unfold.
+- Go back and forth through being in insert mode.
+- In insert mode, the inputs follow where you are. You have an input in place, rather than the spreadsheet input for the formula that's on the top left.
+- Merge steps.
+- Create new path from a prefix by going down.
+- Delete at step (whatever comes after it, gets deleted, so it could be multiple paths).
+- Unfold/fold at different depths, by clicking on the pseudo fold/unfold steps.
+
+I wonder if I'm going to work on cell most effectively from the top down: first editor, then language, then db, then service.
+
+When I named this UI the "editor", I didn't think I was going to get more than I was bargaining for. This is really an editor. And it does feel like the key to the whole thing. The editor, the UI, is really the tool where we can get our hands in. The hand is the extension of the eye.
+
+I think I'll stop here. Thanks for watching!
