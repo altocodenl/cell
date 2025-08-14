@@ -52,8 +52,19 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ### Editor
 
-- modal approach
-- cursor that jumps to the next distinct element at the depth that you are.
+- Initial implementation
+   1. Whether you see data on the left or not, there has to be a cursor somewhere, or something that, when clicked, makes a cursor appear.
+   2. Let's think of a blank slate. It is easier. The left part has no data.
+   3. You start typing. The moment you hit a space, two things happen: you move to the next step, and the previous step is shown outside of the text area!
+   4. If you go back with the arrow keys, you go back to the previous (initial) step, and the second step you did is out of the textarea/input. So, really, the input moves left and right.
+   5. If you go back with the backspace, you join the two steps into one.
+   6. If you press on escape, you select the step but there's no longer an input.
+   7. When you click enter on the step, the input is opened again.
+   8. When you are in normal (nonediting) mode on the data, you can delete a step (which might delete several paths) through backspace.
+   9. To create a new path, when you are at a step, click on down, that will send you one down, to a potentially new path with the same prefix. If you click on down on the last step of a path, it won't let you go down, you can only go down in a non-terminal step.
+   10. If you enter something that is resorted, it is resorted but you don't lose sight of it, and the input remains open there. The view could scroll to that.
+   11. You still have paths folded and expanded. But now the fold can be done at different depths, not just at depth 1.
+
 - shrink to screen, no horizontal scroll, instead use ellipses
 - quick search (macro?)
 - table view?
@@ -138,6 +149,34 @@ Cell intends to go beyond the spreadsheet in the following ways:
 - Cell can also be a service, a database and an interface maker.
 
 These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
+
+## For programmers coming from...
+
+### Erlang
+
+No notion of processes. Errors are stopping values that bubble all the way up to the caller. The system is never broken.
+
+### Lisp
+
+No explicit parens, use instead lines to put multiple elements.
+
+Instead of just lists and atoms, there are lists and hashes.
+
+Macros are done on paths. Macros are *only* about selectively unfreezing some definitions before they are frozen again.
+
+### Datomic
+
+The table, attribute and value can be seen as the path. Transactions with timestamps can be added. I am still figuring out how to implement the "retract" notion, in that the previous value should start to be valid. This should be built on top and I'd like for a system like this to be part of the core.
+
+### Go
+
+Rather than channels, we can have built in queues that can allow up to n processes in parallel.
+
+For now, I don't see a need for explicit coroutines, but I need to review this again when we're further down the road.
+
+### Typed languages
+
+Define types as validations. The requirements from the calls will bubble up on the editor (note: TODO) so you can see what's expected of you in a call. This is the essence of the value of a type system, from the perspective of human performance. As for computer performance, we'll deal with that when we build a fast way to operate on paths.
 
 ## Innovations of cell
 
@@ -265,6 +304,36 @@ PWAs out of the box.
 Forms and reports just are interfaces.
 
 TODO: everything :)
+
+## Development notes
+
+### 2025-08-14
+
+New thought, coming from yesterday's session: in building cell, so far my metaphor has been to make data visible (well, at least some of the time; sometimes I focus on making programming like writing, because natural written language is very habitable and software desperately needs habitability).
+
+If we have evolved from simians, we are made to work in a physical world, and are endowed with great visual cortexes, to find bananas we can see. If we can directly see data, we can engage a great deal of our brain in it.
+
+But we also need hands. That's why I'm working on the editor. Because I feel that text editors, even powerful ones, limit us in levels of scale of jumping around, grasping, seeing, being able to do things with what we get so that we do something else.
+
+I see cell as a tool for hand eye coordination when working with data. ChatGPT calls this "proprioceptive".
+
+The hands we have with current editors (where text is inputted linearly, and doesn't usually offer levels of scale for jumping around) are daft. We have to copy and paste things manually, and the formatting breaks. We have a ton of data in a terminal and we cannot query it, or compress it, or search it. This is as much in the hand as it is in the eye.
+
+Rather than a grid of turned off inputs like in the spreadsheet, just see data (no empty boxes, just meaning) and then move around and make it an input if you're editing. but almost nudging you to go out into normal mode and jump around. Jumping, like a game! Text suddenly has levels of structure that you cannot only see, but also manipulate (by, at the very least, changing your position (there's always a fovea, a "here I am"), then later more advanced manipulations).
+
+Never mind: the cursor is not the eye, is the hand. And we have two hands, potentially even more. So we can have more than one cursor, optionally (start with one, but don't limit it to one). Then, if the cursors are far apart enough, that determines multiwindow automatically. Then you don't have to manually set windows to then have the cursors on them. It's like your eyes: they go to where your hands are. This is all directly inspired by the analogy of a monkey looking for bananas in a tree. And cursors are stronger than marks (in the vim sense).
+
+The jumping around is key, I think play is essential and jumping is playing. We need to jump from datum to datum, like monkeys from branch to branch, but with levels of scale. ChatGPT says this is a "semantic parkour".
+
+The textarea/input has too little structure! Herein lies a great opportunity for innovation.
+
+Unrelated, but two more concepts:
+- Errors as mere stopping values that bubble all the way up until the initial caller OR an error handler.
+- Side effects as changes in the dataspace that are not in the response value. If something more than the = belonging to the @ of the call is changed, that's a side effect.
+
+Two more:
+- For solving the ascending funarg, I think we already need macros. Because any references from the sequence that you are responding won't be resolved. Although you could also ship it with some context. That would be a non-macro way to solve the problem, just ship context, ship scope. Basically, ship some data together with the definition, to be stuffed at :. That could work.
+- To save versions, take a diff between the current and the previous, and express it as a diff applied in a moment.
 
 ## Other stuff
 
