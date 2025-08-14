@@ -65,6 +65,12 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
    10. If you enter something that is resorted, it is resorted but you don't lose sight of it, and the input remains open there. The view could scroll to that.
    11. You still have paths folded and expanded. But now the fold can be done at different depths, not just at depth 1.
 
+- Initial implementation, actual work
+   - Start with some data
+   - When you click on a step, edit it.
+      - Where do we store the mark that says that we are working on that path? In `editing`
+      - How do we save that modified path?
+
 - shrink to screen, no horizontal scroll, instead use ellipses
 - quick search (macro?)
 - table view?
@@ -78,6 +84,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
       - add validations
       - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
       - test each of them, also with multiple arguments
+   - test fizzbuzz (http://localhost:2315/#/river-chair-phone)
    - test two step calls
    - test stop
    - test nested calls
@@ -1214,6 +1221,10 @@ This finishes the loop and the function.
 ```js
 }
 ```
+
+#### `cell.native`
+
+TODO
 
 #### `cell.if`
 

@@ -1,0 +1,7 @@
+First episode of season 3! I'm building a programming environment from scratch while recording myself. New season, same old microphone! But this will change soon. We start with the editor, implementing the cursor on paths. We also start using LLMs to get some speed.
+
+https://github.com/altocodenl/cell
+
+Season 3 starts. Work enough in the editor until it works, then move on to the language.
+
+In vim, you escape insert mode with escape only. Here you can exit with esc (discarding changes) and with enter (saving changes).

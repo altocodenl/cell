@@ -57,6 +57,41 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', []);
       });
    }],
+   ['edit', 'path', function (x, path, index) {
+      B.call (x, 'set', 'editing', {path: path, index: index});
+      var cursor = c ('.cursor') [0];
+      cursor.focus ();
+      cursor.setSelectionRange (cursor.value.length, cursor.value.length);
+   }],
+   ['edit', 'keydown', function (x, ev) {
+      var cursor = c ('.cursor') [0];
+      var editing = B.get ('editing');
+      // ESC: 27
+      if (ev.keyCode === 27) return B.call (x, 'rem', [], 'editing');
+      // Enter: 13
+      if (ev.keyCode === 13) {
+         var value = cursor.value;
+         var prefix = editing.path.slice (0, index);
+         teishi.clog ('prefix', prefix);
+         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+            if (path.length < prefix.length) return;
+            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
+            if (path [index] !== editing.path [index]) return path;
+            return value.concat (path.slice (index));
+         });
+         // put p prefix
+         //     v relevantPaths
+      }
+
+
+   //['send', 'call', function (x, call, mute) {
+
+      // 39: right
+      // 37: left
+      // 38: up
+      // 40: down
+      console.log (ev.keyCode);
+   }],
    ['expand', 'path', function (x, prefix) {
       var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
       if (! expanded) expanded = [];
@@ -279,63 +314,70 @@ views.datagrid = function (paths, fold) {
       });
    }
 
-   return ['div', {
-      class: 'w-100 overflow-x-auto code',
-      style: style ({
-         'max-height': Math.round (window.innerHeight * 0.8) + 'px',
-         'white-space': 'nowrap',
-      })
-   }, dale.go (paths, function (path, k) {
-
-      if (type (path) === 'object') {
-         if (search !== undefined) return;
-         if (path.entries) return ['div', {
-            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-            onclick: B.ev ('expand', 'path', path.prefix)
-         }, ['Expand all ', path.entries, ' paths...']];
-
-         if (path.hide) return ['div', {
-            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-            onclick: B.ev ('fold', 'path', path.prefix)
-         }, ['Fold path']];
-      }
-
-      var abridge = 0;
-      if (k > 0) dale.stop (path, true, function (v2, k2) {
-         if (paths [k - 1] [k2] !== v2) return true;
-         abridge++;
-      });
-
-      var height = '';
-      var maxLength = Math.max.apply (null, dale.go (path, function (element) {
-         return (element + '').length;
-      }));
-      if (maxLength > 50) height = (Math.min (9, Math.floor (maxLength / 50)) + 2) + 'rem';
-
+   return B.view ('editing', function (editing) {
       return ['div', {
-         class: 'cf',
+         class: 'w-100 overflow-x-auto code',
          style: style ({
+            'max-height': Math.round (window.innerHeight * 0.8) + 'px',
             'white-space': 'nowrap',
-         }),
-      }, dale.go (path, function (element, k) {
+         })
+      }, dale.go (paths, function (path, k) {
 
-         var searchMatch = search !== undefined && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
+         if (type (path) === 'object') {
+            if (search !== undefined) return;
+            if (path.entries) return ['div', {
+               class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+               onclick: B.ev ('expand', 'path', path.prefix)
+            }, ['Expand all ', path.entries, ' paths...']];
 
-         var abridged = k < abridge;
+            if (path.hide) return ['div', {
+               class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+               onclick: B.ev ('fold', 'path', path.prefix)
+            }, ['Fold path']];
+         }
 
-         if (element === '') element = '""';
+         var abridge = 0;
+         if (k > 0) dale.stop (path, true, function (v2, k2) {
+            if (paths [k - 1] [k2] !== v2) return true;
+            abridge++;
+         });
 
-         var f1rst = k === 0;
+         var height = '';
+         var maxLength = Math.max.apply (null, dale.go (path, function (element) {
+            return (element + '').length;
+         }));
+         if (maxLength > 50) height = (Math.min (9, Math.floor (maxLength / 50)) + 2) + 'rem';
 
          return ['div', {
-            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : '') + (f1rst ? ' pointer' : '') + (searchMatch ? ' b underline' : ''),
+            class: 'cf',
             style: style ({
-               'height': height
+               'white-space': 'nowrap',
             }),
-            onclick: f1rst ? B.ev ('fold', 'path', element) : '',
-         }, element];
+         }, dale.go (path, function (element, k) {
+
+            var searchMatch = search !== undefined && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
+
+            var abridged = k < abridge;
+
+            if (element === '') element = '""';
+
+            var f1rst = k === 0;
+
+            return ['div', {
+               class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
+               style: style ({
+                  'height': height
+               }),
+               //onclick: f1rst ? B.ev ('fold', 'path', element) : '',
+               onclick: B.ev ('edit', 'path', path, k),
+            }, teishi.eq ({path: path, index: k}, editing) ? ['input', {
+               class: 'cursor',
+               value: element,
+               onkeydown: B.ev ('edit', 'keydown', {raw: 'event'}),
+            }] : element];
+         })];
       })];
-   })];
+   });
 }
 
 views.cell = function () {
@@ -371,6 +413,8 @@ views.cell = function () {
                ]]
             ]]
          ]],
+
+
          /*
          ['input', {
             class: 'code w-50 pa3 ba br3 mb3 db center',

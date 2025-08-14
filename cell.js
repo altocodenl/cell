@@ -511,12 +511,21 @@ cell.native = function (call, message) {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
 
-      // % for intersection of list and hash (values vs keys)
+      // TODO; % for intersection of list and hash (values vs keys)
 
-      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
+      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a % b})]];
    }
-}
 
+   if (call === 'eq') {
+      return [[dale.stop (message, false, function (v, k) {
+         if (k === 0) return true;
+         return teishi.eq (v, message [k - 1]);
+      })] ? 1 : 0];
+   }
+
+
+   return [['']];
+}
 
 cell.if = function (queryPath, contextPath, get) {
 
