@@ -57,39 +57,45 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', []);
       });
    }],
-   ['edit', 'path', function (x, path, index) {
-      B.call (x, 'set', 'editing', {path: path, index: index});
-      var cursor = c ('.cursor') [0];
-      cursor.focus ();
-      cursor.setSelectionRange (cursor.value.length, cursor.value.length);
+   ['click', 'step', function (x, path, index) {
+      var cursor = B.get ('cursor') || {};
+      B.call (x, 'set', 'cursor', {path: path, index: index, editing: teishi.eq (cursor.path, path)});
+      var cursorEl = c ('input.cursor') [0];
+      if (! cursorEl) return; // Might not yet be an input
+      cursorEl.focus ();
+      cursorEl.setSelectionRange (cursor.value.length, cursor.value.length);
    }],
    ['edit', 'keydown', function (x, ev) {
-      var cursor = c ('.cursor') [0];
-      var editing = B.get ('editing');
+      var cursorElement = c ('.cursor') [0];
+      var cursor = B.get ('cursor');
       // ESC: 27
-      if (ev.keyCode === 27) return B.call (x, 'rem', [], 'editing');
+      if (ev.keyCode === 27) return B.call (x, 'rem', [], 'cursor');
       // Enter: 13
       if (ev.keyCode === 13) {
-         var value = cursor.value;
-         var prefix = editing.path.slice (0, index);
-         teishi.clog ('prefix', prefix);
+         var value = cell.toNumberIfNumber (cursorElement.value);
+
+         if (value === cursor.path [cursor.index]) return B.call (x, 'rem', [], 'cursor');
+
+         var prefix = cursor.path.slice (0, cursor.index);
          var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
             if (path.length < prefix.length) return;
             if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
-            if (path [index] !== editing.path [index]) return path;
-            return value.concat (path.slice (index));
+            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
+            return [value].concat (path.slice (cursor.index + 1));
          });
-         // put p prefix
-         //     v relevantPaths
+
+         var call = [
+            ['@', 'put', 'p'].concat (prefix)
+         ];
+
+         dale.go (relevantPaths, function (v) {
+            call.push (['@', 'put', 'v'].concat (v));
+         });
+
+         B.call (x, 'send', 'call', cell.pathsToText (call), true);
+
       }
 
-
-   //['send', 'call', function (x, call, mute) {
-
-      // 39: right
-      // 37: left
-      // 38: up
-      // 40: down
       console.log (ev.keyCode);
    }],
    ['expand', 'path', function (x, prefix) {
@@ -314,7 +320,8 @@ views.datagrid = function (paths, fold) {
       });
    }
 
-   return B.view ('editing', function (editing) {
+   return B.view ('cursor', function (cursor) {
+      cursor = cursor || {};
       return ['div', {
          class: 'w-100 overflow-x-auto code',
          style: style ({
@@ -363,19 +370,28 @@ views.datagrid = function (paths, fold) {
 
             var f1rst = k === 0;
 
+            var selected = teishi.eq (path, cursor.path) && cursor.index === k;
+
             return ['div', {
-               class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
+               class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
                style: style ({
                   'height': height
                }),
-               //onclick: f1rst ? B.ev ('fold', 'path', element) : '',
-               onclick: B.ev ('edit', 'path', path, k),
-            }, teishi.eq ({path: path, index: k}, editing) ? ['input', {
-               class: 'cursor',
-               value: element,
-               onkeydown: B.ev ('edit', 'keydown', {raw: 'event'}),
-            }] : element];
+               onclick: B.ev ('click', 'step', path, k),
+            }, (function () {
+               if (! teishi.eq ({path: path, index: k}, cursor)) return element;
+
+               if (cursor.editing) return ['input', {
+                  class: 'cursor',
+                  value: element,
+                  onkeydown: B.ev ('edit', 'keydown', {raw: 'event'}),
+               }];
+
+               return element;
+
+            }) ()];
          })];
+
       })];
    });
 }

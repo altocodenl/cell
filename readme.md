@@ -70,9 +70,12 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
    - When you click on a step, edit it.
       - Where do we store the mark that says that we are working on that path? In `editing`
       - How do we save that modified path?
+   - When you click on a step, select it. Another click then edits it. Have a selected state. Rename `editing` to `cursor` or `jumper`.
 
+- Store the cursor information inside the cell dataspace.
 - shrink to screen, no horizontal scroll, instead use ellipses
 - quick search (macro?)
+- vim mode when editing long texts
 - table view?
 
 ### Language

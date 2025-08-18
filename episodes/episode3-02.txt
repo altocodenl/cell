@@ -1,0 +1,7 @@
+Second episode of season 3! I'm building a programming environment from scratch while recording myself. Didn't unpack the new microphone, but I did get the cable and it's even working! It's difficult to change the world when you are lazy. We get an unfairly high amount of stuff done despite the shortness of the episode. Namely, we can edit paths and they get saved, and we set the groundwork for moving around.
+
+https://github.com/altocodenl/cell
+
+TODO tomorrow:
+- Fix the second click not making it an input.
+- Also collect keystrokes outside of inputs so we can move around with the arrows.
