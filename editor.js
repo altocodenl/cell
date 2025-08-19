@@ -29,6 +29,51 @@ window.addEventListener ('resize', function () {
    B.call ('change', 'dataspace');
 });
 
+window.addEventListener ('keydown', function (ev) {
+   var cursor = B.get ('cursor');
+   if (! cursor) return;
+   var activeElement = document.activeElement.tagName.toLowerCase ();
+   if (['input', 'textarea'].includes (activeElement)) return;
+
+   var code = ev.keyCode;
+   clog (code);
+
+   // Left
+   if ([37, 66, 72].includes (code)) {
+      if (cursor.index > 0) B.call ('set', ['cursor', 'index'], cursor.index - 1);
+   }
+   // Right
+   if ([39, 76, 87].includes (code)) {
+      if (cursor.index + 1 < cursor.path.length) B.call ('set', ['cursor', 'index'], cursor.index + 1);
+   }
+
+   var paths = B.get ('dataspace');
+
+   var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
+      if (teishi.eq (path, cursor.path)) return k;
+   });
+
+   // Up, down
+   if ([38, 75, 40, 74].includes (code)) {
+      var up = [38, 75].includes (code);
+      var newPath = paths [pathIndex + (up ? -1 : 1)];
+      if (newPath) {
+         // Get rid of the abridged
+         var range = [dale.stopNot (newPath, undefined, function (v, k) {
+            var previousPath = paths [pathIndex + (up ? -2 : 0)] || [];
+            if (v !== previousPath [k]) return k;
+         }), newPath.length - 1];
+
+         var index;
+         if (cursor.index < range [0]) index = range [0];
+         else if (cursor.index > range [1]) index = range [1];
+         else index = cursor.index;
+
+         B.call ('set', 'cursor', {path: newPath, index: index});
+      }
+   }
+});
+
 
 B.mrespond ([
    ['initialize', [], function (x) {
@@ -59,11 +104,12 @@ B.mrespond ([
    }],
    ['click', 'step', function (x, path, index) {
       var cursor = B.get ('cursor') || {};
-      B.call (x, 'set', 'cursor', {path: path, index: index, editing: teishi.eq (cursor.path, path)});
+      var selected = teishi.eq (path, cursor.path) && cursor.index === index;
+      B.call (x, 'set', 'cursor', {path: path, index: index, editing: selected});
       var cursorEl = c ('input.cursor') [0];
       if (! cursorEl) return; // Might not yet be an input
       cursorEl.focus ();
-      cursorEl.setSelectionRange (cursor.value.length, cursor.value.length);
+      cursorEl.setSelectionRange (cursorEl.value.length, cursorEl.value.length);
    }],
    ['edit', 'keydown', function (x, ev) {
       var cursorElement = c ('.cursor') [0];
@@ -93,10 +139,7 @@ B.mrespond ([
          });
 
          B.call (x, 'send', 'call', cell.pathsToText (call), true);
-
       }
-
-      console.log (ev.keyCode);
    }],
    ['expand', 'path', function (x, prefix) {
       var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
@@ -379,7 +422,8 @@ views.datagrid = function (paths, fold) {
                }),
                onclick: B.ev ('click', 'step', path, k),
             }, (function () {
-               if (! teishi.eq ({path: path, index: k}, cursor)) return element;
+
+               if (! selected) return element;
 
                if (cursor.editing) return ['input', {
                   class: 'cursor',

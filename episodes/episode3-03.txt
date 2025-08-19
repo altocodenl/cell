@@ -1,0 +1,10 @@
+Third episode of season 3! I'm building a programming environment from scratch while recording myself. I'm sneezing a lot. And the navigation came through. I almost feel like playing Nibbles in cell. Very happy. Megadeth helped.
+
+https://github.com/altocodenl/cell
+
+TODO now:
+- Fix the second click not making it an input. [DONE]
+- Also collect keystrokes outside of inputs so we can move around with the arrows. [DONE]
+
+TODO next:
+- Get rid of that expanded or reorganize the cell.
