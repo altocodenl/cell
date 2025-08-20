@@ -47,7 +47,10 @@ window.addEventListener ('keydown', function (ev) {
       if (cursor.index + 1 < cursor.path.length) B.call ('set', ['cursor', 'index'], cursor.index + 1);
    }
 
-   var paths = B.get ('dataspace');
+   var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+      if (path [0] === 'expanded') return;
+      return path;
+   });
 
    var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
       if (teishi.eq (path, cursor.path)) return k;
@@ -58,7 +61,6 @@ window.addEventListener ('keydown', function (ev) {
       var up = [38, 75].includes (code);
       var newPath = paths [pathIndex + (up ? -1 : 1)];
       if (newPath) {
-         // Get rid of the abridged
          var range = [dale.stopNot (newPath, undefined, function (v, k) {
             var previousPath = paths [pathIndex + (up ? -2 : 0)] || [];
             if (v !== previousPath [k]) return k;
@@ -73,7 +75,6 @@ window.addEventListener ('keydown', function (ev) {
       }
    }
 });
-
 
 B.mrespond ([
    ['initialize', [], function (x) {
@@ -114,9 +115,9 @@ B.mrespond ([
    ['edit', 'keydown', function (x, ev) {
       var cursorElement = c ('.cursor') [0];
       var cursor = B.get ('cursor');
-      // ESC: 27
+      // ESC
       if (ev.keyCode === 27) return B.call (x, 'rem', [], 'cursor');
-      // Enter: 13
+      // Enter
       if (ev.keyCode === 13) {
          var value = cell.toNumberIfNumber (cursorElement.value);
 
@@ -139,6 +140,31 @@ B.mrespond ([
          });
 
          B.call (x, 'send', 'call', cell.pathsToText (call), true);
+      }
+      // Space: add step laterally
+      if (ev.keyCode === 32) {
+
+         var value = cell.toNumberIfNumber (cursorElement.value);
+
+         var prefix = cursor.path.slice (0, cursor.index);
+         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+            if (path.length < prefix.length) return;
+            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
+            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
+            return [value, ''].concat (path.slice (cursor.index + 1));
+         });
+
+         var call = [
+            ['@', 'put', 'p'].concat (prefix)
+         ];
+
+         dale.go (relevantPaths, function (v) {
+            call.push (['@', 'put', 'v'].concat (v));
+         });
+
+         B.call (x, 'send', 'call', cell.pathsToText (call));
+         // var path = cursor.path.splice (cursor.index + 1, 0, '');
+         // B.call (x, 'set', 'cursor', {index: cursor.index, path: path, editing: true});
       }
    }],
    ['expand', 'path', function (x, prefix) {

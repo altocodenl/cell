@@ -52,25 +52,23 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ### Editor
 
-- Initial implementation
-   1. Whether you see data on the left or not, there has to be a cursor somewhere, or something that, when clicked, makes a cursor appear.
-   2. Let's think of a blank slate. It is easier. The left part has no data.
-   3. You start typing. The moment you hit a space, two things happen: you move to the next step, and the previous step is shown outside of the text area!
-   4. If you go back with the arrow keys, you go back to the previous (initial) step, and the second step you did is out of the textarea/input. So, really, the input moves left and right.
-   5. If you go back with the backspace, you join the two steps into one.
-   6. If you press on escape, you select the step but there's no longer an input.
-   7. When you click enter on the step, the input is opened again.
-   8. When you are in normal (nonediting) mode on the data, you can delete a step (which might delete several paths) through backspace.
-   9. To create a new path, when you are at a step, click on down, that will send you one down, to a potentially new path with the same prefix. If you click on down on the last step of a path, it won't let you go down, you can only go down in a non-terminal step.
-   10. If you enter something that is resorted, it is resorted but you don't lose sight of it, and the input remains open there. The view could scroll to that.
-   11. You still have paths folded and expanded. But now the fold can be done at different depths, not just at depth 1.
+- Move around
+   - Have a cursor [DONE]
+   - Move it around with the keys [DONE]
+   - Search
+   - Fold/expand
+   - Auto scroll to where the cursor is, if the cursor jumps
 
-- Initial implementation, actual work
-   - Start with some data
-   - When you click on a step, edit it.
-      - Where do we store the mark that says that we are working on that path? In `editing`
-      - How do we save that modified path?
-   - When you click on a step, select it. Another click then edits it. Have a selected state. Rename `editing` to `cursor` or `jumper`.
+- Make changes:
+   - Edit step [DONE]
+   - Add
+      - Add ground laterally (one step)
+      - Add ground at the bottom (remove step)
+   - Remove
+      - Join steps
+      - Remove step
+      - Remove path with all suffixes (show what would be deleted by highlighting, first delete shows you the extent of the deletion, second executes)
+   - Support for quoted texts
 
 - Store the cursor information inside the cell dataspace.
 - shrink to screen, no horizontal scroll, instead use ellipses
@@ -316,6 +314,26 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+### 2025-08-20
+
+General UX use cases for cell, they are three:
+- Querying:
+   - Level 1: simple lookup of one value (linear read, read "next to it")
+   - Level 2: lookup of one value involving query
+   - Level 3: getting multiple values and processing them
+- Writing:
+   - Level 1: putting structured data in without validations
+   - Level 2: have validations that don't let bad data in with proper messages
+   - Level 3: allow data in in a purgatory stage and then be able to do cleanup in versions
+- Orchestrating multiple threads:
+   - Level 1: do things in parallel
+   - Level 2: limit throughput
+   - Level 3: error recovery (retry, give up)
+Channels for each of the uses:
+- 1: API
+- 2: UI
+- 3: editor
 
 ### 2025-08-14
 

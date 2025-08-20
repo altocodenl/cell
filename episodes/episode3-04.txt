@@ -1,0 +1,34 @@
+
+https://github.com/altocodenl/cell
+
+Editor, right?
+
+- Edits
+- Move around
+
+Edits:
+- Add more ground
+- Remove ground
+- Edit ground
+
+Ground: paths/steps.
+
+Move around:
+- Use cursors
+- Search (see highlighted results as you type, when entered you can jump between results)
+- Expand/contract
+
+A good idea: keep the editor state inside the cell data.
+
+Currently, we have:
+- Edits: edit the step you're in (edit ground). No add, no remove.
+- Move around: cursors.
+
+Let's add more editing:
+- Add ground laterally: type and, when you have a space, create a new step to the right.
+- Add ground below: use enter and create a new path with the same prefix as the one you entered on.
+
+TODO:
+- Put cursor in dataspace (ignore it when filtering out paths to navigate)
+- Implement add ground laterally and below.
+- Implement remove
