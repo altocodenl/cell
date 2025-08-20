@@ -1,3 +1,4 @@
+Fourth episode of season 3! I'm building a programming environment from scratch while recording myself. Short episode, but we figure out most of the work we need to get to have a usable editor. Onwards!
 
 https://github.com/altocodenl/cell
 
