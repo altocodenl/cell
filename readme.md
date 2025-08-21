@@ -238,6 +238,8 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 ```
 dialogue
 editor
+   cursor
+   expand
    search
 endpoints
    email
@@ -318,14 +320,18 @@ TODO: everything :)
 ### 2025-08-20
 
 General UX use cases for cell, they are three:
-- Querying:
+- Querying data:
    - Level 1: simple lookup of one value (linear read, read "next to it")
    - Level 2: lookup of one value involving query
    - Level 3: getting multiple values and processing them
-- Writing:
+- Writing data:
    - Level 1: putting structured data in without validations
    - Level 2: have validations that don't let bad data in with proper messages
    - Level 3: allow data in in a purgatory stage and then be able to do cleanup in versions
+- Programming:
+   - Level 1: references, native calls, conditionals, sequences, loops, errors
+   - Level 2: macros
+   - Level 3: integration with JS
 - Orchestrating multiple threads:
    - Level 1: do things in parallel
    - Level 2: limit throughput

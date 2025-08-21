@@ -19,6 +19,11 @@ H.matchVerb = function (ev, responder) {
    return B.r.compare (ev.verb, responder.verb);
 }
 
+var get = function (paths, context, fallback) {
+   var result = cell.pathsToJS (cell.get (paths, context || [], function () {return B.get ('dataspace')}));
+   return (result === '' && fallback) ? fallback : result;
+}
+
 // *** RESPONDERS ***
 
 window.addEventListener ('hashchange', function () {
@@ -30,53 +35,13 @@ window.addEventListener ('resize', function () {
 });
 
 window.addEventListener ('keydown', function (ev) {
-   var cursor = B.get ('cursor');
-   if (! cursor) return;
-   var activeElement = document.activeElement.tagName.toLowerCase ();
-   if (['input', 'textarea'].includes (activeElement)) return;
-
-   var code = ev.keyCode;
-   clog (code);
-
-   // Left
-   if ([37, 66, 72].includes (code)) {
-      if (cursor.index > 0) B.call ('set', ['cursor', 'index'], cursor.index - 1);
-   }
-   // Right
-   if ([39, 76, 87].includes (code)) {
-      if (cursor.index + 1 < cursor.path.length) B.call ('set', ['cursor', 'index'], cursor.index + 1);
-   }
-
-   var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
-      if (path [0] === 'expanded') return;
-      return path;
-   });
-
-   var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
-      if (teishi.eq (path, cursor.path)) return k;
-   });
-
-   // Up, down
-   if ([38, 75, 40, 74].includes (code)) {
-      var up = [38, 75].includes (code);
-      var newPath = paths [pathIndex + (up ? -1 : 1)];
-      if (newPath) {
-         var range = [dale.stopNot (newPath, undefined, function (v, k) {
-            var previousPath = paths [pathIndex + (up ? -2 : 0)] || [];
-            if (v !== previousPath [k]) return k;
-         }), newPath.length - 1];
-
-         var index;
-         if (cursor.index < range [0]) index = range [0];
-         else if (cursor.index > range [1]) index = range [1];
-         else index = cursor.index;
-
-         B.call ('set', 'cursor', {path: newPath, index: index});
-      }
-   }
+   B.call ('keydown', [], ev.keyCode);
 });
 
 B.mrespond ([
+
+   // *** SETUP ***
+
    ['initialize', [], function (x) {
       B.call (x, 'read', 'hash');
    }],
@@ -96,6 +61,9 @@ B.mrespond ([
          if (cb) cb (x, error, rs);
       });
    }],
+
+   // *** CELL ***
+
    ['create', 'cell', function (x) {
       B.call (x, 'post', 'new', {}, {}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', error);
@@ -103,87 +71,19 @@ B.mrespond ([
          B.call (x, 'set', 'dataspace', []);
       });
    }],
-   ['click', 'step', function (x, path, index) {
-      var cursor = B.get ('cursor') || {};
-      var selected = teishi.eq (path, cursor.path) && cursor.index === index;
-      B.call (x, 'set', 'cursor', {path: path, index: index, editing: selected});
-      var cursorEl = c ('input.cursor') [0];
-      if (! cursorEl) return; // Might not yet be an input
-      cursorEl.focus ();
-      cursorEl.setSelectionRange (cursorEl.value.length, cursorEl.value.length);
+
+   ['retrieve', 'cell', function (x) {
+
+      var cellName = window.location.hash.replace ('#/', '');
+
+      B.call (x, 'post', 'call/' + cellName, {}, {call: '@', mute: true}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', error);
+         B.call (x, 'set', 'dataspace', rs.body.response);
+      });
    }],
-   ['edit', 'keydown', function (x, ev) {
-      var cursorElement = c ('.cursor') [0];
-      var cursor = B.get ('cursor');
-      // ESC
-      if (ev.keyCode === 27) return B.call (x, 'rem', [], 'cursor');
-      // Enter
-      if (ev.keyCode === 13) {
-         var value = cell.toNumberIfNumber (cursorElement.value);
 
-         if (value === cursor.path [cursor.index]) return B.call (x, 'rem', [], 'cursor');
+   // *** SEND DATA TO SERvER ***
 
-         var prefix = cursor.path.slice (0, cursor.index);
-         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
-            if (path.length < prefix.length) return;
-            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
-            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
-            return [value].concat (path.slice (cursor.index + 1));
-         });
-
-         var call = [
-            ['@', 'put', 'p'].concat (prefix)
-         ];
-
-         dale.go (relevantPaths, function (v) {
-            call.push (['@', 'put', 'v'].concat (v));
-         });
-
-         B.call (x, 'send', 'call', cell.pathsToText (call), true);
-      }
-      // Space: add step laterally
-      if (ev.keyCode === 32) {
-
-         var value = cell.toNumberIfNumber (cursorElement.value);
-
-         var prefix = cursor.path.slice (0, cursor.index);
-         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
-            if (path.length < prefix.length) return;
-            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
-            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
-            return [value, ''].concat (path.slice (cursor.index + 1));
-         });
-
-         var call = [
-            ['@', 'put', 'p'].concat (prefix)
-         ];
-
-         dale.go (relevantPaths, function (v) {
-            call.push (['@', 'put', 'v'].concat (v));
-         });
-
-         B.call (x, 'send', 'call', cell.pathsToText (call));
-         // var path = cursor.path.splice (cursor.index + 1, 0, '');
-         // B.call (x, 'set', 'cursor', {index: cursor.index, path: path, editing: true});
-      }
-   }],
-   ['expand', 'path', function (x, prefix) {
-      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
-      if (! expanded) expanded = [];
-      expanded.push (prefix);
-
-      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})), true);
-   }],
-   ['fold', 'path', function (x, prefix) {
-      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace') || []}));
-      expanded = dale.fil (expanded, prefix, function (v) {return v});
-      if (expanded.length === 0) expanded = '';
-
-      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'expanded', v: expanded}}})), true);
-   }],
-   ['search', [], function (x, term) {
-      B.call (x, 'send', 'call', cell.pathsToText (cell.JSToPaths ({'@': {put: {p: 'search', v: term}}})), true);
-   }],
    ['send', 'call', function (x, call, mute) {
 
       if (call.trim ().length === 0) return;
@@ -202,15 +102,15 @@ B.mrespond ([
       });
 
    }],
-   ['retrieve', 'cell', function (x) {
 
-      var cellName = window.location.hash.replace ('#/', '');
+   ['send', 'put', function (x, p, v, nonMute) {
+      var call = [['@', 'put', 'p'].concat (p)].concat (dale.go (v, function (v2) {
+         return ['@', 'put', 'v'].concat (v2);
+      }));
 
-      B.call (x, 'post', 'call/' + cellName, {}, {call: '@', mute: true}, function (x, error, rs) {
-         if (error) return B.call (x, 'report', 'error', error);
-         B.call (x, 'set', 'dataspace', rs.body.response);
-      });
+      B.call (x, 'send', 'call', cell.pathsToText (call), ! nonMute);
    }],
+
    ['upload', 'clipboard', async function (x) {
       var file = await navigator.clipboard.readText ();
 
@@ -250,6 +150,129 @@ B.mrespond ([
 
       reader.readAsDataURL (file);
    }],
+
+   // *** MOVE AROUND ***
+
+   ['click', 'step', function (x, path, index) {
+      var cursor = get (['editor', 'cursor'], [], {});
+
+      var selected = teishi.eq (path, cursor.path) && cursor.index === index;
+
+      B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: path, index: index, editing: selected}));
+
+      var cursorEl = c ('input.cursor') [0];
+      if (! cursorEl) return; // Might not yet be an input, will be after the redraw
+      cursorEl.focus ();
+      cursorEl.setSelectionRange (cursorEl.value.length, cursorEl.value.length);
+   }],
+
+   ['keydown', [], function (x, key) {
+
+      // If an input/textarea is being edited that is not on the datagrid, ignore the event.
+      var activeElement = document.activeElement.tagName.toLowerCase ();
+      if (['input', 'textarea'].includes (activeElement) && c.get (activeElement, 'class').class !== 'cursor') return;
+
+      // If there's no cursor, there's nothing to do.
+      var cursor = get (['editor', 'cursor'], [], {});
+
+      // Two modes: 1) moving around vs 2) editing
+
+      // MOVING AROUND
+      if (! ['input', 'textarea'].includes (activeElement)) {
+
+         // Left
+         if ([37, 66, 72].includes (key)) {
+            if (cursor.index > 0) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index - 1]);
+         }
+         // Right
+         if ([39, 76, 87].includes (key)) {
+            if (cursor.index + 1 < cursor.path.length) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index + 1]);
+         }
+
+         var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+            if (path [0] !== 'editor') return path;
+         });
+
+         var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
+            if (teishi.eq (path, cursor.path)) return k;
+         });
+
+         // Up, down
+         if ([38, 75, 40, 74].includes (key)) {
+            var up = [38, 75].includes (key);
+            var newPath = paths [pathIndex + (up ? -1 : 1)];
+            if (newPath) {
+               var range = [dale.stopNot (newPath, undefined, function (v, k) {
+                  var previousPath = paths [pathIndex + (up ? -2 : 0)] || [];
+                  if (v !== previousPath [k]) return k;
+               }), newPath.length - 1];
+
+               var index;
+               if (cursor.index < range [0]) index = range [0];
+               else if (cursor.index > range [1]) index = range [1];
+               else index = cursor.index;
+
+               return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: newPath, index: index}));
+            }
+         }
+      }
+
+      // EDITING
+
+      // ESC
+      if (key === 27) return B.call (x, 'send', 'put', ['editor', 'cursor'], []);
+      // Enter
+      if (key === 13) {
+         var value = cell.toNumberIfNumber (cursorElement.value);
+
+         if (value === cursor.path [cursor.index]) return B.call (x, 'send', 'put', ['editor', 'cursor'], []);
+
+         var prefix = cursor.path.slice (0, cursor.index);
+         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+            if (path.length < prefix.length) return;
+            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
+            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
+            return [value].concat (path.slice (cursor.index + 1));
+         });
+
+         B.call (x, 'send', 'put', prefix, relevantPaths);
+      }
+      // Space: add step laterally
+      if (key === 32) {
+
+         var value = cell.toNumberIfNumber (cursorElement.value);
+
+         var prefix = cursor.path.slice (0, cursor.index);
+         var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
+            if (path.length < prefix.length) return;
+            if (! teishi.eq (path.slice (0, prefix.length), prefix)) return;
+            if (cursor.path [cursor.index] !== path [cursor.index]) return path.slice (cursor.index);
+            return [value, ''].concat (path.slice (cursor.index + 1));
+         });
+
+         B.call (x, 'send', 'put', prefix, relevantPaths);
+         // var path = cursor.path.splice (cursor.index + 1, 0, '');
+         // B.call (x, 'set', 'cursor', {index: cursor.index, path: path, editing: true});
+      }
+   }],
+
+   ['expand', 'path', function (x, prefix) {
+      var expand = get (['editor', 'expand'], [], []);
+      expand.push (prefix);
+
+      B.call (x, 'send', 'put', ['editor', 'expand'], expand);
+   }],
+   ['fold', 'path', function (x, prefix) {
+      var expand = get (['editor', 'expand'], [], []);
+      expand = dale.fil (expand, prefix, function (v) {return v});
+      if (expand.length === 0) expand = '';
+
+      B.call (x, 'send', 'put', ['editor', 'expand'], expand);
+   }],
+   ['search', [], function (x, term) {
+      B.call (x, 'send', 'put', ['editor', 'search'], [term]);
+   }],
+
 ]);
 
 // *** VIEWS ***
@@ -263,7 +286,7 @@ views.css = [
 views.main = function () {
 
    return B.view ([['dataspace'], ['call'], ['loading']], function (dataspace, call, loading) {
-      var dialogue = cell.pathsToJS (cell.get (['dialogue'], [], function () {return B.get ('dataspace') || []}));
+      var dialogue = get (['dialogue'], [], []);
 
       var spinny = ['span', {style: style ({
          border: '2px solid rgba(0,0,0,0.1)',
@@ -343,8 +366,7 @@ views.main = function () {
 
 views.datagrid = function (paths, fold) {
 
-   var search = cell.pathsToJS (cell.get (['search'], [], function () {return B.get ('dataspace')}));
-   if (search === '') search = undefined;
+   var search = get (['editor', 'search'], [], undefined);
 
    if (fold && search === undefined) {
 
@@ -360,10 +382,11 @@ views.datagrid = function (paths, fold) {
       var foldedPaths = [];
       var maxWhenFolded = 3;
 
-      var expanded = cell.pathsToJS (cell.get (['expanded'], [], function () {return B.get ('dataspace')})) || [];
+      var expand = get (['editor', 'expand'], [], []);
+
       dale.go (paths, function (path) {
 
-         if (expanded.includes (path [0])) {
+         if (expand.includes (path [0])) {
             foldedPaths.push (path);
             pathsPerPrefix [path [0]]--;
             // If this is the last element of an unfolded path, put an object to fold it.
@@ -389,96 +412,87 @@ views.datagrid = function (paths, fold) {
       });
    }
 
-   return B.view ('cursor', function (cursor) {
-      cursor = cursor || {};
+   var cursor = get (['editor', 'cursor'], [], {});
+
+   return ['div', {
+      class: 'w-100 overflow-x-auto code',
+      style: style ({
+         'max-height': Math.round (window.innerHeight * 0.8) + 'px',
+         'white-space': 'nowrap',
+      })
+   }, dale.go (paths, function (path, k) {
+
+      if (type (path) === 'object') {
+         if (search !== undefined) return;
+         if (path.entries) return ['div', {
+            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+            onclick: B.ev ('expand', 'path', path.prefix)
+         }, ['Expand all ', path.entries, ' paths...']];
+
+         if (path.hide) return ['div', {
+            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
+            onclick: B.ev ('fold', 'path', path.prefix)
+         }, ['Fold path']];
+      }
+
+      var abridge = 0;
+      if (k > 0) dale.stop (path, true, function (v2, k2) {
+         if (paths [k - 1] [k2] !== v2) return true;
+         abridge++;
+      });
+
+      var height = '';
+      var maxLength = Math.max.apply (null, dale.go (path, function (element) {
+         return (element + '').length;
+      }));
+      if (maxLength > 50) height = (Math.min (9, Math.floor (maxLength / 50)) + 2) + 'rem';
+
       return ['div', {
-         class: 'w-100 overflow-x-auto code',
+         class: 'cf',
          style: style ({
-            'max-height': Math.round (window.innerHeight * 0.8) + 'px',
             'white-space': 'nowrap',
-         })
-      }, dale.go (paths, function (path, k) {
+         }),
+      }, dale.go (path, function (element, k) {
 
-         if (type (path) === 'object') {
-            if (search !== undefined) return;
-            if (path.entries) return ['div', {
-               class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-               onclick: B.ev ('expand', 'path', path.prefix)
-            }, ['Expand all ', path.entries, ' paths...']];
+         var searchMatch = search !== undefined && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
 
-            if (path.hide) return ['div', {
-               class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-               onclick: B.ev ('fold', 'path', path.prefix)
-            }, ['Fold path']];
-         }
+         var abridged = k < abridge;
 
-         var abridge = 0;
-         if (k > 0) dale.stop (path, true, function (v2, k2) {
-            if (paths [k - 1] [k2] !== v2) return true;
-            abridge++;
-         });
+         if (element === '') element = '""';
 
-         var height = '';
-         var maxLength = Math.max.apply (null, dale.go (path, function (element) {
-            return (element + '').length;
-         }));
-         if (maxLength > 50) height = (Math.min (9, Math.floor (maxLength / 50)) + 2) + 'rem';
+         var f1rst = k === 0;
+
+         var selected = teishi.eq (path, cursor.path) && cursor.index === k;
 
          return ['div', {
-            class: 'cf',
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
             style: style ({
-               'white-space': 'nowrap',
+               'height': height
             }),
-         }, dale.go (path, function (element, k) {
+            onclick: B.ev ('click', 'step', path, k),
+         }, (function () {
 
-            var searchMatch = search !== undefined && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
+            if (! selected) return element;
 
-            var abridged = k < abridge;
+            if (cursor.editing) return ['input', {
+               class: 'cursor',
+               value: element,
+            }];
 
-            if (element === '') element = '""';
+            return element;
 
-            var f1rst = k === 0;
-
-            var selected = teishi.eq (path, cursor.path) && cursor.index === k;
-
-            return ['div', {
-               class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
-               style: style ({
-                  'height': height
-               }),
-               onclick: B.ev ('click', 'step', path, k),
-            }, (function () {
-
-               if (! selected) return element;
-
-               if (cursor.editing) return ['input', {
-                  class: 'cursor',
-                  value: element,
-                  onkeydown: B.ev ('edit', 'keydown', {raw: 'event'}),
-               }];
-
-               return element;
-
-            }) ()];
-         })];
-
+         }) ()];
       })];
-   });
+   })];
 }
 
 views.cell = function () {
    return B.view ('dataspace', function (dataspace) {
 
-      var search = '';
+      var search = get (['editor', 'search'], [], undefined);
 
-      var paths = dale.fil (cell.get ([], [], function () {return dataspace}), undefined, function (v) {
-         if (v [0] === 'dialogue') return; // Don't show the dialogue
-         if (v [0] === 'expanded') return; // Don't show expanded
-         if (v [0] === 'search') {
-            search = v [1];
-            return; // Don't show search, but set it to the local variable.
-         }
-         return v;
+      var paths = dale.fil (dataspace, undefined, function (path) {
+         if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
       });
 
       return ['div', {class: 'pa3 flex flex-column items-center'}, [

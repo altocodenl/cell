@@ -1,0 +1,16 @@
+Fifth episode of season 3! I'm building a programming environment from scratch while recording myself. Big bang refactor, but it almost seems to work, and it was quite fun. Definitely a good idea to have the data of the editor inside the cell. The refactor felt good, like everything nas a better place now, in the code and in my mind. Onwards!
+
+https://github.com/altocodenl/cell
+
+I see also the search and the expand. We need to deal with this too.
+
+We're doing a big bang refactor (cursor in the dataspace, one single keydown responder), wish us luck!
+
+Let's go with the splicing of all data in the general dataspace of the cell, rather than constraining it to "data". So you can, if you want, overwrite things (although you could still do that even having everything inside data). Let's go with it and see if it works.
+
+TODO next:
+- Put cursor in dataspace (ignore it when filtering out paths to navigate) [DONE]
+- Fix the things still broken by the refactor (move around, edit in place)
+- Don't allow going left into the abridged zone
+- Implement add ground laterally and below.
+- Implement remove

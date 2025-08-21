@@ -2,35 +2,76 @@
 
 ## 2.2 Defining Functions
 
-```
+```lisp
 (defun double (x) (* x 2))
 
+> (double 1)
+2
+
+> #'double
+#<Interpreted-Function C66ACE>
+```
+
+```js
 var double = function (x) {
     return x * 2;
 }
 
+> double (1)
+2
+
+> double
+[Function: double]
+```
+
+```cell
 double @ do x . @ * . x
                     . 2
-```
 
-```
-#'double
+= 2
+@ double 1
 
-console.log (double);
-
+= x 1
 @ double
 ```
 
+```lisp
+> (eq #’double (car (list #’double)))
+T
 ```
-(lambda (x) (* x 2))
 
+```js
+> double === [double] [0]
+true
+```
+
+```cell
+       = ...
+@ eq 1 @ double
+           = ...
+       = 1 @ double
+     2 1 @ double 1
+```
+
+
+```lisp
+(lambda (x) (* x 2))
+```
+
+```js
 function (x) {
     return x * 2;
 }
-
-@ do x . @ * . @ x
-             . 2
 ```
+
+```cell
+= x 1
+@ do x . @ * - @ x
+             - 2
+```
+
+
+
 
 ```
 ((lambda (x) (* x 2)) 3)
