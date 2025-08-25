@@ -46,13 +46,15 @@ true
 ```
 
 ```cell
-       = ...
-@ eq 1 @ double
-           = ...
-       = 1 @ double
-     2 1 @ double 1
-```
+// "We don't have a way to put parenthesis around a call. We'd need something like `(@ double) 1` to replicate this. So we instead use a separate variable, which works as a parenthesis.
 
+@ "double list" 1 @ double
+= 1
+       = ...
+@ eq - @ double
+         = ...
+     - @ "double list" 1
+```
 
 ```lisp
 (lambda (x) (* x 2))
@@ -70,16 +72,51 @@ function (x) {
              - 2
 ```
 
-
-
-
+```lisp
+> #’(lambda (x) (* x 2))
+#<Interpreted-Function C674CE>
 ```
-((lambda (x) (* x 2)) 3)
 
-(function (x) {
-    return x * 2;
-}) (3);
+```js
+> (function (x) {return x * 2})
+[Function (anonymous)]
+```
 
+```cell
+= x 1
+@ do x . @ * - @ x
+             - 2
+```
+
+```lisp
+> (double 3)
+6
+```
+
+```js
+> double (3)
+6
+```
+
+```cell
+= 6
+@ double 3
+```
+
+```lisp
+> ((lambda (x) (* x 2)) 3)
+6
+```
+
+```js
+> (function (x) {
+     return x * 2;
+  }) (3);
+```
+
+```cell
+= 6
+??
 @ call do x . @ * . @ x
                   . 2
        m 3

@@ -170,7 +170,8 @@ B.mrespond ([
 
       // If an input/textarea is being edited that is not on the datagrid, ignore the event.
       var activeElement = document.activeElement.tagName.toLowerCase ();
-      if (['input', 'textarea'].includes (activeElement) && c.get (activeElement, 'class').class !== 'cursor') return;
+      // TODO; why do I need [0] here?
+      if (['input', 'textarea'].includes (activeElement) && c.get (activeElement, 'class') [0] ['class'] !== 'cursor') return;
 
       // If there's no cursor, there's nothing to do.
       var cursor = get (['editor', 'cursor'], [], {});
@@ -180,15 +181,6 @@ B.mrespond ([
       // MOVING AROUND
       if (! ['input', 'textarea'].includes (activeElement)) {
 
-         // Left
-         if ([37, 66, 72].includes (key)) {
-            if (cursor.index > 0) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index - 1]);
-         }
-         // Right
-         if ([39, 76, 87].includes (key)) {
-            if (cursor.index + 1 < cursor.path.length) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index + 1]);
-         }
-
          var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
             if (path [0] !== 'editor') return path;
          });
@@ -197,35 +189,42 @@ B.mrespond ([
             if (teishi.eq (path, cursor.path)) return k;
          });
 
+         // Left
+         if ([37, 66, 72].includes (key)) {
+            if (cursor.index > 0 && (pathIndex === 0 || paths [pathIndex - 1] [cursor.index - 1] !== cursor.path [cursor.index - 1])) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index - 1]);
+         }
+         // Right
+         if ([39, 76, 87].includes (key)) {
+            if (cursor.index + 1 < cursor.path.length) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index + 1]);
+         }
+
          // Up, down
          if ([38, 75, 40, 74].includes (key)) {
             var up = [38, 75].includes (key);
-            var newPath = paths [pathIndex + (up ? -1 : 1)];
-            if (newPath) {
-               var range = [dale.stopNot (newPath, undefined, function (v, k) {
-                  var previousPath = paths [pathIndex + (up ? -2 : 0)] || [];
-                  if (v !== previousPath [k]) return k;
-               }), newPath.length - 1];
+            var where = dale.stopNot (dale.times (up ? pathIndex : paths.length - 1 - pathIndex, up ? pathIndex - 1 : pathIndex + 1, up ? -1 : 1), undefined, function (k) {
+               if (paths [k] [cursor.index] === cursor.path [cursor.index]) return;
+               if (! up) return paths [k];
+               if (! paths [k - 1] || paths [k - 1] [cursor.index] !== paths [k] [cursor.index]) return paths [k];
+            });
 
-               var index;
-               if (cursor.index < range [0]) index = range [0];
-               else if (cursor.index > range [1]) index = range [1];
-               else index = cursor.index;
-
-               return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: newPath, index: index}));
-            }
+            if (where) return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: where, index: cursor.index}));
          }
+
+         // Enter
+         if (key === 27) return B.call (x, 'click', 'step', cursor.path, cursor.index);
+
+         return;
       }
 
       // EDITING
 
       // ESC
-      if (key === 27) return B.call (x, 'send', 'put', ['editor', 'cursor'], []);
+      if (key === 27) return B.call (x, 'send', 'put', ['editor', 'cursor', 'editing'], [[0]]);
       // Enter
       if (key === 13) {
-         var value = cell.toNumberIfNumber (cursorElement.value);
+         var value = cell.toNumberIfNumber (document.activeElement.value);
 
-         if (value === cursor.path [cursor.index]) return B.call (x, 'send', 'put', ['editor', 'cursor'], []);
+         if (value === cursor.path [cursor.index]) return B.call (x, 'send', 'put', ['editor', 'cursor'], [['']]);
 
          var prefix = cursor.path.slice (0, cursor.index);
          var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
@@ -240,7 +239,7 @@ B.mrespond ([
       // Space: add step laterally
       if (key === 32) {
 
-         var value = cell.toNumberIfNumber (cursorElement.value);
+         var value = cell.toNumberIfNumber (document.activeElement.value);
 
          var prefix = cursor.path.slice (0, cursor.index);
          var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {

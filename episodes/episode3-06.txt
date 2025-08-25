@@ -1,0 +1,33 @@
+Sixth episode of season 3! I'm building a programming environment from scratch while recording myself. Lots of ideas of things to implement. Unexpectedly, I end up writing some tests in words, and execute them by hand when running the code. The editor feels a bit like a game; at least there's quite some jumping around. Really keen to see the editor unfold quickly into a useful thing.
+
+https://github.com/altocodenl/cell
+
+At least, let's write the editor tests:
+- dataspace is:
+
+foo bar 1 jip
+        2 joo
+    soda wey
+something else
+
+- Noop
+   - If the input/textarea on the right is selected, don't do anything on the left.
+   - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
+- Without being in editing mode:
+   - Click on a non selected step and see how the cursor jumps there.
+   - Go to the left, don't do anything because you're already at position 1.
+   - Go all the way to the right, one at a time, until you hit the last one.
+   - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
+   - Do the same going up, it should also jump up.
+   - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). See you can't go left.
+- Editing:
+   - Click on a selected step and enter edit mode.
+   - Change the value.
+   - Exit it again with escape, this will not change the value.
+   - Enter edit mode again with enter.
+   - Change the value again.
+   - Exit it again with enter, this will save the change.
+
+TODO:
+- Keep on writing the rest of the tests for the cursor and editing.
+- Fix them all.

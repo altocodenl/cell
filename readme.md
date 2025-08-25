@@ -54,15 +54,19 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 - Move around
    - Have a cursor [DONE]
-   - Move it around with the keys [DONE]
-   - Search
+   - Move it around with the keys
+      - When being at level n, if click on down, go to the next distinct path with level n, or don't move.
+   - Jumping search
    - Fold/expand
    - Auto scroll to where the cursor is, if the cursor jumps
+   - Select and copy?
 
 - Make changes:
    - Edit step [DONE]
    - Add
       - Add ground laterally (one step)
+         - At the end
+         - In the middle
       - Add ground at the bottom (remove step)
    - Remove
       - Join steps
@@ -70,18 +74,24 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
       - Remove path with all suffixes (show what would be deleted by highlighting, first delete shows you the extent of the deletion, second executes)
    - Support for quoted texts
 
-- Store the cursor information inside the cell dataspace.
-- shrink to screen, no horizontal scroll, instead use ellipses
+- Diffs
+   - Give ids to calls
+   - Make mute calls still be in the dialogue but not shown
+   - Rename dialogue to dialog
+- undo
+- show images and graphs where the = is, as a large pseudo step (a la netscape)
 - quick search (macro?)
 - vim mode when editing long texts
 - table view?
+- shrink to screen, no horizontal scroll, instead use ellipses
 
 ### Language
 
+- edit
+- wipe
 - change dot to dash for placeholders of list
 - do
    - native calls
-      - remove eval from native calls
       - add validations
       - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
       - test each of them, also with multiple arguments
@@ -316,6 +326,41 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+### 2025-08-25
+
+ Add a diff in the cell, which can be coupled (but not inside) the dialogue. Add timestamp entries (the sortable, iso kind) plus -NOUN-NOUN, so we can recognize it. Store the diff as a set of - and +, perhaps using Myers.
+
+Add wipe and edit commands, to modify things beyond get and put.
+
+wipe takes a prefix. it can actually be wipe 1 in the put, instead of v! sure, but let's add wipe as a shorthand.
+
+Start with everything showing, then hide at a step. when hiding at a step, hide everything after that prefix. to expand, go to the frozen and click enter to unhide, the frozen shows (...), without a number.
+
+How would the diff look? we have calls and some of them generate diffs. we need an universal diff: - and +. Can do it per line, but it's better to think of it in terms of paths. there's a condensation, if you rename a prefix that has a lot of paths. then, you'd like to just see that rename. but isn't that too short? Perhaps you do want to see the call, there you see the rename, and then you just see the diff line by line, but with that github thing of highlighting what's different in the - and +. Some calls have diffs.
+
+Mute calls are not shown in the dialogue but they should be in the dialogue.
+
+Do we include the diff in the call? we link them. calls need a time and an id. the id should have also the name of the cell, so things can be portable.
+in the diff, do we skip the : and =? I think not, you want to see how results change!
+
+Show diff as cells but with some extra markup that will later be added as a ui macro.
+
+Show graphical things built in in the =! as a 400x400 (adjustable to the screen), for example graphs or images. it's right there! you can see feedback from your text changes directly in the graph.
+
+For edit: what about merging? do we allow it? Do we overwrite the old or the new? We pick a good default: auto merge and overwrite the target with those that you are renaming (if not, do it the other way around).
+
+If you have foo bar 1 and foo jip 2, if you edit foo, you're editing all the foos. If you don't want to do that, you have to do a copy to a new name. You're basically editing on all prefixes, not just one, by default.
+
+Implementing sublinear cell in redis:
+- Consider each step to be represented by four things: an id, a value, a position (1, 2, ...) and the id of the parent. For example, the "bar" in foo bar would have value bar, position 2, and the parent id would be that of foo.
+- What about naive indexing on redis? Take each column (row) that's not an id and make it into a set. For example: value:bar would be a set of all the ids (of steps) that have as value "bar". Or position:2 would be a set of all the steps that are in position 2. And children:ID would be the set of all the steps that are children of the step ID.
+- The deeper idea is to sets like masks. I'd love a prefix mask where shorter and longer elements that have similar prefixes match, and this would be done inside redis without having to go to the Lua script.
+- Example: look for "status 200", where those are two distinct steps, one next to each other. They are at any position, so ignore the position. You would start by looking those ids with status, then get all the 200 that have each of those ids as parent, then intersect for a result. I'm itching to find a pattern like that in Earley's parser where you "combine like subparses". Rather than starting from a point, you go through each of the search terms in parallel, gathering subresults in sets, and then you intersect until you get all the steps that match. Then, you linearly reconstruct the paths from the ids.
+
+There's the "jumping search" and the "compacting search" -- the latter only shows you the paths that match your query, but without context except for the prefix. The jumping search shows you the whole thing and you just jump.
+
+By default, things should be expanded, the cursors will help you jump around, because going down at level 2 should take you to the next distinct value at level 2!
 
 ### 2025-08-20
 
