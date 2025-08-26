@@ -116,6 +116,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ### Service
 
+- Make a queue per cell to process things. Take cb.
 - ai
 - outbound http
 - email
@@ -326,6 +327,16 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+### 2025-08-26
+
+Logged like 3mb of data into cell today. Fourdata shows it cleanly.
+
+At the same time, made me think that with a few mbs, the client will be unusable, and I need to query the server per "screen", so we can scroll and jump up and down. That would be quite a feat. And I need it to be continuous. And not in a plain text file.
+
+And sending many almost concurrent requests basically broke it. I need to implement a queue per cell so that the fs.writeFile don't step on each other.
+
+It really feels like programming the editor is like programming the movement of a game. A boring one, perhaps.
 
 ### 2025-08-25
 

@@ -116,7 +116,7 @@ var routes = [
 
       if (stop (rs, [
          ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
-         ['call', rq.body.call, 'string'],
+         ['call', rq.body.call, ['string', 'object'], 'oneOf'],
          ['mute', rq.body.mute, [undefined, true, false], 'oneOf', teishi.test.equal],
       ])) return;
 
@@ -139,6 +139,8 @@ var routes = [
             dataspace = Dataspace;
             fs.writeFileSync (path, cell.pathsToText (dataspace), 'utf8');
          }
+
+         if (type (rq.body.call) === 'object') rq.body.call = cell.JSToPaths (rq.body.call);
 
          var response = cell.call (rq.body.call, get, put);
          var dialogue = cell.call ('@ dialogue', get, put);

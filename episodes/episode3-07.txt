@@ -1,0 +1,29 @@
+Seventh episode of season 3! I'm building a programming environment from scratch while recording myself. Today, a lot of editor. Jumping around, letting the screen follow the cursor. I get stumped calculating offsets, but so does chatgpt 5, so I don't feel so replaceable yet. I'm so keen to get this editor to work so I can start using it!
+
+https://github.com/altocodenl/cell
+
+TODO:
+Take JS in the service [DONE]
+- Keep on writing the rest of the tests for the cursor and editing.
+- Fix them all.
+
+- Noop
+   - If the input/textarea on the right is selected, don't do anything on the left.
+   - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
+- Without being in editing mode:
+   - Click on a non selected step and see how the cursor jumps there.
+   - Go to the left, don't do anything because you're already at position 1.
+   - Go all the way to the right, one at a time, until you hit the last one.
+   - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
+   - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
+   - Do the same going up, it should also jump up.
+   - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). See you can't go left.
+   - Scroll down/up when jumping far enough (requires more than a screenful of data). [YOU ARE HERE]
+   - When reloading the page, if the selected element is far down enough, jump to it automatically.
+- Editing:
+   - Click on a selected step and enter edit mode.
+   - Change the value.
+   - Exit it again with escape, this will not change the value.
+   - Enter edit mode again with enter.
+   - Change the value again.
+   - Exit it again with enter, this will save the change.

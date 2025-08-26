@@ -166,6 +166,32 @@ B.mrespond ([
       cursorEl.setSelectionRange (cursorEl.value.length, cursorEl.value.length);
    }],
 
+   ['redraw', [], {match: function (ev, responder) {
+      return ev.verb === responder.verb;
+   }}, function (x) {
+      var selected = c ('.selected') [0];
+      var box = c ('.main-datagrid') [0];
+      if (! selected || ! box) return;
+
+      var selectedC = selected.getBoundingClientRect ();
+      var boxC      = box.getBoundingClientRect ();
+
+      var x = 0, y = 0;
+
+      var margin = 60;
+
+      if      (selectedC.top > boxC.bottom - margin) y = selectedC.top - margin; // Scroll down
+      else if (selectedC.top < boxC.top    - margin) y = selectedC.top - margin; // Scroll up
+
+      if      (selectedC.left > boxC.right - margin) x = selectedC.left - margin; // Scroll right
+      else if (selectedC.left < boxC.left  - margin) x = selectedC.left - margin; // Scroll left
+
+      box.scrollTo ({
+         top:  box.scrollTop + y,
+         left: box.scrollLeft + x,
+      });
+   }],
+
    ['keydown', [], function (x, key) {
 
       // If an input/textarea is being edited that is not on the datagrid, ignore the event.
@@ -207,7 +233,7 @@ B.mrespond ([
                if (! paths [k - 1] || paths [k - 1] [cursor.index] !== paths [k] [cursor.index]) return paths [k];
             });
 
-            if (where) return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: where, index: cursor.index}));
+            if (where) return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: where, index: Math.min (cursor.index, where.length - 1)}));
          }
 
          // Enter
@@ -363,7 +389,7 @@ views.main = function () {
    });
 }
 
-views.datagrid = function (paths, fold) {
+views.datagrid = function (paths, main, fold) {
 
    var search = get (['editor', 'search'], [], undefined);
 
@@ -414,7 +440,7 @@ views.datagrid = function (paths, fold) {
    var cursor = get (['editor', 'cursor'], [], {});
 
    return ['div', {
-      class: 'w-100 overflow-x-auto code',
+      class: 'w-100 overflow-x-auto code ' + (main ? 'main-datagrid' : ''),
       style: style ({
          'max-height': Math.round (window.innerHeight * 0.8) + 'px',
          'white-space': 'nowrap',
@@ -464,7 +490,7 @@ views.datagrid = function (paths, fold) {
          var selected = teishi.eq (path, cursor.path) && cursor.index === k;
 
          return ['div', {
-            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' selected bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
             style: style ({
                'height': height
             }),
@@ -522,7 +548,7 @@ views.cell = function () {
             value: search || '',
          }],
          */
-         views.datagrid (paths, true)
+         views.datagrid (paths, 'main', true)
       ]];
    });
 }
