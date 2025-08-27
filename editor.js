@@ -19,8 +19,8 @@ H.matchVerb = function (ev, responder) {
    return B.r.compare (ev.verb, responder.verb);
 }
 
-var get = function (paths, context, fallback) {
-   var result = cell.pathsToJS (cell.get (paths, context || [], function () {return B.get ('dataspace')}));
+var get = function (path, context, fallback) {
+   var result = cell.pathsToJS (cell.get (path, context || [], function () {return B.get ('dataspace')}));
    return (result === '' && fallback) ? fallback : result;
 }
 
@@ -169,26 +169,26 @@ B.mrespond ([
    ['redraw', [], {match: function (ev, responder) {
       return ev.verb === responder.verb;
    }}, function (x) {
-      var selected = c ('.selected') [0];
-      var box = c ('.main-datagrid') [0];
-      if (! selected || ! box) return;
 
-      var selectedC = selected.getBoundingClientRect ();
-      var boxC      = box.getBoundingClientRect ();
+      var cursor = c ('.selected') [0];
+      var grid = c ('.main-datagrid') [0];
+      if (! cursor || ! grid) return;
 
-      var x = 0, y = 0;
+      var cursorC = cursor.getBoundingClientRect ();
+      var gridC   = grid.getBoundingClientRect ();
 
-      var margin = 60;
+      var x = 0, y = 0, marginX = Math.round (gridC.width / 4), marginY = Math.round (gridC.height / 4);
 
-      if      (selectedC.top > boxC.bottom - margin) y = selectedC.top - margin; // Scroll down
-      else if (selectedC.top < boxC.top    - margin) y = selectedC.top - margin; // Scroll up
 
-      if      (selectedC.left > boxC.right - margin) x = selectedC.left - margin; // Scroll right
-      else if (selectedC.left < boxC.left  - margin) x = selectedC.left - margin; // Scroll left
+      if      (cursorC.bottom > gridC.bottom) y = cursorC.top - marginY; // Scroll down
+      else if (cursorC.top < gridC.top)       y = cursorC.top - gridC.height + marginY; // Scroll up
 
-      box.scrollTo ({
-         top:  box.scrollTop + y,
-         left: box.scrollLeft + x,
+      if      (cursorC.right > gridC.right)   x = cursorC.left - marginX; // Scroll right
+      else if (cursorC.left < gridC.left)     x = cursorC.left - gridC.width + marginX; // Scroll left
+
+      grid.scrollTo ({
+         top:  grid.scrollTop  + y,
+         left: grid.scrollLeft + x,
       });
    }],
 
@@ -208,7 +208,7 @@ B.mrespond ([
       if (! ['input', 'textarea'].includes (activeElement)) {
 
          var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
-            if (path [0] !== 'editor') return path;
+            if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
          });
 
          var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
@@ -217,7 +217,12 @@ B.mrespond ([
 
          // Left
          if ([37, 66, 72].includes (key)) {
-            if (cursor.index > 0 && (pathIndex === 0 || paths [pathIndex - 1] [cursor.index - 1] !== cursor.path [cursor.index - 1])) return B.call (x, 'send', 'put', ['editor', 'cursor', 'index'], [cursor.index - 1]);
+            if (cursor.index === 0) return;
+            var where = dale.stopNot (dale.times (pathIndex + 1, pathIndex, -1), undefined, function (k) {
+               if (! paths [k - 1] || paths [k - 1] [cursor.index - 1] !== paths [k] [cursor.index - 1]) return paths [k];
+            });
+
+            return B.call (x, 'send', 'put', ['editor', 'cursor'], cell.JSToPaths ({path: where, index: cursor.index - 1}));
          }
          // Right
          if ([39, 76, 87].includes (key)) {
@@ -310,7 +315,7 @@ views.css = [
 
 views.main = function () {
 
-   return B.view ([['dataspace'], ['call'], ['loading']], function (dataspace, call, loading) {
+   return B.view ([['dataspace'], ['call']], function (dataspace, call) {
       var dialogue = get (['dialogue'], [], []);
 
       var spinny = ['span', {style: style ({
@@ -329,7 +334,7 @@ views.main = function () {
          ['style', views.css],
          ['style', '@keyframes spin {from { transform: rotate(0deg); } to   { transform: rotate(360deg); }}'],
          ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
-            views.cell (),
+            views.cell (dataspace),
          ]],
          ['div', {
             class: 'fl w-40 pa2 bg-black overflow-auto',
@@ -367,23 +372,25 @@ views.main = function () {
                autofocus: true,
                value: call,
             }],
-            ['div', {class: 'flex flex-column w-100'}, [
-               ['button', {
-                  class: 'w-100 pv2 ph3 br2 bg-blue white hover-bg-dark-blue pointer shadow-1',
-                  onclick: loading ? '' : B.ev ('send', 'call', call)
-               }, loading ? spinny : 'Submit'],
-               ['button', {
-                  class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
-                  onclick: loading ? '' : B.ev ('upload', 'clipboard')
-               }, loading ? spinny : 'Upload from clipboard'],
-               ['input', {
-                  class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
-                  id: 'file-upload', type: 'file', multiple: true,
-               }],
-               ['button', {
-                  onclick: loading ? '' : B.ev ('upload', 'files')
-               }, loading ? spinny : 'Upload files'],
-            ]]
+            B.view ('loading', function (loading) {
+               return ['div', {class: 'flex flex-column w-100'}, [
+                  ['button', {
+                     class: 'w-100 pv2 ph3 br2 bg-blue white hover-bg-dark-blue pointer shadow-1',
+                     onclick: loading ? '' : B.ev ('send', 'call', call)
+                  }, loading ? spinny : 'Submit'],
+                  ['button', {
+                     class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
+                     onclick: loading ? '' : B.ev ('upload', 'clipboard')
+                  }, loading ? spinny : 'Upload from clipboard'],
+                  ['input', {
+                     class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
+                     id: 'file-upload', type: 'file', multiple: true,
+                  }],
+                  ['button', {
+                     onclick: loading ? '' : B.ev ('upload', 'files')
+                  }, loading ? spinny : 'Upload files'],
+               ]];
+            }),
          ]],
       ]];
    });
@@ -511,46 +518,43 @@ views.datagrid = function (paths, main, fold) {
    })];
 }
 
-views.cell = function () {
-   return B.view ('dataspace', function (dataspace) {
+views.cell = function (dataspace) {
 
-      var search = get (['editor', 'search'], [], undefined);
+   var search = get (['editor', 'search'], [], undefined);
 
-      var paths = dale.fil (dataspace, undefined, function (path) {
-         if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
-      });
-
-      return ['div', {class: 'pa3 flex flex-column items-center'}, [
-
-         ['div', {class: 'absolute top-0 left-0 ml2 mt2', style: 'width: 2.5rem; height: 2.5rem;'}, [
-            ['div', {class: 'relative w-100 h-100'}, [
-               ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
-                  ['span', {
-                     class: 'f-headline fw4 black',
-                     style: 'font-family: sans-serif;',
-                  }, 'c']
-               ]],
-               ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
-                  ['span', {
-                     class: 'f1 fw4 black',
-                     style: 'font-family: sans-serif;',
-                  }, 'ə']
-               ]]
-            ]]
-         ]],
-
-
-         /*
-         ['input', {
-            class: 'code w-50 pa3 ba br3 mb3 db center',
-            onchange: B.ev ('search', [], {raw: 'this.value'}),
-            oninput: B.ev ('search', [], {raw: 'this.value'}),
-            value: search || '',
-         }],
-         */
-         views.datagrid (paths, 'main', true)
-      ]];
+   var paths = dale.fil (dataspace, undefined, function (path) {
+      if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
    });
+
+   return ['div', {class: 'pa3 flex flex-column items-center'}, [
+
+      ['div', {class: 'absolute top-0 left-0 ml2 mt2', style: 'width: 2.5rem; height: 2.5rem;'}, [
+         ['div', {class: 'relative w-100 h-100'}, [
+            ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
+               ['span', {
+                  class: 'f-headline fw4 black',
+                  style: 'font-family: sans-serif;',
+               }, 'c']
+            ]],
+            ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
+               ['span', {
+                  class: 'f1 fw4 black',
+                  style: 'font-family: sans-serif;',
+               }, 'ə']
+            ]]
+         ]]
+      ]],
+
+      /*
+      ['input', {
+         class: 'code w-50 pa3 ba br3 mb3 db center',
+         onchange: B.ev ('search', [], {raw: 'this.value'}),
+         oninput: B.ev ('search', [], {raw: 'this.value'}),
+         value: search || '',
+      }],
+      */
+      views.datagrid (paths, 'main', true)
+   ]];
 }
 
 B.call ('initialize', []);

@@ -1,0 +1,3 @@
+Eight episode of season 3! I'm building a programming environment from scratch while recording myself. Today, fun with the editor. We implement the jump scroll correctly, also improve performance. It's still slowish, but threatening to be useful. I cannot hope for anything more: if this becomes useful, it's on.
+
+https://github.com/altocodenl/cell

@@ -6,6 +6,12 @@ Programming is currently much harder than writing prose. Reading programs is als
 
 The goal of cell is to make programming easier, so that it is only as demanding as writing prose. By making programming more accessible to more writers and readers, we hope to empower more humans to create and own their own [information systems](https://github.com/altocodenl/todis).
 
+### Additional vibe goals
+
+- Make information systems habitable.
+- Provide a different everyday fabric of computation.
+- Find a sweet spot between the low-level spreadsheets and programming languages, on one end, and big, clunky applications on the other.
+
 ## How
 
 The core understanding behind cell is this: originally, we developed computers to get the result of various mathematical calculations. But this is not the case anymore: most of our systems now are not concerned with calculations, but rather, with the management of data. More precisely, we use computers to store, communicate and transform data. In short, computers and programs are only valuable because they let us work with data. **The game is data.**
@@ -52,17 +58,21 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ### Editor
 
-- Move around
+- Find
    - Have a cursor [DONE]
-   - Move it around with the keys
-      - When being at level n, if click on down, go to the next distinct path with level n, or don't move.
+   - Move it around with the keys [IN PROGRESS]
    - Jumping search
-   - Fold/expand
+   - Fold/unfold
    - Auto scroll to where the cursor is, if the cursor jumps
    - Select and copy?
+   - Show images and graphs where the = is, as a large pseudo step (a la netscape)
+   - Search input that calls the search call (see devnotes 2025-08-27)
+   - Store searches in the dataspace and have quick retrieval
+   - Table view with headers at top and rows on the left?
+   - Fast scrolling with >100k (see devnotes 2025-08-27)
 
-- Make changes:
-   - Edit step [DONE]
+- Write
+   - Edit step [DONE, NEEDS REWORK]
    - Add
       - Add ground laterally (one step)
          - At the end
@@ -73,23 +83,43 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
       - Remove step
       - Remove path with all suffixes (show what would be deleted by highlighting, first delete shows you the extent of the deletion, second executes)
    - Support for quoted texts
+   - Diffs
+      - Give ids to calls
+      - Make mute calls still be in the dialogue but not shown
+      - Rename dialogue to dialog
+   - Undo
+   - Vim mode when editing long texts
 
-- Diffs
-   - Give ids to calls
-   - Make mute calls still be in the dialogue but not shown
-   - Rename dialogue to dialog
-- undo
-- show images and graphs where the = is, as a large pseudo step (a la netscape)
-- quick search (macro?)
-- vim mode when editing long texts
-- table view?
-- shrink to screen, no horizontal scroll, instead use ellipses
+### Editor tests (TODO: move to code)
+
+- Noop
+   - If the input/textarea on the right is selected, don't do anything on the left.
+   - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
+- Find
+   - Click on a non selected step and see how the cursor jumps there.
+   - Go to the left, don't do anything because you're already at position 1.
+   - Go all the way to the right, one at a time, until you hit the last one.
+   - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
+   - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
+   - Do the same going up, it should also jump up.
+   - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). When you go left, rather than going to the abridged, you jump up and left until foo bar (the previous path that has a nonabridged step at position 3).
+   - Scroll down/up when jumping far enough (requires more than a screenful of data).
+      - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
+      - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
+      - Same with right & left.
+   - When reloading the page, if the selected element is far down/right enough, autoscroll to it automatically.
+- Write [YOU ARE HERE]
+   - Click on a selected step and enter edit mode.
+   - Change the value.
+   - Exit it again with escape, this will not change the value.
+   - Enter edit mode again with enter.
+   - Change the value again.
+   - Exit it again with enter, this will save the change.
 
 ### Language
 
-- edit
-- wipe
-- change dot to dash for placeholders of list
+- More calls: edit, wipe
+- Change dot to dash for placeholders of list
 - do
    - native calls
       - add validations
@@ -104,24 +134,35 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
    - test ascending funarg (return function)
 - loop
 - error (catch)
-- query (general call to get matching paths)
+- search (general call to get matching paths)
 - replace (macro)
 - wall (block walking up, but not down)
+- Recursive lambdas by referencing itself?
+- Parsing issues:
+   - Distinguishing literal dots in hashes.
+   - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
 
 ### Database
 
-- Sublinear get
+- Sublinear search
    - Set from a path to all its following steps (just the next one)
    - Set from a step (by value) to all its prefixes
 
+Cell engines (dbs):
+- Disk (improve efficiency enough so that it's at least linear)
+- Redis (with aof)
+- Postgres
+
 ### Service
 
-- Make a queue per cell to process things. Take cb.
+- Altocookies: login with email with link (no password) or oauth with providers that always provide email (google)
+- Make a queue per cell to process calls. Take cb as argument.
 - ai
 - outbound http
-- email
-- auth
+- inbound email
 - domain
+- Encrypted (password/passkey protected) dumps/restores
+- PWAs out of the box.
 
 ## Illustrated use cases
 
@@ -173,13 +214,13 @@ These new features are built on top of the same mechanisms that make the spreads
 
 ### Erlang
 
-No notion of processes. Errors are stopping values that bubble all the way up to the caller. The system is never broken.
+No notion of processes. Errors are stopping values that bubble all the way up to the caller. The system is never broken and always runs.
 
 ### Lisp
 
 No explicit parens, use instead lines to put multiple elements.
 
-Instead of just lists and atoms, there are lists and hashes.
+Instead of just lists and atoms, there are lists and hashes, as well as numbers and text.
 
 Macros are done on paths. Macros are *only* about selectively unfreezing some definitions before they are frozen again.
 
@@ -328,6 +369,42 @@ TODO: everything :)
 
 ## Development notes
 
+## 2025-08-27
+
+Ideas for implementing jumping around with quite some data (>100kb):
+   - When scrolling down or up to put the cursor back on screen, have two "doors": areas of the screen through which the cursor appears. These should be near the top and near the bottom for y scroll, but not at the bottom or top. So, if you scroll down, don't suddenly put the cursor at the bottom (just a little bit, like the spreadsheet) or at the top (like a paginated jump), but towards the bottom, like a little jump that shows you the context of the cursor. Same with going up, instead of putting it completely up or at the bottom of the previous "screen", put it close to the bottom but not fully. So, basically, like spreadsheet scroll but with a buffer. More "arcade".
+   - When going left or right, the logic should be the same.
+   - Also, when scrolling, make sure that the far edge of the cursor is in. If scrolling up, take its bottom; if scrolling up, take its top.
+   - When moving around in the screen, retain the scroll position, even if you go to a cell that's fully on the edge. I was going to say don't let cells to be cut by edges but that would remove the continuous nature of it, so never mind. But if you jump to those cut ones, they should be brought back into focus by the mechanism above. Perhaps, rather than a fixed margin, I just need to look to see if things are fully on screen.
+   - How to redraw efficiently? Estimate how many paths can be shown on screen at one time, and keep 3X drawn on the DOM (the one showing, plus one buffer on each side - this does feel like an old game). The cursor gives you the offset. You still redraw the 3x, but it's perhaps 100-120 paths (600 divs or so) rather than tens or hundreds of thousands. That should be fast enough. Computing the position of the whole thing from scratch would be very heavy, and so would be putting the paths on screen to see how many fit; better to go with a good guess based on the screen parameters.
+   - If this works well, we can put up with cells of up to 20-50mb in modern browsers in laptops. That would push the need for a thin client with constant server querying quite farther in the future. There's a lot of use to be had if we can deal with up to 10mb of data already.
+   - How do we deal with the scrollbar? Do we get rid of it?
+
+It's not "move around", but "find". You find by moving around, by searching and by folding/unfolding.
+
+Undo and versions are part of making changes. Also a bit about finding, but mainly about writing. Also, it's "writing", not "making changes".
+
+On search:
+   - With the search box being text, we can still leverage paths: you're querying paths. If you enter `status 200`, you're looking for two contiguous steps. If you want them to match against only one step, then enter "status 200".
+   - Assume partial match rather than full match, that's way more useful as a default.
+   - Wildcards stand for any value of a step. A double wildcard stands for any value on one or more steps between those two, but not zero of them.
+   - The question is, how do we go further? Because going further is basically code. You could presumably write a search in fourdata and you'd get the result. A sort of lambda query that then you could save if you wanted. This hints at having an area to store queries/searches.
+
+Ops that are implied in the editor: saving (because everything is saved) and running (because everything runs continuously).
+
+The editor is the interface to the language. The language is the interface to the service. The service is the interface to the database, but not only that (http, email). See it as vertical boxes supported by pillars between them.
+
+It is key that outgoing calls are also in cell, not just the results but also the doing of them, from a service monitoring perspective. Abridged data has to be present in an admin area for abuse monitoring. Same for rate limiting: this data should be in cell and the ops should be efficient enough to actually support the real operations.
+
+Cell engines (dbs):
+- Disk
+- Redis
+- Postgres
+
+Types are really properties, in the sense of property-based testing. Was thinking about this in the context of making the language tests more general: you could say <text a> and <text b>, and it could be embodied/executed by running the test n times with two different texts. For testing on properties, we need generators, and those can be either deterministic or random. In any case, the tests stand strong. I have to bite the bullet and add tests for the editor.
+
+Fun discovery: when going up, down and left you can jump sometimes. When going right, you either move one or you stay in place because you're already at the edge.
+
 ### 2025-08-26
 
 Logged like 3mb of data into cell today. Fourdata shows it cleanly.
@@ -442,22 +519,6 @@ macros: can be completely runtime, in the language. we can use `replace`, which 
 - No parenthesis, but a couple of evaluation rules (still too few to be considered a proper full-blown syntax)
 - Everything's quoted by default, you need to make calls explicitly
 - Macros are simple data manipulation operations on sequences. The explicitness of @ allows this, because it can considered as data until it is expanded.
-
-## TODO
-
-- Altocookies: login with email with link or oauth with providers that always provide email (google)
-- Cloud: main implementation in redis, backup in postgres. Option to acknowledge writes only when they're also in postgres.
-- Implement the editor in cell itself, so that it interacts with the cell server through the same mechanisms.
-- Recursive lambdas by referencing itself from inside the loop?
-- Diff by non-abridged fourdata with nonlexicographic sorting of number keys, lines of rem, add & keep.
-- PWAs out of the box.
-- Encrypted dumps/restores.
-- Implementation of U and of pg's lisp interpreter.
-- Self-hosting.
-
-- Parsing issues I am playing dumb about:
-   - Distinguishing literal dots in hashes.
-   - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
 
 ## Annotated source code (fragments)
 

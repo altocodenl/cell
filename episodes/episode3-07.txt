@@ -3,7 +3,7 @@ Seventh episode of season 3! I'm building a programming environment from scratch
 https://github.com/altocodenl/cell
 
 TODO:
-Take JS in the service [DONE]
+- Take JS in the service [DONE]
 - Keep on writing the rest of the tests for the cursor and editing.
 - Fix them all.
 
