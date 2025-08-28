@@ -60,7 +60,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 - Find
    - Have a cursor [DONE]
-   - Move it around with the keys [IN PROGRESS]
+   - Move it around with the keys [DONE]
    - Jumping search
    - Fold/unfold
    - Auto scroll to where the cursor is, if the cursor jumps
@@ -72,12 +72,13 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
    - Fast scrolling with >100k (see devnotes 2025-08-27)
 
 - Write
-   - Edit step [DONE, NEEDS REWORK]
+   - Edit step [DONE]
    - Add
       - Add ground laterally (one step)
          - At the end
          - In the middle
       - Add ground at the bottom (remove step)
+      - A way to create space that doesn't entail editing something already there. Sort of a blank space that you can create or go to with a click.
    - Remove
       - Join steps
       - Remove step
@@ -90,35 +91,36 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
    - Undo
    - Vim mode when editing long texts
 
-### Editor tests (TODO: move to code)
-
-- Noop
-   - If the input/textarea on the right is selected, don't do anything on the left.
-   - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
-- Find
-   - Click on a non selected step and see how the cursor jumps there.
-   - Go to the left, don't do anything because you're already at position 1.
-   - Go all the way to the right, one at a time, until you hit the last one.
-   - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
-   - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
-   - Do the same going up, it should also jump up.
-   - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). When you go left, rather than going to the abridged, you jump up and left until foo bar (the previous path that has a nonabridged step at position 3).
-   - Scroll down/up when jumping far enough (requires more than a screenful of data).
-      - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
-      - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
-      - Same with right & left.
-   - When reloading the page, if the selected element is far down/right enough, autoscroll to it automatically.
-- Write [YOU ARE HERE]
-   - Click on a selected step and enter edit mode.
-   - Change the value.
-   - Exit it again with escape, this will not change the value.
-   - Enter edit mode again with enter.
-   - Change the value again.
-   - Exit it again with enter, this will save the change.
+- Editor tests
+   - Noop
+      - If the input/textarea on the right is selected, don't do anything on the left.
+      - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
+   - Find
+      - Click on a non selected step and see how the cursor jumps there.
+      - Go to the left, don't do anything because you're already at position 1.
+      - Go all the way to the right, one at a time, until you hit the last one.
+      - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
+      - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
+      - Do the same going up, it should also jump up.
+      - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). When you go left, rather than going to the abridged, you jump up and left until foo bar (the previous path that has a nonabridged step at position 3).
+      - Scroll down/up when jumping far enough (requires more than a screenful of data).
+         - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
+         - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
+         - Same with right & left.
+      - When reloading the page, if the selected element is far down/right enough, autoscroll to it automatically.
+      - The cursor should cast a dim light (green) on all paths that share its prefix up until the cursor.
+   - Write
+      - Click on a selected step and enter edit mode.
+      - Change the value.
+      - Exit it again with escape, this will not change the value.
+      - Enter edit mode again with enter.
+      - Change the value again.
+      - Exit it again with enter, this will save the change and retain the cursor, but not editing it.
+      - Enter edit mode again with enter and exit again with enter, retain the cursor.
 
 ### Language
 
-- More calls: edit, wipe
+- More calls: edit, wipe, push, lepush (left add), pop, lepop
 - Change dot to dash for placeholders of list
 - do
    - native calls
@@ -141,6 +143,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 - Parsing issues:
    - Distinguishing literal dots in hashes.
    - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
+- Efficient recalculation in cell.respond
 
 ### Database
 
@@ -368,6 +371,24 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+## 2025-08-28
+
+How to create empty space? In a spreadsheet, the space is already there. That's usually not great, but it gets you started. Also, marginal note: in a spreadsheet, everything looks like an input. In cell, there's one place at a time that you are editing, the rest looks non-editable.
+
+Also, another idea: when you are in a prefix (you are the cursor), dimly highlight all the paths that have that prefix.
+
+It feels like operations are not on paths so much as on prefixes, which are left subpaths common to many paths.
+
+And, if the cursor really selects a prefix, rather than just one path (just one line), you have automatic, almost explicit selection.
+
+Thinking about tables: it would be great to see some data as regular tables. A table is really a list of hashes, where each row is the data of the hash, and the columns are the keys of each of the hashes (hopefully the same columns for all hashes). But this cannot be the core way in which we see the dataspace: nested tables are incredibly clunky. And, if you have a hash of hashes, it's two tables with one row each, one inside the other. It's not an efficient way to use space.
+
+Lessons from visicalc:
+- Commas for numbers.
+- No shift or control keys.
+
+Fold/unfold should work at any level!
 
 ## 2025-08-27
 

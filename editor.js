@@ -242,7 +242,24 @@ B.mrespond ([
          }
 
          // Enter
-         if (key === 27) return B.call (x, 'click', 'step', cursor.path, cursor.index);
+         if (key === 13) return B.call (x, 'click', 'step', cursor.path, cursor.index);
+
+         // Space: fold or unfold
+         if (key === 32) {
+            var fold   = get (['editor', 'fold'], [], []);
+
+            var folded = dale.stopNot (fold, false, function (foldedPrefix) {
+               if (teishi.eq (cursor.path.slice (0, foldedPrefix.length), foldedPrefix)) return foldedPrefix;
+            });
+
+            if (folded) fold = dale.fil (fold, undefined, function (foldedPrefix) {
+               if (! teishi.eq (foldedPrefix, folded)) return foldedPrefix;
+            });
+            else fold.push (cursor.path.slice (0, cursor.index));
+
+            return B.call (x, 'send', 'put', ['editor', 'fold'], fold.length === 0 ? [['']] : cell.JSToPaths (fold));
+
+         }
 
          return;
       }
@@ -255,7 +272,7 @@ B.mrespond ([
       if (key === 13) {
          var value = cell.toNumberIfNumber (document.activeElement.value);
 
-         if (value === cursor.path [cursor.index]) return B.call (x, 'send', 'put', ['editor', 'cursor'], [['']]);
+         if (value === cursor.path [cursor.index]) return B.call (x, 'send', 'put', ['editor', 'cursor', 'editing'], [[0]]);
 
          var prefix = cursor.path.slice (0, cursor.index);
          var relevantPaths = dale.fil (B.get ('dataspace'), undefined, function (path) {
@@ -286,19 +303,6 @@ B.mrespond ([
       }
    }],
 
-   ['expand', 'path', function (x, prefix) {
-      var expand = get (['editor', 'expand'], [], []);
-      expand.push (prefix);
-
-      B.call (x, 'send', 'put', ['editor', 'expand'], expand);
-   }],
-   ['fold', 'path', function (x, prefix) {
-      var expand = get (['editor', 'expand'], [], []);
-      expand = dale.fil (expand, prefix, function (v) {return v});
-      if (expand.length === 0) expand = '';
-
-      B.call (x, 'send', 'put', ['editor', 'expand'], expand);
-   }],
    ['search', [], function (x, term) {
       B.call (x, 'send', 'put', ['editor', 'search'], [term]);
    }],
@@ -396,54 +400,10 @@ views.main = function () {
    });
 }
 
-views.datagrid = function (paths, main, fold) {
+views.datagrid = function (paths, main) {
 
    var search = get (['editor', 'search'], [], undefined);
-
-   if (fold && search === undefined) {
-
-      var pathsPerPrefix = {};
-      dale.go (paths, function (path) {
-         if (! pathsPerPrefix [path [0]]) pathsPerPrefix [path [0]] = 0;
-         pathsPerPrefix [path [0]]++;
-      });
-      var pathsPushedPerPrefix = dale.obj (pathsPerPrefix, function (v, k) {
-         return [k, 0];
-      });
-
-      var foldedPaths = [];
-      var maxWhenFolded = 3;
-
-      var expand = get (['editor', 'expand'], [], []);
-
-      dale.go (paths, function (path) {
-
-         if (expand.includes (path [0])) {
-            foldedPaths.push (path);
-            pathsPerPrefix [path [0]]--;
-            // If this is the last element of an unfolded path, put an object to fold it.
-            if (pathsPerPrefix [path [0]] === 0) foldedPaths.push ({prefix: path [0], hide: true});
-         }
-         else {
-            if (pathsPushedPerPrefix [path [0]] >= maxWhenFolded) return;
-
-            foldedPaths.push (path);
-            pathsPushedPerPrefix [path [0]]++;
-            if (pathsPushedPerPrefix [path [0]] === maxWhenFolded && pathsPerPrefix [path [0]] > pathsPushedPerPrefix [path [0]]) {
-               foldedPaths.push ({prefix: path [0], entries: pathsPerPrefix [path [0]]});
-            }
-         }
-      });
-
-      paths = foldedPaths;
-   }
-   // We only apply the search to the main, which uses folding
-   if (fold && search !== undefined) {
-      paths = dale.fil (paths, undefined, function (path) {
-         if (JSON.stringify (path).toLowerCase ().match (search)) return path;
-      });
-   }
-
+   var fold   = get (['editor', 'fold'], [], []);
    var cursor = get (['editor', 'cursor'], [], {});
 
    return ['div', {
@@ -454,18 +414,12 @@ views.datagrid = function (paths, main, fold) {
       })
    }, dale.go (paths, function (path, k) {
 
-      if (type (path) === 'object') {
-         if (search !== undefined) return;
-         if (path.entries) return ['div', {
-            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-            onclick: B.ev ('expand', 'path', path.prefix)
-         }, ['Expand all ', path.entries, ' paths...']];
-
-         if (path.hide) return ['div', {
-            class: 'dib ws-normal ml3 mb3 bt bl br3 pa2 mw6 ws-normal light-blue pointer',
-            onclick: B.ev ('fold', 'path', path.prefix)
-         }, ['Fold path']];
-      }
+      var folded = dale.stopNot (fold, undefined, function (foldedPrefix) {
+         if (! teishi.eq (path.slice (0, foldedPrefix.length), foldedPrefix)) return;
+         if (! paths [k - 1] || ! teishi.eq (paths [k - 1].slice (0, foldedPrefix.length), foldedPrefix)) return foldedPrefix; // First path with this prefix, show the ...
+         return true;
+      });
+      if (folded === true) return;
 
       var abridge = 0;
       if (k > 0) dale.stop (path, true, function (v2, k2) {
@@ -486,6 +440,8 @@ views.datagrid = function (paths, main, fold) {
          }),
       }, dale.go (path, function (element, k) {
 
+         if (folded && k + 1 > folded.length) return;
+
          var searchMatch = search !== undefined && search.length > 1 && (element + '').toLowerCase ().match (search.toLowerCase ());
 
          var abridged = k < abridge;
@@ -495,9 +451,10 @@ views.datagrid = function (paths, main, fold) {
          var f1rst = k === 0;
 
          var selected = teishi.eq (path, cursor.path) && cursor.index === k;
+         var dimly = teishi.eq (path.slice (0, cursor.index + 1), cursor.path.slice (0, cursor.index + 1)) && cursor.index <= k && ! selected;
 
          return ['div', {
-            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' selected bg-blue yellow b ' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
+            class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' selected bg-blue yellow b ' : '') + (dimly ? ' bg-green' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),
             style: style ({
                'height': height
             }),
@@ -510,6 +467,8 @@ views.datagrid = function (paths, main, fold) {
                class: 'cursor',
                value: element,
             }];
+
+            if (folded) return element + ' ...';
 
             return element;
 
@@ -553,7 +512,7 @@ views.cell = function (dataspace) {
          value: search || '',
       }],
       */
-      views.datagrid (paths, 'main', true)
+      views.datagrid (paths, 'main')
    ]];
 }
 

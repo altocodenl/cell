@@ -1,0 +1,51 @@
+Ninth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, moar editor. After a difficult start, we gain momentum with adding the "dimly" green selection, and we even dare to do the fold/unfold. It's coming together. We need more language.
+
+https://github.com/altocodenl/cell
+
+Tests are an executable assertion of your interfaces. (interfaces in the TODIS sense: https://github.com/altocodenl/TODIS)
+
+The problem:
+- I need multi put: I need to edit the cursor and I need to touch the rest of the dataspace.
+Since we are at it:
+- Edit
+- Wipe
+
+
+put 1 p foo bar
+      v result
+    2 p editor cursor editing
+      v 0
+
+You can still do:
+
+put p foo bar
+    v result
+
+As for edit:
+
+Imagine you have
+
+foo bar 1
+    joo 2
+
+And you want
+
+"improved foo" bar 1
+               joo 2
+
+So you can do
+edit p foo
+     v "improved foo"
+
+If you want to change foo bar:
+
+edit p foo bar
+     v nieuwbar
+
+wipe p foo
+(deletes all paths that start with foo)
+
+And: push lepush, pop lepop
+
+TODO:
+- Fix issues with fold/unfold (show dots in non cursors that are visible, make sure cursor is not lost)
