@@ -115,8 +115,8 @@ var routes = [
    ['post', 'call/:id', function (rq, rs) {
 
       if (stop (rs, [
-         ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
-         ['call', rq.body.call, ['string', 'object'], 'oneOf'],
+         ['id', rq.data.params.id, /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/, teishi.test.match],
+         ['call', rq.body.call, ['object', 'string'], 'oneOf'],
          ['mute', rq.body.mute, [undefined, true, false], 'oneOf', teishi.test.equal],
       ])) return;
 
@@ -126,6 +126,8 @@ var routes = [
 
          if (error && error.code !== 'ENOENT') return reply (rs, 500, {error: error});
          if (error) dataspace = '';
+
+         if (type (rq.body.call) === 'object') rq.body.call = cell.JSToText (rq.body.call);
 
          dataspace = cell.textToPaths (dataspace);
 
@@ -139,8 +141,6 @@ var routes = [
             dataspace = Dataspace;
             fs.writeFileSync (path, cell.pathsToText (dataspace), 'utf8');
          }
-
-         if (type (rq.body.call) === 'object') rq.body.call = cell.JSToPaths (rq.body.call);
 
          var response = cell.call (rq.body.call, get, put);
          var dialogue = cell.call ('@ dialogue', get, put);
@@ -169,7 +169,15 @@ var routes = [
             ], [], get, put, true);
          }
 
-         reply (rs, 200, {response: response});
+         fs.appendFile ('cells/' + new Date ().toISOString ().slice (0, 10), cell.JSToText ({
+            [new Date ().toISOString () + '-' + (Math.random () + '').slice (2, 6)]: {
+               cell: rq.data.params.id,
+               call: rq.body.call,
+               resp: cell.pathsToText (response)
+            }
+         }) + '\n', function () {
+            reply (rs, 200, cell.pathsToText (response));
+         });
       });
    }],
 

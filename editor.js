@@ -78,7 +78,7 @@ B.mrespond ([
 
       B.call (x, 'post', 'call/' + cellName, {}, {call: '@', mute: true}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', error);
-         B.call (x, 'set', 'dataspace', rs.body.response);
+         B.call (x, 'set', 'dataspace', cell.textToPaths (rs.body));
       });
    }],
 
@@ -351,8 +351,6 @@ views.about = function () {
 
 views.main = function () {
 
-   return views.about ();
-
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
       var dialogue = get (['dialogue'], [], []);
 
@@ -485,7 +483,7 @@ views.datagrid = function (paths, main) {
          var f1rst = k === 0;
 
          var selected = teishi.eq (path, cursor.path) && cursor.index === k;
-         var dimly = teishi.eq (path.slice (0, cursor.index + 1), cursor.path.slice (0, cursor.index + 1)) && cursor.index <= k && ! selected;
+         var dimly = cursor.path && teishi.eq (path.slice (0, cursor.index + 1), cursor.path.slice (0, cursor.index + 1)) && cursor.index <= k && ! selected;
 
          return ['div', {
             class: 'dib ws-normal bt bl br3 pa2 mw6 ws-normal overflow-auto' + (selected ? ' selected bg-blue yellow b ' : '') + (dimly ? ' bg-green' : '') + (abridged ? ' o-20' : '') + ' pointer' + (searchMatch ? ' b underline' : ''),

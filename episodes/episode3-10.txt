@@ -1,7 +1,4 @@
-
-TODO: move to dev notes, keep first 5k characters and the ending.
-
-Hi! Silent episode today. I don't feel like talking, but I do feel like writing.
+Tenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, a soul searching session, in silence. Lots came out. I have a much clearer vision of what a useful cell would be like to others, through a couple of concrete user journeys.
 
 If you are just tuning in, this will give some context: https://github.com/altocodenl/cell
 
@@ -33,15 +30,9 @@ The dashboard as an entry point. The same than back of the envelope financial ca
 
 I also think that UIs are mostly made of three things: dashboards, forms and tables. With some base models, plus a LLM, we could generate them dynamically from data. Two things are going to be tough and great to make: 1) a smoooooth experience where you have some data and a need and a browser, nothing else; 2) the implementation of a SPA in that link, in a way that it polls data.
 
-The other entrypoint I'm thinking of is #2 send calls to APIs to figure out what data they return. Instead of postman, you go to cell. This would require our server to do these calls because CORS would kill us otherwise.
-
 Another entrypoint: you don't share anything with anyone through interfaces, but you figure out data and organize it. But that's too general, too programm-y, to be what I'm looking for. Or perhaps not, but I need way more language for that, or more editor. Definitely more editor. And way more skill. Although... that assumes you'd do that yourself. But, like with the UIs, the LLM could do that for you.
 
-(Side note: it is interesting how LLMs are also overwhelmed by data and need to run queries with code, just like us, to get a few data points. Like firing photons at a large object to get an outline).
-
-(Another side note: what a strange and great thing it is to work with software, with computers. Even if it doesn't work, what a ride it has been so far.)
-
-THe figuring out things entrypoint is also interesting. It could be API calls. It could be some messy data in a spreadsheet. It could be data in a relational database, for which we'd require a read connector.
+The figuring out things entrypoint is also interesting. It could be API calls. It could be some messy data in a spreadsheet. It could be data in a relational database, for which we'd require a read connector.
 
 To figure things out, the LLM should have some good tools to slice and dice data. Or rather, to query, filter, count.
 
@@ -51,77 +42,5 @@ Instead of publishing, sharing? No, you can also share your thoughts mid-way. Pu
 
 cell for publishing
 cell for pondering
-
-Not bad. This goes much deeper than saying API vs UI, solo vs social. Because it reflects the state of mind of the human(s) using it for something. I can almost see two columns, one in black with white text, another one in white background and black text, saying For Publishing and For Pondering
-
-cell for publishing:
-- Bring data from anywhere: Excel, API, DB, even AI.
-- Create a dashboard to share the key points.
-- Add a form so that others can share more data.
-- Create a table for collaborators to analyze the data.
-
-cell for thinking:
-- Bring data from anywhere, or just start writing.
-- Write powerful queries to understand data.
-- Establish rules to clean data.
-- Work with code, prose and data in the same place.
-
-If those tables could have some pseudo-pivot tables (really, cell queries below), they'd be already half as powerful as the editor, but with way less surface.
-
-(realized that OBS stopped recording, here we go again)
-
-Nah, pondering is too pompous. Let's go for thinking.
-
-I like this.
-
-OK, let's go with entrypoint #1: publishing. What do I need to make this happen in cell?
-
-- Better upload of files: upload csv, xls (multiple sheets), upload json, paste csv, paste json
-   - Make it through a cell call rather than a separate API endpoint in the service.
-   - Store the original file in `files`
-   - Peek at the data with a LLM to detect the type and get a good name to place it in the dataspace
-   - Parse it deterministically
-   - Goal: from input to data in the dataspace, with a nice name. Click on either upload (uploads right away) or paste+send.
-- DB: will anyone be crazy/trusting enough to give us credentials to a relational db? perhaps.
-   - We'd just have to get the type of db and the connection details, and then make the test call.
-   - Then, we list the tables and get the schema, and get 10 rows of each, and put that in the dataspace.
-   - We need to forbid the LLM from sending any updates, we could even filter them out deterministically because that's a disaster waiting to happen.
-- API:
-   - Make calls to third parties, the LLM can ask you for the details.
-   - Put the result in the dataspace, with a LLM provided name.
-
-- Create views:
-   - By default, put them in views. Later, if you want to define outside, you can, and then you just link.
-   - Each view has a path and it has a content. The content is a call that can make calls to other parts of the dataspace and it draws things. But really? I don't think so: you want a SPA, not the full cell. But that means that you need to expose an API.
-
-Do we allow "raw access"? I think this is too much. Especially for iews like form, where you only want to share the rules. You cannot just let anyone access the entire cell.
-What stands here in the way is the relationship between an APi call and a cell call.
-Perhaps this could be the key: you let any calls in, but then you see how you serve them. Instead of definining custom API endpoints (which you can, later), you can use the main endpoint of the cell, which is a POST. You POST to a cell, a cell call. And (here's the key), you can expose things in the API section. Well, not in the API section. There should be another part of the cell to manage access.
-If you grant access, they can get the stuff straight. or even put it.
-Three levels of access: get, push and put. Put can wipe everything, it's like admin except that perhaps it doesn't have access to versions? But that's also a path! The key is that access is also at a path level, or rather at a prefix level.
-For validating the form, you can grant read access to rules whatever. Then, the LLM can write code that sends calls from the client, and the server just serves those calls.
-So it's also cell calls at the API level. The data interchange format is simple: fourdata as text, or fourdata as json. Perhaps it should be text. Am I emotionally ready to leave JSON? Perhaps.
-Getting rid of the work of writing mappings between http api calls and cell calls is key. You should be able to make cell calls from the client and get stuff back.
-
-So, architecture of a frontend built by cell that is not the editor (and even the editor could be one of this, eventually):
-- Loads up the core cell.
-- Talks with the server using the id of cell and eventually passing cookies.
-- Gets back data as fourdata, can parse it to JS.
-
-Now, I am not yet going to rewrite gotoB (my frontend library) in cell. And, in any case, we need to run things in JS. So, how do we do this mapping?
-
-- We have views, with one general view containing others.
-- The views have dependencies on the state. These states come from queries.
-- So there has to be a link between a place in the state and a cell call.
-- And same goes for writes, although the writes are not to the state (well, in tables perhaps yes, for intermediate state and also perhaps for keeping state of the query). The writes have to become cell calls.
-- Or, I could be lazy and just make the view depend on the entire dataspace. Not the entire dataspace of the cell at the editor, *but of the cell that the client gets* when it makes a @ get for everything. So, get will bring different subsets for different agents. It will bring less stuff, but it will bring all of it. No need to also do the bureaucracy/boilerplate of making n calls to get n pieces of state. Just give me what I need, all of it, and update it often enough.
-
-Yeah, so, the frontend does a get every second and gets whatever it can get, and based on that, it redraws everything. the views depend on parts of the dataspace, the way it is organized in the cell itself, and this will just work beautifully. it can just be a subset. this could work for small applications, at least. when you need more, we'll see where it breaks.
-
-There has also to be a bundle of gotoB + tachyons + cell. We can load this up in an iframe too to get the wysiwyg. And shrink it to 400x400 so you can see a scrollable preview, or perhaps even better a zoomed out preview that fits to screen that you can expand. Imagine writing a frontend without switching tabs or applications. For me, it'd be a first.
-
-- Dashboard widget (prompting, really).
-- Forms: you can define rules on data.
-- Table widget (with sorting, pagination and filtering).
 
 OK, I'm going to stop here. Thank you for watching. This was a big one.

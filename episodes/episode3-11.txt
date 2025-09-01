@@ -1,0 +1,22 @@
+Eleventh episode of season 3! I'm building a programming environment from scratch while recording myself. Today, we continue where we left off, but first we do some cleaning up. We have a clear path for a demo.
+
+If you are just tuning in, this will give some context: https://github.com/altocodenl/cell
+
+Hi! Today we start in silence, then we'll make this a talkie.
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+Small todos now:
+- fix cursor bug [DONE]
+- Interchange fourdata, not json, over the wire [DONE]
+- Write server logs into cell so I can inspect them [DONE]
+
+My library doesn't allow plain text! Let's fix that.
+
+Why do we mention www urlencoded in cicek.receive?
+
+OK, I don't have to modify the frontend library. That's a relief.
+
+Will continue later!
+
+OK, we're back.

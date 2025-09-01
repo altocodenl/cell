@@ -56,15 +56,71 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 ## TODO
 
+## Use cases
+
+### Publishing
+
+- Bring data from anywhere:
+   - Fixed prompt to ask you to enter data
+   - Modes
+      - Clipboard
+      - Upload
+      - API
+      - AI (bring public data or invent sample data)
+   - Parse
+      - Spreadsheet
+      - CSV
+      - JSON
+   - Ask AI to name the output making sure it doesn't overwrite the top level hashes
+   - Save the file (the pasted output is also a file) inside the cell as base64 with some attributes
+
+- Prompt the making of a dashboard, a form or a table, with some buttons
+
+- Dashboard (first view):
+   - Set view.dashboard to
+
+view dashboard @ do dataspace 1 div class main
+                                    _ 1 p _ 1 "Foo is"
+                                              = 1
+                                            2 @ foo
+                                    _ 2 p _ 1 "Bar is"
+                                              = 2
+                                            2 @ bar
+
+- html with tachyons, gotob and cell
+- bootstrap js that does the following:
+   - gets the entire cell (the id is preloaded)
+   - gets the view that it is in (the view name is preloaded)
+   - gets the contents of the view, which requires evaluation
+   - convert them to lith
+   - puts a reactive view that depends on the dataspace (contents below)
+   - put this function inside the reactive view
+- Query every n seconds to refresh
+
+- For the form:
+   - Validation which defines rules
+
+- For the table
+   - Iteration for generating rows
+
+Left out for now:
+- Read from DB.
+- Read DB dump.
+- Access levels on data (for now, all is accessible all the time by everyone)
+
+### Thinking
+
+## Features
+
 ### Editor
 
 - Find
    - Have a cursor [DONE]
    - Move it around with the keys [DONE]
+   - Fold/unfold [IN PROGRESS]
    - Jumping search
-   - Fold/unfold
    - Auto scroll to where the cursor is, if the cursor jumps
-   - Select and copy?
+   - Copy (the cursor determines the selection)
    - Show images and graphs where the = is, as a large pseudo step (a la netscape)
    - Search input that calls the search call (see devnotes 2025-08-27)
    - Store searches in the dataspace and have quick retrieval
@@ -122,6 +178,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 - More calls: edit, wipe, push, lepush (left add), pop, lepop
 - Change dot to dash for placeholders of list
+- Make put return a diff
 - do
    - native calls
       - add validations
@@ -164,7 +221,7 @@ Cell engines (dbs):
 - outbound http
 - inbound email
 - domain
-- Encrypted (password/passkey protected) dumps/restores
+- Encrypted (password/passkey protected) export/import
 - PWAs out of the box.
 
 ## Illustrated use cases
@@ -372,6 +429,18 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+## 2025-09-01
+
+When in the publishing tack, suggest making dashboard, or form, or table, just with the click of a button (UI inferred from DSL from the LLM, which comes from a hidden prompt).
+
+Why do I write tests as instances, rather than in their generality? I would say that writing a converter form one to other would be to write the implementation/logic. But would it really be that? Is there a way, at least sometimes, to generate inputs and outputs without actually doing the implementation? But then, why would you need the implementation?
+What if instead of generating it, you could determine properties? Or you could assert on properties. You'd still generate inputs. Then you could assert on properties of the output, but not fully specify the output. That could work.
+What would be good about this is to write tests at a higher level of abstraction, while still being able to see them concretely. Write the generator of tests. And the relationships of inputs vs outputs, but without specifying the entire thing. This would be a true specification, instead of just a bad copy of the implementation.
+
+Interesting angle: keep secrets in cell, but don't expose them in the frontend. you just expose calls and the frontend makes them. in the implementation of the call (or a reference it makes) you can have the secret.
+
+For search: list distinct paths abridging parts, that's a cool one. the llm fires deterministic shots to compact the data into patterns, just like us humans!
 
 ## 2025-08-30
 

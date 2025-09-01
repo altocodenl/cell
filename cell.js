@@ -307,6 +307,14 @@ cell.pathsToJS = function (paths, output) {
    return output;
 }
 
+cell.JSToText = function (text) {
+   return cell.pathsToText (cell.JSToPaths (text));
+}
+
+cell.textToJS = function (text) {
+   return cell.pathsToJS (cell.textToPaths (text));
+}
+
 // Assumes that paths are dedotted and sorted!
 cell.validator = function (paths) {
 
