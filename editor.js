@@ -317,7 +317,41 @@ views.css = [
    ['body', {'padding-left, padding-top': 30, height: 100}],
 ];
 
+views.about = function () {
+   return ['div', {class: 'flex flex-column flex-row-ns'}, [
+      ['section', {class: 'w-100 w-50-ns bg-white near-black pa4 pa5-ns flex items-center'}, [
+         ['div', {class: 'measure-wide center'}, [
+            ['header', {class: 'mb4'}, [
+               ['h1', {class: 'f3 f2-ns lh-title mv0 tracked-tight'}, 'cell for publishing'],
+            ]],
+            ['ul', {class: 'list pl3 lh-copy f5 f4-ns'}, [
+               ['li', {class: 'mb3'}, 'Bring data from anywhere: Excel, API, DB, even AI.'],
+               ['li', {class: 'mb3'}, 'Create a dashboard to share the key points.'],
+               ['li', {class: 'mb3'}, 'Add a form so that others can share more data.'],
+               ['li', {class: 'mb3'}, 'Create a table so that collaborators to analyze the data.']
+            ]]
+         ]]
+      ]],
+
+      ['section', {class: 'w-100 w-50-ns bg-near-black white pa4 pa5-ns flex items-center'}, [
+         ['div', {class: 'measure-wide center'}, [
+            ['header', {class: 'mb4'}, [
+               ['h1', {class: 'f3 f2-ns lh-title mv0 tracked-tight'}, 'cell for thinking'],
+            ]],
+            ['ul', {class: 'list pl3 lh-copy f5 f4-ns'}, [
+               ['li', {class: 'mb3'}, 'Bring data from anywhere, or just start writing.'],
+               ['li', {class: 'mb3'}, 'Write powerful queries to understand data.'],
+               ['li', {class: 'mb3'}, 'Establish rules to clean data.'],
+               ['li', {class: 'mb3'}, 'Work with code, prose and data in the same place.'],
+            ]]
+         ]]
+      ]]
+   ]];
+}
+
 views.main = function () {
+
+   return views.about ();
 
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
       var dialogue = get (['dialogue'], [], []);
