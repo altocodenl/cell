@@ -1,4 +1,4 @@
-Eleventh episode of season 3! I'm building a programming environment from scratch while recording myself. Today, we continue where we left off, but first we do some cleaning up. We have a clear path for a demo.
+Eleventh episode of season 3! I'm building a programming environment from scratch while recording myself. Today, we continue where we left off, but first we do some cleaning up. We have a clear path to a demo.
 
 If you are just tuning in, this will give some context: https://github.com/altocodenl/cell
 

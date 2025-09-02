@@ -430,6 +430,78 @@ TODO: everything :)
 
 ## Development notes
 
+## 2025-09-02
+
+The approach of cell inside a JS/gotoB view function is absolutely tenable. The view only has to return html, and we can do that by returning something that maps to lith (a way that gotoB uses to represent HTML).
+
+I also like the representation we used for HTML here in cell.
+
+    <section id="catalog">
+      <h2>Book Catalog</h2>
+      <article>
+        <h3>The Great Gatsby</h3>
+        <p><strong>Author:</strong> F. Scott Fitzgerald</p>
+        <p>A novel about wealth, love, and the American Dream in the 1920s.</p>
+      </article>
+      <article>
+        <h3>1984</h3>
+        <p><strong>Author:</strong> George Orwell</p>
+        <p>A dystopian story of surveillance and totalitarianism.</p>
+      </article>
+    </section>
+
+['section', {id: 'catalog'}, [
+   ['h2', 'Book Catalog'],
+   ['article', [
+      ['h3', 'The Great Gatsby'],
+      ['p', [['strong', 'Author:'], 'F. Scott Fitzgerald]],
+      ['p', 'A novel about wealth, love, and the American Dream in the 1920s.'],
+   ]],
+   ['article', [
+      ['h3', 1984],
+      ['p', [['strong', 'Author:'], ['p', 'George Orwell']]],
+      ['p', 'A dystopian story of surveillance and totalitarianism.']
+   ]]
+]]
+
+section id catalog
+        _ 1 h2 _ "Book Catalog"
+          2 article _ 1 h3 _ "The Great Gatsby"
+                      2 p _ 1 strong _ Author:
+                            2 "F. Scott Fitzgerald
+                      3 p _ "A novel about wealth, love, and the American Dream in the 1920s."
+          3 article _ 1 h3 _ 1984
+                      2 p _ 1 strong _ Author:
+                            2 "George Orwell"
+                      3 p _ "A dystopian story of surveillance and totalitarianism."
+
+the HTML and lith versions have 13 lines. The cell version has 9.
+
+Well, this looks clean! The only thing that is a bit more clunky than lith is to have to mark _ when you have content, to disambiguate the content from the attributes. But we can still have lithbags (mix of literals and elements) at the list level.
+
+Maybe we shouldn't draw data grids on the right.
+
+I should be in a hurry, but am not. Let's see if we can make the dialog more pretty.
+
+I'm backing up the cell because the other day, the lack of queuing in saving the cell corrupted it and I lost it. And this is a good example of a dialog.
+
+I'm going to stick with "dialogue", at least today. That spelling looks good.
+
+White background is bad for the soul.
+
+Things that are floating around in my mind:
+- We need to return the diffs after calling put.
+- When calling higher level calls that in turn call put, do we also associate them with that put and the diff? If so, how? If there's a concept of transaction, then it should be passed as part of the call. Or would it be a parallel path, like the second forth stack?
+
+chatgpt: "Many looping constructs (DO ... LOOP, IF ... ELSE ... THEN) use the return stack internally to manage control flow."
+
+I wonder if this manipulation is how you get macro-like behavior in forth. Apparently, that's only one way of doing it, then the distinction between immediate and compiled words give you the rest.
+
+Next:
+- Paste some data and don't even hit submit, that already gets it going.
+- The upload is like that too: select the file, and as soon as you come back, it's uploading and then done.
+- Then we can remove the upload from clipboard, since it's confusing to have two things. Also, we make it more about the textarea.
+
 ## 2025-09-01
 
 When in the publishing tack, suggest making dashboard, or form, or table, just with the click of a button (UI inferred from DSL from the LLM, which comes from a hidden prompt).

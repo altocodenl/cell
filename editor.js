@@ -353,6 +353,9 @@ views.main = function () {
 
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
       var dialogue = get (['dialogue'], [], []);
+      if (dialogue.length === 0) dialogue = [
+         {prompt: 'Welcome to cell!\n\nTo get started, paste or upload some data.'},
+      ];
 
       var spinny = ['span', {style: style ({
          border: '2px solid rgba(0,0,0,0.1)',
@@ -381,22 +384,19 @@ views.main = function () {
                if (! entry) return;
 
                var classes = function (who) {
-                  var output = 'code w-70 pa2 ba br3 mb2';
-                  if (who === 'user') output += ' fr bg-white';
+                  var output = 'code w-70 pa3 ba br3 mb2 near-white';
+                  if (who === 'user') output += ' fr bg-black';
                   else                output += ' fl bg-dark-green near-white';
                   return output;
                }
 
-               var parseIfValid = function (v) {
-                  var parsed = cell.textToPaths (v);
-                  return type (parsed) === 'array' ? parsed : v;
-               }
+               var preStyle = {style: 'white-space: pre-wrap'};
 
-               var call = parseIfValid (entry ['@']);
+               if (entry.prompt) return ['div', {class: classes ('cell')}, ['pre', preStyle, entry.prompt]];
 
                return [
-                  type (call) === 'array' ? ['div', {class: classes (entry.from)}, views.datagrid (call)] : ['textarea', {class: classes, readonly: true, value: call, rows: call.split ('\n').length}, call],
-                  ['div', {class: classes (entry.to)}, entry ['='] !== undefined ? views.datagrid (cell.JSToPaths (entry ['='])) : views.datagrid ([['""']])],
+                  ['div', {class: classes (entry.from)}, ['pre', preStyle, entry ['@']]],
+                  ['div', {class: classes (entry.to)}, ['pre', preStyle, cell.JSToText (entry ['='])]],
                ];
             }),
 
