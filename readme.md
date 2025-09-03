@@ -126,6 +126,7 @@ Left out for now:
    - Store searches in the dataspace and have quick retrieval
    - Table view with headers at top and rows on the left?
    - Fast scrolling with >100k (see devnotes 2025-08-27)
+   - Get only the diff between your last refresh and the server version
 
 - Write
    - Edit step [DONE]
@@ -429,6 +430,17 @@ Forms and reports just are interfaces.
 TODO: everything :)
 
 ## Development notes
+
+## 2025-09-03
+
+With cell functioning in a live system that performs chains of calls to outside systems, the finish of one call would trigger the next one (through recalculation, plus a conditional fence that doesn't activate until the previous is done).
+And what's a bit mindblowing to me is that you can have diffs on the internal state of the system. You have perfect visibility with no added tooling, simply because all state is first class already.
+
+When refreshing the cell, just ask for the diffs between the version you have and the latest one. Then, apply them. A further improvement would be that the server would give you a condensed diff, with only the necessary changes from where you are to the latest, without having to pass through intermediate things that have been in the meantime overriden.
+
+`@ is` is a good call for assertions.
+
+puts don't have expansion. They just add stuff. If our calls are puts, the expansion should be the diff.
 
 ## 2025-09-02
 

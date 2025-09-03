@@ -1,0 +1,30 @@
+Thirteenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, we inch forward after taking a couple of detours.
+
+https://github.com/altocodenl/cell
+
+Next:
+- Paste some data and don't even hit submit, that already gets it going.
+- The upload is like that too: select the file, and as soon as you come back, it's uploading and then done.
+- Then we can remove the upload from clipboard, since it's confusing to have two things. Also, we make it more about the textarea.
+
+The detour of the detour:
+- Let's make a transactional put file
+- Let's figure out how a dialogue entry should be structured
+- Let's make an assertion notation (executable) for expressing the structure
+
+What I want to see in the dialogue, each dialogue entry:
+
+= ...
+@ ...
+diff ??
+from @ is oneOf 1 user
+                2 LLM
+t @ is date
+to @ is oneOf 1 cell
+              2 LLM
+
+Why do I want to see the diff? To see what changed! Is this the expansion? Or is it something else?
+
+puts don't have expansion. They just add stuff. If our calls are puts, the expansion should be the diff.
+
+We can leave this for later. It doesn't add to the substance. I added time and hide to each element of the dialogue.

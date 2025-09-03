@@ -117,7 +117,7 @@ var routes = [
       if (stop (rs, [
          ['id', rq.data.params.id, /^[a-z0-9]+-[a-z0-9]+-[a-z0-9]+$/, teishi.test.match],
          ['call', rq.body.call, ['object', 'string'], 'oneOf'],
-         ['mute', rq.body.mute, [undefined, true, false], 'oneOf', teishi.test.equal],
+         ['hide', rq.body.hide, [undefined, true, false], 'oneOf', teishi.test.equal],
       ])) return;
 
       var path = Path.join ('cells', rq.data.params.id);
@@ -148,26 +148,32 @@ var routes = [
          var length = dialogue.length ? teishi.last (dialogue) [0] : 0;
 
          // Note that even if the call is not valid, we still store it in the dialogue!
-         if (! rq.body.mute) {
-            cell.put ([
-               ['p', 'dialogue', length + 1, 'from'],
-               ['v', 'user'],
-            ], [], get, put, true);
-            cell.put ([
-               ['p', 'dialogue', length + 1, 'to'],
-               ['v', 'cell'],
-            ], [], get, put, true);
-            cell.put ([
-               ['p', 'dialogue', length + 1, '@'],
-               ['v', rq.body.call],
-            ], [], get, put, true);
-            if (response.length) cell.put ([
-               ['p', 'dialogue', length + 1, '='],
-               ...dale.go (response, function (v) {
-                  return ['v', ...v];
-               }),
-            ], [], get, put, true);
-         }
+         cell.put ([
+            ['p', 'dialogue', length + 1, 'from'],
+            ['v', 'user'],
+         ], [], get, put, true);
+         cell.put ([
+            ['p', 'dialogue', length + 1, 'to'],
+            ['v', 'cell'],
+         ], [], get, put, true);
+         cell.put ([
+            ['p', 'dialogue', length + 1, '@'],
+            ['v', rq.body.call],
+         ], [], get, put, true);
+         if (response.length) cell.put ([
+            ['p', 'dialogue', length + 1, '='],
+            ...dale.go (rq.body.call === '@' ? '[ABRIDGED]' : response, function (v) {
+               return ['v', ...v];
+            }),
+         ], [], get, put, true);
+         cell.put ([
+            ['p', 'dialogue', length + 1, 't'],
+            ['v', new Date ().toISOString ()],
+         ], [], get, put, true);
+         if (rq.body.hide) cell.put ([
+            ['p', 'dialogue', length + 1, 'hide'],
+            ['v', 1],
+         ], [], get, put, true);
 
          fs.appendFile ('cells/' + new Date ().toISOString ().slice (0, 10), cell.JSToText ({
             [new Date ().toISOString () + '-' + (Math.random () + '').slice (2, 6)]: {
@@ -182,12 +188,14 @@ var routes = [
    }],
 
    ['post', 'file/:id', function (rq, rs) {
+
       if (stop (rs, [
          ['id', rq.data.params.id, /^[a-z]+-[a-z]+-[a-z]+$/, teishi.test.match],
          ['file', rq.body.file, 'string'],
          ['name', rq.body.name, 'string'],
          ['mime', rq.body.mime, 'string']
       ])) return;
+
 
       var plainParse = function (text, format) {
          if (format === 'json') {
@@ -244,11 +252,10 @@ var routes = [
             method: 'post',
             path: 'call/' + rq.data.params.id,
             body: {
-               call: cell.pathsToText (cell.JSToPaths ({'@': {'put': {
+               call: cell.JSToText ({'@': {'put': {
                   p: parsed.name,
                   v: plainParse (rq.body.file, parsed.format.toLowerCase ()),
-               }}})),
-               mute: true,
+               }}}),
             }
          }, function (error, RS) {
             if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});

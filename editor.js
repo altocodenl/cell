@@ -76,7 +76,7 @@ B.mrespond ([
 
       var cellName = window.location.hash.replace ('#/', '');
 
-      B.call (x, 'post', 'call/' + cellName, {}, {call: '@', mute: true}, function (x, error, rs) {
+      B.call (x, 'post', 'call/' + cellName, {}, {call: '@', hide: true}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', error);
          B.call (x, 'set', 'dataspace', cell.textToPaths (rs.body));
       });
@@ -84,7 +84,7 @@ B.mrespond ([
 
    // *** SEND DATA TO SERvER ***
 
-   ['send', 'call', function (x, call, mute) {
+   ['send', 'call', function (x, call, hide) {
 
       if (call.trim ().length === 0) return;
 
@@ -92,7 +92,7 @@ B.mrespond ([
 
       B.call (x, 'set', 'loading', true);
 
-      B.call (x, 'post', 'call/' + cellName, {}, {call: call, mute: mute}, function (x, error, rs) {
+      B.call (x, 'post', 'call/' + cellName, {}, {call: call, hide: hide}, function (x, error, rs) {
          B.call (x, 'set', 'loading', false);
 
          if (error) return B.call (x, 'report', 'error', error);
@@ -103,12 +103,12 @@ B.mrespond ([
 
    }],
 
-   ['send', 'put', function (x, p, v, nonMute) {
+   ['send', 'put', function (x, p, v, nonHidden) {
       var call = [['@', 'put', 'p'].concat (p)].concat (dale.go (v, function (v2) {
          return ['@', 'put', 'v'].concat (v2);
       }));
 
-      B.call (x, 'send', 'call', cell.pathsToText (call), ! nonMute);
+      B.call (x, 'send', 'call', cell.pathsToText (call), ! nonHidden);
    }],
 
    ['upload', 'clipboard', async function (x) {
@@ -376,12 +376,18 @@ views.main = function () {
             views.cell (dataspace),
          ]],
          ['div', {
-            class: 'fl w-40 pa2 bg-black overflow-auto',
+            class: 'fl w-40 pa2 bg-black flex flex-column',
             style: style ({'max-height': Math.round (window.innerHeight * 0.9) + 'px'}),
          }, [
 
-            dale.go (dialogue, function (entry) {
-               if (! entry) return;
+            ['div', {
+               class: 'overflow-auto',
+               style: style ({
+                  flex: '1 1 auto',
+                  'max-height': Math.round (window.innerHeight * 0.7) + 'px'
+               }),
+            }, dale.go (dialogue, function (entry) {
+               if (! entry || entry.hide) return;
 
                var classes = function (who) {
                   var output = 'code w-70 pa3 ba br3 mb2 near-white';
@@ -398,35 +404,36 @@ views.main = function () {
                   ['div', {class: classes (entry.from)}, ['pre', preStyle, entry ['@']]],
                   ['div', {class: classes (entry.to)}, ['pre', preStyle, cell.JSToText (entry ['='])]],
                ];
-            }),
+            })],
 
-            // New message
-            ['textarea', {
-               class: 'code w-70 pa2 ba br3 mb2 fr',
-               onchange: B.ev ('set', 'call'),
-               oninput: B.ev ('set', 'call'),
-               autofocus: true,
-               value: call,
-            }],
-            B.view ('loading', function (loading) {
-               return ['div', {class: 'flex flex-column w-100'}, [
-                  ['button', {
-                     class: 'w-100 pv2 ph3 br2 bg-blue white hover-bg-dark-blue pointer shadow-1',
-                     onclick: loading ? '' : B.ev ('send', 'call', call)
-                  }, loading ? spinny : 'Submit'],
-                  ['button', {
-                     class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
-                     onclick: loading ? '' : B.ev ('upload', 'clipboard')
-                  }, loading ? spinny : 'Upload from clipboard'],
-                  ['input', {
-                     class: 'w-100 pv2 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt2',
-                     id: 'file-upload', type: 'file', multiple: true,
-                  }],
-                  ['button', {
-                     onclick: loading ? '' : B.ev ('upload', 'files')
-                  }, loading ? spinny : 'Upload files'],
-               ]];
-            }),
+            ['div', {class: 'w-100 flex flex-column items-end'}, [
+
+               ['textarea', {
+                  class: 'code w-100 mw6 pa3 ba br3 mb3 bg-near-white black',
+                  onchange: B.ev ('set', 'call'),
+                  oninput: B.ev ('set', 'call'),
+                  onpaste: B.ev ('upload', 'clipboard'),
+                  placeholder: 'Paste data to get started',
+                  autofocus: true,
+                  value: call,
+               }],
+
+               B.view ('loading', function (loading) {
+                  return ['div', {class: 'w-100 mw6 flex flex-column'}, [
+
+                     ['button', {
+                        class: 'w-100 pv3 ph3 br2 bg-blue white hover-bg-dark-green pointer shadow-1 fw6',
+                        onclick: loading ? '' : B.ev ('send', 'call', call)
+                     }, loading ? spinny : 'Submit'],
+
+                     ['input', {
+                        class: 'w-100 pv3 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt3',
+                        id: 'file-upload', type: 'file', multiple: true,
+                     }],
+
+                  ]];
+               })
+            ]],
          ]],
       ]];
    });
