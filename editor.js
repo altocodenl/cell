@@ -125,7 +125,6 @@ B.mrespond ([
    }],
    ['upload', 'files', function (x) {
       var input = c ('#file-upload');
-      alert ('here');
       dale.go (input.files, function (file) {
          B.call (x, 'upload', 'file', file);
       });
@@ -429,6 +428,7 @@ views.main = function () {
                      ['input', {
                         class: 'w-100 pv3 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt3',
                         id: 'file-upload', type: 'file', multiple: true,
+                        onchange: B.ev ('upload', 'files'),
                      }],
 
                   ]];

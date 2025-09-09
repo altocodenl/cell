@@ -72,7 +72,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
       - CSV
       - JSON
    - Ask AI to name the output making sure it doesn't overwrite the top level hashes
-   - Save the file (the pasted output is also a file) inside the cell as base64 with some attributes
+   - Save the file and have a reference to it from the cell (the metadata is in the cell)
 
 - Prompt the making of a dashboard, a form or a table, with some buttons
 

@@ -162,7 +162,7 @@ var routes = [
          ], [], get, put, true);
          if (response.length) cell.put ([
             ['p', 'dialogue', length + 1, '='],
-            ...dale.go (rq.body.call === '@' ? '[ABRIDGED]' : response, function (v) {
+            ...dale.go (rq.body.call === '@' ? [['[OMITTED]']] : response, function (v) {
                return ['v', ...v];
             }),
          ], [], get, put, true);
@@ -197,7 +197,7 @@ var routes = [
       ])) return;
 
 
-      var plainParse = function (text, format) {
+      var parse = function (text, format) {
          if (format === 'json') {
             var json = teishi.parse (text);
             if (json) return json;
@@ -254,7 +254,7 @@ var routes = [
             body: {
                call: cell.JSToText ({'@': {'put': {
                   p: parsed.name,
-                  v: plainParse (rq.body.file, parsed.format.toLowerCase ()),
+                  v: parse (rq.body.file, parsed.format.toLowerCase ()),
                }}}),
             }
          }, function (error, RS) {

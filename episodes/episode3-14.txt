@@ -1,0 +1,8 @@
+Fourteenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, a nominal episode, just to get back in the groove. What's coming ahead is exciting.
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Fix the upload.
+- Show the dialogue entries for upload in a much nicer way that has access to the original file.
+- Display datetime to calls on the dialogue. Format: 2025-09-09:22:13:31 (local time)
