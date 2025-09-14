@@ -1,6 +1,6 @@
 # cell
 
-## Motivation
+## Why
 
 Programming is currently much harder than writing prose. Reading programs is also much harder than reading prose.
 
@@ -11,6 +11,16 @@ The goal of cell is to make programming easier, so that it is only as demanding 
 - Make information systems habitable.
 - Provide a different everyday fabric of computation.
 - Find a sweet spot between the low-level spreadsheets and programming languages, on one end, and big, clunky applications on the other.
+
+### Do we still need programming tools? Can't we just ask AI to create systems for us?
+
+My contention is: if you want to build data systems using AI, you need to do three things:
+
+1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
+2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that maintain important constraints.
+3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
+
+Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence.
 
 ## How
 
@@ -32,17 +42,7 @@ Here's an illustration:
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
-## Do we still need programming tools? Can't we just ask AI to create systems for us?
-
-My contention is: if you want to build data systems using AI, you need to do three things:
-
-1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
-2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that maintain important constraints.
-3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
-
-Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence.
-
-## The seven powerups
+### The seven powerups
 
 Cell employs seven powerups to make programming as easy (or hard) as writing prose:
 
@@ -109,6 +109,20 @@ Left out for now:
 - Access levels on data (for now, all is accessible all the time by everyone)
 
 ### Thinking
+
+TODO
+
+### More use cases
+
+- Civ2 savegame analyzer
+- Rent a crud
+- Back tester for stocks
+- Fitness companion for phone
+- Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
+- Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
+- Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
+- Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
+- Usage dashboard: requests per second, also per code, bytes flowing. See fun data in real time.
 
 ## Features
 
@@ -195,13 +209,22 @@ Left out for now:
 - loop
 - error (catch)
 - search (general call to get matching paths)
-- replace (macro)
+- replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
 - wall (block walking up, but not down)
+- check: validation function
+   - type
+   - equality
+   - range (for numbers): >, <, >=, <=
+   - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
+   - any other logic, really, the full language is there
+- diff: takes one or two points of the dialogue and gives you a diff.
+- access masks
 - Recursive lambdas by referencing itself?
 - Parsing issues:
    - Distinguishing literal dots in hashes.
    - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
 - Efficient recalculation in cell.respond
+- @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
 
 ### Database
 
@@ -214,33 +237,42 @@ Cell engines (dbs):
 - Redis (with aof)
 - Postgres
 
+Implementing sublinear cell in redis:
+- Consider each step to be represented by four things: an id, a value, a position (1, 2, ...) and the id of the parent. For example, the "bar" in foo bar would have value bar, position 2, and the parent id would be that of foo.
+- What about naive indexing on redis? Take each column (row) that's not an id and make it into a set. For example: value:bar would be a set of all the ids (of steps) that have as value "bar". Or position:2 would be a set of all the steps that are in position 2. And children:ID would be the set of all the steps that are children of the step ID.
+- The deeper idea is to sets like masks. I'd love a prefix mask where shorter and longer elements that have similar prefixes match, and this would be done inside redis without having to go to the Lua script.
+- Example: look for "status 200", where those are two distinct steps, one next to each other. They are at any position, so ignore the position. You would start by looking those ids with status, then get all the 200 that have each of those ids as parent, then intersect for a result. I'm itching to find a pattern like that in Earley's parser where you "combine like subparses". Rather than starting from a point, you go through each of the search terms in parallel, gathering subresults in sets, and then you intersect until you get all the steps that match. Then, you linearly reconstruct the paths from the ids.
+- The memory footprint would be softened by having data where a lot of the texts or numbers are the same, because then they would have the same entry. I wonder how much more memory this representation requires than an equivalent text representation.
+
+For postgres:
+- How is this implemented? Make a single table on a relational database, with 2000 columns, the odd ones text and the even ones number. For a path element at position m, store it in m\*2 if it's text and m\*2+1 if it is a number. perform queries accordingly.
+- What do you get out of this?
+   - ACID, because it's backed by a relational database.
+   - Fast querying on arbitrary path elements.
+   - Range and match tests.
+
+Tackling consistency:
+- run the sync code in the db within a transaction
+- make async ops not have consistency requirements except for checking things when they are ready for sync again
+- have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
+- If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
+
+Vague but compelling: every change generates a new id. This can recompute the entire dataspace affected by it. This creates a snapshot. The latest versions are resolved lexically. This would be a sort of indexing on top of the database itself (instead of it being a linear performance call going backwards from the latest to the requested one through applying reverse diffs).
+
 ### Service
 
 - Altocookies: login with email with link (no password) or oauth with providers that always provide email (google)
 - Make a queue per cell to process calls. Take cb as argument.
 - ai
 - outbound http
-- inbound email
+- inbound email: automatic email inbox per cell
 - domain
 - Encrypted (password/passkey protected) export/import
 - PWAs out of the box.
 
-## Illustrated use cases
+## Concepts
 
-- Civ2 analyzer
-- Rent a crud
-- Back tester for stocks
-- Fitness companion for phone
-
-## Other use cases
-
-- Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
-- Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
-- Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
-- Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
-- Usage dashboard: requests per second, also per code, bytes flowing. See fun data in real time.
-
-## Relationship to the spreadsheet
+### Relationship to the spreadsheet
 
 Cell is very much inspired by the [spreadsheet](https://en.wikipedia.org/wiki/Spreadsheet).
 
@@ -271,35 +303,54 @@ Cell intends to go beyond the spreadsheet in the following ways:
 
 These new features are built on top of the same mechanisms that make the spreadsheet possible in the first place: everything being referenceable and dependencies automatically updating.
 
-## For programmers coming from...
+### Comparison between cell and other programming languages
 
-### Erlang
+cell most resembles the following programming languages: [Tcl](https://en.wikipedia.org/wiki/Tcl), [J](https://en.wikipedia.org/wiki/J_(programming_language)) and other array languages and [lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)). To a lesser extent, [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)).
+
+Like all of these languages, cell is [homoiconic](https://en.wikipedia.org/wiki/Homoiconicity). The languages above have almost no syntax; we can perhaps ay that cell has no syntax, apart from the syntax used to represent alf.
+
+Like these languages, cell has text, number and list as first-class structures. Unlike them, it has native support for hashes. This is, in my opinion, the biggest advantage that cell has over lisp.
+
+The main differences between cell and these languages is the embodiment of [pillars 2 and 3 of TODIS](https://github.com/altocodenl/todis?tab=readme-ov-file#the-five-pillars):
+- All the data exists in a single dataspace that is fully addressable.
+- The execution of the interpreter happens within this dataspace, so that intermediate results can be seen and manipulated.
+
+The two decisions above make macros just like normal programming, by simply modifying the intermediate results of the interpreter.
+
+Like Tcl with [Tk](https://en.wikipedia.org/wiki/Tk_(software)), the interface maker comes integrated with the language. Unlike the languages above, cell also comes integrated with a server to expose an API.
+
+### For programmers coming from...
+
+#### Erlang
 
 No notion of processes. Errors are stopping values that bubble all the way up to the caller. The system is never broken and always runs.
 
-### Lisp
+#### Lisp
 
-No explicit parens, use instead lines to put multiple elements.
+### Departures of cell from lisp
 
-Instead of just lists and atoms, there are lists and hashes, as well as numbers and text.
+- No explicit parens, use instead lines to put multiple elements in a list or hash.
+- Instead of just lists and atoms, there are lists and hashes, as well as numbers and text.
+- Specify exactly how data looks like in terms of pretty-printing
+- No parenthesis, but a couple of evaluation rules (still too few to be considered a proper full-blown syntax)
+- Everything's quoted by default, you need to make calls explicitly
+- Macros are simple data manipulation operations on sequences. The explicitness of @ allows this, because it can considered as data until it is expanded. Macros are done on paths. Macros are *only* about selectively unfreezing some definitions before they are frozen again.
 
-Macros are done on paths. Macros are *only* about selectively unfreezing some definitions before they are frozen again.
-
-### Datomic
+#### Datomic
 
 The table, attribute and value can be seen as the path. Transactions with timestamps can be added. I am still figuring out how to implement the "retract" notion, in that the previous value should start to be valid. This should be built on top and I'd like for a system like this to be part of the core.
 
-### Go
+#### Go
 
 Rather than channels, we can have built in queues that can allow up to n processes in parallel.
 
 For now, I don't see a need for explicit coroutines, but I need to review this again when we're further down the road.
 
-### Typed languages
+#### Typed languages
 
 Define types as validations. The requirements from the calls will bubble up on the editor (note: TODO) so you can see what's expected of you in a call. This is the essence of the value of a type system, from the perspective of human performance. As for computer performance, we'll deal with that when we build a fast way to operate on paths.
 
-## Innovations of cell
+### Innovations of cell
 
 - Programming as message-based three-way communication between the environment, the user and the LLM.
 - Immediate integration of files and emails into the dataspace.
@@ -308,7 +359,9 @@ Define types as validations. The requirements from the calls will bubble up on t
 - Storing discrete calls in a dialog gives us both commits and transactions in a single construct. This allows us to query the system's state at any specific moment. We can also examine how the system evolves over time by reviewing the sequence of interactions. The calls are the diffs of the system. If the `get` call takes a parameter, we can query any previous state. And if the `put` call can take a condition and perform multiple operations as a whole, we can have reified transactions. These insights grow from the work of Datomic (thanks Val Waeselynck for your [great explanation](https://vvvvalvalval.github.io/posts/2018-11-12-datomic-event-sourcing-without-the-hassle.html)!).
 - A first-class [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation): paths. Computation as rewriting of paths.
 
-## The cell editor
+## Tour of cell
+
+### The editor
 
 - The *main*: a main window that contains *cells*: smaller windows that show either text (fourdata) or graphical components.
 - The *dialogue*: a dialogue window that combines the concept of a terminal with that of an LLM prompt, enabling a dialogue between the user, an LLM and cell. Any message starting with @, whether it comes from the user or the LLM, is understood as a call to cell. Any message sent by the user that is not starting with a @ is sent to the LLM, which will then respond with other messages and possibly calls to cell. Calls to cell will control the interface as well as put data in the dataspace (actually, the interface is simply an interpretation of part of the dataspace, but we mention it as an important special case). cell won't output anything on the dialogue, its results will be seen (optionally) in the main window.
@@ -323,7 +376,7 @@ The key insight carried from the [shell](https://en.wikipedia.org/wiki/Shell_(co
 
 An interesting development of this design is that programming becomes an act of communication with cell and the LLM. This taps into the social nature of language.
 
-## The data representation: `fourdata`
+### The data representation: `fourdata`
 
 Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-1-single-representation-of-data).
 
@@ -342,11 +395,11 @@ Examples:
 
 Note that you can have non-quoted text with slashes. For example, `/foo` can simply be written as such.
 
-## The language
+### The language
 
 Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-3-call-and-response) and [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-4-logic-is-what-happens-between-call-and-response).
 
-## Organization of a cell
+### Organization of a cell
 
 ```
 access
@@ -362,74 +415,63 @@ rules
 views
 ```
 
-**DEAR READER: cell is currently vaporware; everything below this message has to undergo intense work to be worthy of standing by itself. Below are very roughly sketched areas. They are quite unreadable. If they don't make sense to you, it's likely because they don't make sense at all, yet.**
-
-### The editor
-
-It's going to be like a vim! only that you start in insert mode :)
-Make the editor move per word, rather than by character. only in insert mode move by character.
-Use keys E and R for expand and reduce.
-Always a cursor pointing at data.
-when you see the values only, you're compressing the part that does the computation, which extends down and to the right. it's like a macro, the resolving of it, but it's just code that runs through the data and gives you a part of it.
-
-## Comparison between cell and other programming languages
-
-cell most resembles the following programming languages: [Tcl](https://en.wikipedia.org/wiki/Tcl), [J](https://en.wikipedia.org/wiki/J_(programming_language)) and other array languages and [lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language)). To a lesser extent, [Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)).
-
-Like all of these languages, cell is [homoiconic](https://en.wikipedia.org/wiki/Homoiconicity). The languages above have almost no syntax; we can perhaps ay that cell has no syntax, apart from the syntax used to represent alf.
-
-Like these languages, cell has text, number and list as first-class structures. Unlike them, it has native support for hashes. This is, in my opinion, the biggest advantage that cell has over lisp.
-
-The main differences between cell and these languages is the embodiment of [pillars 2 and 3 of TODIS](https://github.com/altocodenl/todis?tab=readme-ov-file#the-five-pillars):
-- All the data exists in a single dataspace that is fully addressable.
-- The execution of the interpreter happens within this dataspace, so that intermediate results can be seen and manipulated.
-
-The two decisions above make macros just like normal programming, by simply modifying the intermediate results of the interpreter.
-
-Like Tcl with [Tk](https://en.wikipedia.org/wiki/Tk_(software)), the interface maker comes integrated with the language. Unlike the languages above, cell also comes integrated with a server to expose an API.
-
-## The database
-
-TODO: everything :)
-
-Four validations:
-- type
-- equality
-- range for numbers
-- match for text
-
-More open regex format with lists: literal, character class, backreference or lookahead
-
-How is this implemented? Make a single table on a relational database, with 2000 columns, the odd ones text and the even ones number. For a path element at position m, store it in m\*2 if it's text and m\*2+1 if it is a number. perform queries accordingly.
-
-What do you get out of this?
-- ACID, because it's backed by a relational database.
-- Fast querying on arbitrary path elements.
-- Range and match tests.
-
-Tackling consistency:
-- run the sync code in the db within a transaction
-- make async ops not have consistency requirements except for checking things when they are ready for sync again
-- have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
-- If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
-
-Vague but compelling: every change generates a new id. This can recompute the entire dataspace affected by it. This creates a snapshot. The latest versions are resolved lexically.
-
-## The service
-
-TODO: everything :)
-
-## The interface maker
-
-Reactive connections to data sources (like server) to always have fresh data. You can avoid refreshing if it affects user experience, but still have the data ready.
-
-PWAs out of the box.
-
-Forms and reports just are interfaces.
-
-TODO: everything :)
-
 ## Development notes
+
+## 2025-09-14
+
+Automatic trace id per call? Or just see the expansions? The expansions should do it.
+
+When you only rerun what you need, there's way less logs/data being made anyway. Compare this with a normal runtime, where everything needs to be recreated so that you can hit the same bug.
+
+The development process: do, verify. Even if ai does it, humans want to verify. And eventually (or perhaps soon), even ai can verify. But cell can make it easier for humans/ai to perform, because of how it encapsulates context in paths.
+
+When doing LLM prompts, allow it to think things through and then return JSON at the end (with the call). Give it breathing room to work, E squares. We all need E squares. Let the LLM figure it out, then write the command.
+
+The tools for working with data are still not great. I use vim which helps a lot, but there's so many obstacles. no good data representation, no good editor that is also programmable. this is where cell comes in.
+
+hypothesis: you cannot build a hard consistency system on top of an eventually consistent system. but if you combine cells over the network, you can do eventaully consistent.
+at the same time, cell is very consistent in that it retains consistency and cannot do without it.
+if you want inconsistency or eventual consistency, split it into multiple cells and let them talk over the wire! **a cell is a unit of consistency**.
+
+Masked diffs for views! You have access to a certain part of the dataspace, and you just call @. You have an access mask that filters out some data. Then, you don't need a mapping. You can just use the paths of the cell, but only access some, and you avoid the typical API mapping boilerplate.
+
+Economics of cell:
+- Free: cells deleted after 7 days, cell limit is 1MB dataspace, 10MB filespace.
+- 100 to 1 ratio for big/slow/cheap. it's 1 cent per gb for disk (filespace), and 1 eur per gb for memory (dataspace).
+- Paid plans give cell retention for >7 days, as well as cells of up to 1GB dataspace (with unlimited filespace up to the global limit).
+- 10 bucks per person per organization. 10 bucks gives 10GB dataspace/1TB filespace.
+- Organizations pool their space, as well as families. For families, dependents can create accounts for free and share in the space.
+- Small organizations (<5 employees) can just use one account, or personal accounts.
+- We reserve the right to enforce licenses. The idea is to only enforce established, profitable companies that are using cell and shirking paying for the licenses. Structural leniency towards individuals, early-stage startups, academia and non-profits. And even when enforcing, always be reasonable.
+- The pricing model as a low, sustainable cost of digital infrastructure per human. An alternative that allows to pay for it without giving away our digital rights to companies or governments.
+- The entire non-infrastructure cost of developing cell comes from the space not used by users. If everyone maxed out their dataspace/filespace, we'd have no margin. This sets incentives between user and company at odds. But, variable pricing is very unattractive. Being open about it is probably a better plan, definitely at the beginning.
+- Infra costs: 50 buck Hetzner servers give you about 50GB of usable RAM and 5TB. That means that 1 buck gives you 1GB of RAM and 100GB of disk. The problem here is that there's no duplication in disk. We'd actually need to at least duplicate filespace (especially since dataspace will be backed up in filespace). Compression and deduplication of files might help here.
+
+An api gives you portability. that means that you get something equivalent at a level, but below that level you have different things. that's like a language, or an interface.
+
+logo for cell: a = and then a @ below it!
+```
+=
+@
+```
+
+we can have references bound to time, to avoid updates. @ is implicitly @ latest. @@ could refer to a time. let's use time, and we can also refer to an entry in the dialogue.
+entries in the dialogue: add a noun after the timestamp, that's the id!
+files: reference the data of the file! instead of copying it over. the parsed goes in as an input to the call, as `data`, only for those that can be parsed. also have images, which is an example of something not parsed.
+
+for folding: have a cap of how many rows and cols, and if you go over that, autofold whatever goes over that by programatically setting it. it is hardcoded and not dynamic, though. better would be to have an autofold property that then can be overriden, then you'd need to store the unfolded ones.
+
+## 2025-09-11
+
+Let's make an assertion notation (executable) for expressing the structure.
+
+Problem: we make a call that makes calls to put. For example, upload. We want to see the top level of the call, not the expansion. The expansion could be expanded if we wanted.
+
+This means that upload should be a call. A system level call, a cell level call. It then calls put as part of its internal process. It can rely on JS for parsing but at least the mechanism of updating the dialogue and other parts should be internal.
+
+Maybe this is even better than showing a diff. You see the expansion of each call you make, if you want. Although it would be cool to see diffs. Perhaps, the diff viewing can be another call. You pass two different moments (calls) and you get the diff in the middle! diff can be a call!
+
+why file is a call? because it is stored as binary. you could infer it on the client.
 
 ## 2025-09-03
 
@@ -795,24 +837,6 @@ Unrelated, but two more concepts:
 Two more:
 - For solving the ascending funarg, I think we already need macros. Because any references from the sequence that you are responding won't be resolved. Although you could also ship it with some context. That would be a non-macro way to solve the problem, just ship context, ship scope. Basically, ship some data together with the definition, to be stuffed at :. That could work.
 - To save versions, take a diff between the current and the previous, and express it as a diff applied in a moment.
-
-## Other stuff
-
-### Ideas
-
-- files
-- automatic email by project
-- local vs remote reference
-
-macros: can be completely runtime, in the language. we can use `replace`, which takes a `target`, `what` and `with`. `@@` are like lisp commas, that turn off the quoting, so you can resolve references at define time.
-
-### departures of cell from lisp
-
-- Include hashes as a base type
-- Specify exactly how data looks like in terms of pretty-printing
-- No parenthesis, but a couple of evaluation rules (still too few to be considered a proper full-blown syntax)
-- Everything's quoted by default, you need to make calls explicitly
-- Macros are simple data manipulation operations on sequences. The explicitness of @ allows this, because it can considered as data until it is expanded.
 
 ## Annotated source code (fragments)
 
