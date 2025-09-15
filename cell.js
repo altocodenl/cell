@@ -339,40 +339,91 @@ cell.validator = function (paths) {
    return error ? [['error', error]] : [];
 }
 
-cell.call = function (message, get, put) {
+cell.call = function (message, from, to, hide, get, put) {
 
-   if (type (message) !== 'string') return [['error', 'The message must be text but instead is ' + type (message)]];
+   var startTime = new Date ();
+
+   var respond = function (response) {
+
+      var dialog = cell.get (['dialog'], [], get, put);
+      var length = dialog.length ? teishi.last (dialog) [0] : 0;
+
+      // TODO: refactor with push and multiput
+      cell.put ([
+         ['p', 'dialog', length + 1, 'from'],
+         ['v', from],
+      ], [], get, put, true);
+      cell.put ([
+         ['p', 'dialog', length + 1, 'to'],
+         ['v', to],
+      ], [], get, put, true);
+      cell.put ([
+         ['p', 'dialog', length + 1, '@'],
+         ['v', message],
+      ], [], get, put, true);
+      if (response.length) cell.put ([
+         ['p', 'dialog', length + 1, '='],
+         ...dale.go (message === '@' ? [['[OMITTED]']] : response, function (v) {
+            return ['v', ...v];
+         }),
+      ], [], get, put, true);
+      cell.put ([
+         ['p', 'dialog', length + 1, 'id'],
+         ['v', startTime.toISOString () + '-' + (Math.random () + '').slice (2, 6)],
+      ], [], get, put, true);
+      if (hide) cell.put ([
+         ['p', 'dialog', length + 1, 'hide'],
+         ['v', 1],
+      ], [], get, put, true);
+      cell.put ([
+         ['p', 'dialog', length + 1, 'ms'],
+         ['v', new Date ().getTime () - startTime.getTime ()],
+      ], [], get, put, true);
+
+      return response;
+   }
+
+   // Note that even if the call is not valid, we still store it in the dialog!
+   if (type (message) !== 'string') return respond ([['error', 'The message must be text but instead is ' + type (message)]]);
 
    var paths = cell.textToPaths (message);
-   if (paths [0] && paths [0] [0] === 'error') return paths;
+   if (paths [0] && paths [0] [0] === 'error') return respond (paths);
 
-   if (paths.length === 0) return [];
+   if (paths.length === 0) return respond ([]);
 
-   if (paths [0] [0] !== '@') return [['error', 'The call must start with `@` but instead starts with `' + paths [0] [0] + '`']];
+   if (paths [0] [0] !== '@') return respond ([['error', 'The call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
+
    var extraKey = dale.stopNot (paths, undefined, function (path) {
       if (path [0] !== '@') return path [0];
    });
-   if (extraKey !== undefined) return [['error', 'The call must not have extra keys besides `@`, but it has a key `' + extraKey + '`']];
+   if (extraKey !== undefined) return respond ([['error', 'The call must not have extra keys besides `@`, but it has a key `' + extraKey + '`']]);
 
    if (paths [0] [1] === 'put') {
       var extraKey = dale.stopNot (paths, undefined, function (path) {
          if (path [1] !== 'put') return path [1];
       });
-      if (extraKey !== undefined) return [['error', 'The call must not have a path besides `@ put`, but it has a path `@ ' + extraKey + '`']];
+      if (extraKey !== undefined) return respond ([['error', 'The call must not have a path besides `@ put`, but it has a path `@ ' + extraKey + '`']]);
 
-      return cell.put (dale.go (paths, function (path) {
+      return respond (cell.put (dale.go (paths, function (path) {
          return path.slice (2);
-      }), [], get, put);
+      }), [], get, put));
    }
 
-   if (paths.length > 1) return [['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']];
+   else if (paths [0] [1] === 'do') {
+      // TODO: call cell.do
+   }
 
-   return cell.get (paths [0].slice (1), [], get);
+   // Neither a put nor a do, we can just call get to resolve the reference
+   else {
+      if (paths.length > 1) return respond ([['error', 'A get call cannot have multiple paths, but it has a path `' + paths [1].join (' ') + '`']]);
+
+      return respond (cell.get (paths [0].slice (1), [], get));
+   }
 }
 
 cell.respond = function (path, get, put) {
 
-   if (path.indexOf ('@') === -1) return;
+   if (path.indexOf ('@') === -1 || path [0] === 'dialog') return;
 
    var leftmostAt  = path.indexOf ('@');
    var rightmostAt = path.length - 1 - teishi.copy (path).reverse ().indexOf ('@');
@@ -449,7 +500,8 @@ cell.native = function (call, message) {
    var nativeCalls = [
       '+', '-', '*', '/', '%', // Math
       'eq', '>', '<', '>=', '<=', // Comparison
-      'and', 'or', 'not' // Logical
+      'and', 'or', 'not', // Logical
+      'upload' // Organization
    ];
 
    if (nativeCalls.indexOf (call) === -1) return false;
@@ -531,6 +583,9 @@ cell.native = function (call, message) {
       })] ? 1 : 0];
    }
 
+   if (call === 'upload') {
+      clog ('debug', message);
+   }
 
    return [['']];
 }
@@ -636,6 +691,18 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    return output;
 }
 
+cell.upload = function (name, mime, base64, data) {
+
+
+   // inputs:
+   // name
+   // mime
+   // base64 file
+   // data (text, optional)
+
+   // 1) put it in files
+}
+
 cell.get = function (queryPath, contextPath, get) {
    var dataspace = get ();
 
@@ -656,7 +723,7 @@ cell.get = function (queryPath, contextPath, get) {
    }) || [];
 }
 
-cell.put = function (paths, contextPath, get, put, updateDialogue) {
+cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
    if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
@@ -671,7 +738,7 @@ cell.put = function (paths, contextPath, get, put, updateDialogue) {
    leftSide = leftSide [0];
 
    if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
-   if (leftSide [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
+   if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
 
    var dataspace = get ();
 
@@ -756,10 +823,10 @@ var test = function () {
          ['"///""', [['/"']]],
          ['" //" " ////" // " //a"', [[' /', ' //', '//', ' /a']]],
          ['"The call must start with /"@/" but instead starts with /"w/""', [['The call must start with "@" but instead starts with "w"']]],
-         [['dialogue "1" from user', '             message "@ foo"'], [['dialogue', '1', 'from', 'user'], ['dialogue', '1', 'message', '@ foo']]],
-         [['dialogue 2 from user', '           message "@ foo"'], [['dialogue', 2, 'from', 'user'], ['dialogue', 2, 'message', '@ foo']]],
-         [['dialogue " //" from user', '               message "@ foo"'], [['dialogue', ' /', 'from', 'user'], ['dialogue', ' /', 'message', '@ foo']]],
-         [['dialogue "" from user', '            message "@ foo"'], [['dialogue', '', 'from', 'user'], ['dialogue', '', 'message', '@ foo']]],
+         [['dialog "1" from user', '           message "@ foo"'], [['dialog', '1', 'from', 'user'], ['dialog', '1', 'message', '@ foo']]],
+         [['dialog 2 from user', '         message "@ foo"'], [['dialog', 2, 'from', 'user'], ['dialog', 2, 'message', '@ foo']]],
+         [['dialog " //" from user', '             message "@ foo"'], [['dialog', ' /', 'from', 'user'], ['dialog', ' /', 'message', '@ foo']]],
+         [['dialog "" from user', '          message "@ foo"'], [['dialog', '', 'from', 'user'], ['dialog', '', 'message', '@ foo']]],
          ['" /"', [['error', 'Multiline text not closed: ` "\n`']]],
          ['" //"', [[' /']]],
          ['" ////"', [[' //']]],
@@ -910,16 +977,24 @@ var test = function () {
 
       {reset: []},
       {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', 'bar']]},
+      {f: cell.call, input: '@', expected: [
+         ['dialog', 1, 'from', 'user'],
+         ['dialog', 1, 'id', '<OMITTED>'],
+         ['dialog', 1, 'ms', '<OMITTED>'],
+         ['dialog', 1, 'to', 'cell'],
+         ['dialog', 1, '=', 'ok'],
+         ['dialog', 1, '@', '@ put p foo\n@ put v bar'],
+         ['foo', 'bar']
+      ], keepDialog: true},
 
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
       ]},
       {f: cell.call, input: ['@ put p foo bar', '@ put v hey'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', 'bar', 'hey']]},
+      {f: cell.call, input: '@ foo', expected: [['bar', 'hey']]},
       {f: cell.call, input: ['@ put p foo', '@ put v 1'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', 1]]},
+      {f: cell.call, input: '@ foo', expected: [[1]]},
       {reset: [
          ['foo', 'bar', 1, 'jip'],
          ['foo', 'bar', 2, 'joo'],
@@ -957,7 +1032,7 @@ var test = function () {
       {f: cell.call, input: ['@ foo "\n\nbar"'], expected: [[1]]},
 
       {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.call, input: ['@ put p dialogue', '@ put v 1'], expected: [['error', 'A dialogue cannot be supressed by force.']]},
+      {f: cell.call, input: ['@ put p dialog', '@ put v 1'], expected: [['error', 'A dialog cannot be supressed by force.']]},
       {f: cell.call, input: ['@ put p foo bar jip', '@ put p foo oh yeah', '@ put v 1'], expected: [['error', 'Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah']]},
 
       // *** PUT WITH CONTEXT PATH ***
@@ -1009,6 +1084,10 @@ var test = function () {
       // Even if you overwrite the = keys, they will be overwritten again by cell.respond!
       {f: cell.call, input: ['@ put p reffoo =', '@ put v 30'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
+
+      // A reference to nothing combined with an unrelated reference to something.
+      {f: cell.call, input: ['@ put p a', '@ put v @ nil'], expected: [['ok']]},
+      {f: cell.call, input: ['@'], expected: [['a', '=', ''], ['a', '@', 'nil'], ['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
 
       {reset: [
          ['foo', 1],
@@ -1295,8 +1374,15 @@ var test = function () {
 
       if (test.f === cell.get)       var result = cell.get (test.query, test.context, get);
       else if (test.f === cell.put)  var result = cell.put (test.input, test.context || [], get, put);
-      else if (test.f === cell.call) var result = cell.call (test.input, get, put);
+      else if (test.f === cell.call) var result = cell.call (test.input, 'user', 'cell', false, get, put);
       else                           var result = test.f (test.input);
+
+      if (test.f === cell.call) result = dale.fil (result, undefined, function (path) {
+         if (path [0] !== 'dialog') return path;
+         if (! test.keepDialog) return;
+         if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
+         return path;
+      });
 
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {input: test.input, expected: test.expected, obtained: result});

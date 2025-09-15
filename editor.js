@@ -128,6 +128,7 @@ B.mrespond ([
       dale.go (input.files, function (file) {
          B.call (x, 'upload', 'file', file);
       });
+      input.value = '';
    }],
    ['upload', 'file', function (x, file) {
       var reader = new FileReader ();
@@ -207,7 +208,7 @@ B.mrespond ([
       if (! ['input', 'textarea'].includes (activeElement)) {
 
          var paths = dale.fil (B.get ('dataspace'), undefined, function (path) {
-            if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
+            if (! ['dialog', 'editor'].includes (path [0])) return path; // Don't show the dialog or the editor paths
          });
 
          var pathIndex = dale.stopNot (paths, undefined, function (path, k) {
@@ -313,7 +314,6 @@ B.mrespond ([
 var views = {};
 
 views.css = [
-   ['body', {'padding-left, padding-top': 30, height: 100}],
 ];
 
 views.about = function () {
@@ -351,8 +351,8 @@ views.about = function () {
 views.main = function () {
 
    return B.view ([['dataspace'], ['call']], function (dataspace, call) {
-      var dialogue = get (['dialogue'], [], []);
-      if (dialogue.length === 0) dialogue = [
+      var dialog = get (['dialog'], [], []);
+      if (dialog.length === 0) dialog = [
          {prompt: 'Welcome to cell!\n\nTo get started, paste or upload some data.'},
       ];
 
@@ -370,7 +370,6 @@ views.main = function () {
       call = call || '';
       return ['div', [
          ['style', views.css],
-         ['style', '@keyframes spin {from { transform: rotate(0deg); } to   { transform: rotate(360deg); }}'],
          ['div', {class: 'main fl w-60 bg-dark-green near-white pa2'}, [
             views.cell (dataspace),
          ]],
@@ -385,7 +384,7 @@ views.main = function () {
                   flex: '1 1 auto',
                   'max-height': Math.round (window.innerHeight * 0.7) + 'px'
                }),
-            }, dale.go (dialogue, function (entry) {
+            }, dale.go (dialog, function (entry) {
                if (! entry || entry.hide) return;
 
                var classes = function (who) {
@@ -405,14 +404,14 @@ views.main = function () {
                ];
             })],
 
-            ['div', {class: 'w-100 flex flex-column items-end'}, [
+            ['div', {class: 'w-100 pa3 flex flex-column items-end'}, [
 
                ['textarea', {
                   class: 'code w-100 mw6 pa3 ba br3 mb3 bg-near-white black',
                   onchange: B.ev ('set', 'call'),
                   oninput: B.ev ('set', 'call'),
                   onpaste: B.ev ('upload', 'clipboard'),
-                  placeholder: 'Paste data to get started',
+                  placeholder: 'Write a query or paste data',
                   autofocus: true,
                   value: call,
                }],
@@ -426,7 +425,7 @@ views.main = function () {
                      }, loading ? spinny : 'Submit'],
 
                      ['input', {
-                        class: 'w-100 pv3 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt3',
+                        class: 'w-90 pv3 ph3 br2 bg-light-gray black hover-bg-moon-gray pointer shadow-1 mt3',
                         id: 'file-upload', type: 'file', multiple: true,
                         onchange: B.ev ('upload', 'files'),
                      }],
@@ -521,37 +520,23 @@ views.cell = function (dataspace) {
    var search = get (['editor', 'search'], [], undefined);
 
    var paths = dale.fil (dataspace, undefined, function (path) {
-      if (! ['dialogue', 'editor'].includes (path [0])) return path; // Don't show the dialogue or the editor paths
+      if (! ['dialog', 'editor'].includes (path [0])) return path; // Don't show the dialog or the editor paths
    });
 
-   return ['div', {class: 'pa3 flex flex-column items-center'}, [
-
-      ['div', {class: 'absolute top-0 left-0 ml2 mt2', style: 'width: 2.5rem; height: 2.5rem;'}, [
-         ['div', {class: 'relative w-100 h-100'}, [
-            ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
-               ['span', {
-                  class: 'f-headline fw4 black',
-                  style: 'font-family: sans-serif;',
-               }, 'c']
-            ]],
-            ['div', {class: 'absolute top-0 left-0 w-100 h-100 flex items-center justify-center'}, [
-               ['span', {
-                  class: 'f1 fw4 black',
-                  style: 'font-family: sans-serif;',
-               }, 'ə']
-            ]]
-         ]]
+   return ['div', {class: 'pa3 flex'}, [
+      ['div', {class: 'pa3 pt0 bg-light-purple'}, [
+         ['p', {class: 'ma0 lh-solid code f2'}, '='],
+         ['p', {class: 'ma0 lh-solid code f2'}, '@']
       ]],
-
-      /*
-      ['input', {
-         class: 'code w-50 pa3 ba br3 mb3 db center',
-         onchange: B.ev ('search', [], {raw: 'this.value'}),
-         oninput: B.ev ('search', [], {raw: 'this.value'}),
-         value: search || '',
-      }],
-      */
-      views.datagrid (paths, 'main')
+      ['div', {class: 'ml4 w-90'}, [
+         ['input', {
+            class: 'code w-90 pa3 ba br3 mb3 db',
+            onchange: B.ev ('search', [], {raw: 'this.value'}),
+            oninput: B.ev ('search', [], {raw: 'this.value'}),
+            value: search || '',
+         }],
+         views.datagrid (paths, 'main')
+      ]]
    ]];
 }
 

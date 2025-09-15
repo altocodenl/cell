@@ -142,38 +142,7 @@ var routes = [
             fs.writeFileSync (path, cell.pathsToText (dataspace), 'utf8');
          }
 
-         var response = cell.call (rq.body.call, get, put);
-         var dialogue = cell.call ('@ dialogue', get, put);
-
-         var length = dialogue.length ? teishi.last (dialogue) [0] : 0;
-
-         // Note that even if the call is not valid, we still store it in the dialogue!
-         cell.put ([
-            ['p', 'dialogue', length + 1, 'from'],
-            ['v', 'user'],
-         ], [], get, put, true);
-         cell.put ([
-            ['p', 'dialogue', length + 1, 'to'],
-            ['v', 'cell'],
-         ], [], get, put, true);
-         cell.put ([
-            ['p', 'dialogue', length + 1, '@'],
-            ['v', rq.body.call],
-         ], [], get, put, true);
-         if (response.length) cell.put ([
-            ['p', 'dialogue', length + 1, '='],
-            ...dale.go (rq.body.call === '@' ? [['[OMITTED]']] : response, function (v) {
-               return ['v', ...v];
-            }),
-         ], [], get, put, true);
-         cell.put ([
-            ['p', 'dialogue', length + 1, 't'],
-            ['v', new Date ().toISOString ()],
-         ], [], get, put, true);
-         if (rq.body.hide) cell.put ([
-            ['p', 'dialogue', length + 1, 'hide'],
-            ['v', 1],
-         ], [], get, put, true);
+         var response = cell.call (rq.body.call, 'user', 'cell', rq.body.hide, get, put);
 
          fs.appendFile ('cells/' + new Date ().toISOString ().slice (0, 10), cell.JSToText ({
             [new Date ().toISOString () + '-' + (Math.random () + '').slice (2, 6)]: {
@@ -196,6 +165,13 @@ var routes = [
          ['mime', rq.body.mime, 'string']
       ])) return;
 
+      try {
+         var decoded = Buffer.from (rq.body.file.split (',') [1], 'base64');
+         var text = decoded.toString ('utf8');
+      }
+      catch (error) {
+         return reply (rs, 400, {error: 'File must be a valid base64 file'});
+      }
 
       var parse = function (text, format) {
          if (format === 'json') {
@@ -240,10 +216,13 @@ var routes = [
          rq.body.file.slice (0, 5000)
       ], function (error, res) {
          if (error) return reply (rs, 500, {error: error});
-         var parsed = res.replace (/^```json/, '').replace (/```$/, '');
-         if (teishi.parse (parsed) === false) return reply (rs, 500, {error: 'LLM did not give us JSON', res: res});
-         parsed = JSON.parse (parsed);
-         if (type (parsed.name) !== 'string' || type (parsed.format) !== 'string') return reply (rs, 500, {error: 'LLM did not give us the JSON we wanted', res: res});
+         var metadata = res.replace (/^```json/, '').replace (/```$/, '');
+         if (teishi.parse (metadata) === false) return reply (rs, 500, {error: 'LLM did not give us JSON', res: res});
+         metadata = JSON.parse (metadata);
+         if (type (metadata.name) !== 'string' || type (metadata.format) !== 'string') return reply (rs, 500, {error: 'LLM did not give us the JSON we wanted', res: res});
+
+         var result = parse (text, metadata.format.toLowerCase ());
+         if (cell.JSToPaths (result).length === 0) return reply (rs, 404, {error: 'Empty file'});
 
          httpCall ({
             https: false,
@@ -252,10 +231,18 @@ var routes = [
             method: 'post',
             path: 'call/' + rq.data.params.id,
             body: {
-               call: cell.JSToText ({'@': {'put': {
-                  p: parsed.name,
-                  v: parse (rq.body.file, parsed.format.toLowerCase ()),
-               }}}),
+               call: cell.JSToText ({'@': {'do': {'m': [
+                  {'@': {'upload': {
+                     base64: rq.body.file,
+                     mime: rq.body.mime,
+                     name: rq.body.name,
+                     data: result,
+                  }}},
+                  {'@': {'put': {
+                     p: metadata.name,
+                     v: ['@', 'files', rq.body.name, 'data']
+                  }}},
+               ]}}})
             }
          }, function (error, RS) {
             if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});

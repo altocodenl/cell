@@ -1,0 +1,39 @@
+Seventeenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, we start silent, then we start to blab. cell.respond is now working and we figure out that the dialog should not be expanded. It's really a literal. We manage to debug all the tests and we're on to doing the upload as a native call.
+
+Hi Earth! Silent episode today, at least a part. Then it could become a talkie. I'm in a noisy place.
+
+Last time we were refactoring.
+
+I don't understand this bug. At all.
+
+The issue is with one of the calls to cell.put when we are adding a dialog entry.
+
+Alright! One fixed!
+
+OK, a much subtler bug.
+
+Found it: if there's an @ that's not supposed to be expanded (those of the dialog), the `return true` at the end of cell.respond (to avoid calling cell.put over and over, though not infinitely) stops the thing.
+
+I wonder if it's just having a reference to nothing.
+
+The dialog should not expand! It should remain as is. It should be literal.
+
+You interact with the language through its toplevel (cell.call). The toplevel is not just for a console, it's for everything.
+
+For later:
+- Add multi put
+- Add push
+
+TODO:
+- Make cell.call make an entry on the dialog [DONE]
+- Make cell.call support @ do
+- Upload as call
+   - Make it an internal call
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+
+Do we want to call cell.upload from the toplevel, from cell.respond? Or should that function call cell.call? No, the latter is backwards. We'd have multiple entries in the dialog with one "real" outside call. So we need to call arbitrary calls from the outside. I want to call @ upload file ... and this should really map to cell.upload.
+Those are native mappings, so to speak.
+
+Things to figure out:
+- Do we generate an id for the file if we save it somewhere else? Or do we just keep in in the dialog? No, it has to go to filespace! We'll use the name of the actual file to reference it from dataspace. There can still be an underlying id.

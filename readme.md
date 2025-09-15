@@ -48,7 +48,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
 
 1. **Fourdata**: a simple way to **represent data with text**. This allows you to look directly at any data that comes your way.
 2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location.
-3. **Dialogue**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
+3. **Dialog**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
 4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
 5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
 6. **Integrated editor**: language, database, API and UI are in one editor that runs in your web browser.
@@ -157,8 +157,8 @@ TODO
    - Support for quoted texts
    - Diffs
       - Give ids to calls
-      - Make mute calls still be in the dialogue but not shown
-      - Rename dialogue to dialog
+      - Make mute calls still be in the dialog but not shown
+      - Rename dialogue to dialog [DONE]
    - Undo
    - Vim mode when editing long texts
 
@@ -193,7 +193,7 @@ TODO
 
 - More calls: edit, wipe, push, lepush (left add), pop, lepop
 - Change dot to dash for placeholders of list
-- Make put return a diff
+- Add multi put
 - do
    - native calls
       - add validations
@@ -217,7 +217,7 @@ TODO
    - range (for numbers): >, <, >=, <=
    - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
    - any other logic, really, the full language is there
-- diff: takes one or two points of the dialogue and gives you a diff.
+- diff: takes one or two points of the dialog and gives you a diff.
 - access masks
 - Recursive lambdas by referencing itself?
 - Parsing issues:
@@ -359,12 +359,12 @@ Define types as validations. The requirements from the calls will bubble up on t
 - Storing discrete calls in a dialog gives us both commits and transactions in a single construct. This allows us to query the system's state at any specific moment. We can also examine how the system evolves over time by reviewing the sequence of interactions. The calls are the diffs of the system. If the `get` call takes a parameter, we can query any previous state. And if the `put` call can take a condition and perform multiple operations as a whole, we can have reified transactions. These insights grow from the work of Datomic (thanks Val Waeselynck for your [great explanation](https://vvvvalvalval.github.io/posts/2018-11-12-datomic-event-sourcing-without-the-hassle.html)!).
 - A first-class [intermediate representation](https://en.wikipedia.org/wiki/Intermediate_representation): paths. Computation as rewriting of paths.
 
-## Tour of cell
+## Tour de cell
 
 ### The editor
 
 - The *main*: a main window that contains *cells*: smaller windows that show either text (fourdata) or graphical components.
-- The *dialogue*: a dialogue window that combines the concept of a terminal with that of an LLM prompt, enabling a dialogue between the user, an LLM and cell. Any message starting with @, whether it comes from the user or the LLM, is understood as a call to cell. Any message sent by the user that is not starting with a @ is sent to the LLM, which will then respond with other messages and possibly calls to cell. Calls to cell will control the interface as well as put data in the dataspace (actually, the interface is simply an interpretation of part of the dataspace, but we mention it as an important special case). cell won't output anything on the dialogue, its results will be seen (optionally) in the main window.
+- The *dialog*: a dialog window that combines the concept of a terminal with that of an LLM prompt, enabling a dialog between the user, an LLM and cell. Any message starting with @, whether it comes from the user or the LLM, is understood as a call to cell. Any message sent by the user that is not starting with a @ is sent to the LLM, which will then respond with other messages and possibly calls to cell. Calls to cell will control the interface as well as put data in the dataspace (actually, the interface is simply an interpretation of part of the dataspace, but we mention it as an important special case). cell won't output anything on the dialog, its results will be seen (optionally) in the main window.
 
 In desktop, the main window will be 70% of the width of the screen, to 30% of the vertical stream of messages between user, LLM and cell.
 
@@ -403,7 +403,7 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 
 ```
 access
-dialogue
+dialog
 editor
    cursor
    expand
@@ -416,6 +416,21 @@ views
 ```
 
 ## Development notes
+
+## 2025-09-15
+
+Interesting that deleting the history is just deleting the dialog. But you keep the rest of the state. You just lose the history of how you got there.
+
+Maybe I should move the cursor to localstorage.
+
+The dialog should not expand! It should remain as is. It should be literal.
+
+You interact with the language through its toplevel (cell.call). The toplevel is not just for a console, it's for everything.
+
+Do we want to call cell.upload from the toplevel, from cell.respond? Or should that function call cell.call? No, the latter is backwards. We'd have multiple entries in the dialog with one "real" outside call. So we need to call arbitrary calls from the outside. I want to call @ upload file ... and this should really map to cell.upload.
+Those are native mappings, so to speak.
+
+Do we generate an id for the file if we save it somewhere else? Or do we just keep in in the dialog? No, it has to go to filespace! We'll use the name of the actual file to reference it from dataspace. There can still be an underlying id.
 
 ## 2025-09-14
 
@@ -455,11 +470,26 @@ logo for cell: a = and then a @ below it!
 @
 ```
 
-we can have references bound to time, to avoid updates. @ is implicitly @ latest. @@ could refer to a time. let's use time, and we can also refer to an entry in the dialogue.
-entries in the dialogue: add a noun after the timestamp, that's the id!
+we can have references bound to time, to avoid updates. @ is implicitly @ latest. @@ could refer to a time. let's use time, and we can also refer to an entry in the dialog.
+entries in the dialog: add a noun after the timestamp, that's the id!
 files: reference the data of the file! instead of copying it over. the parsed goes in as an input to the call, as `data`, only for those that can be parsed. also have images, which is an example of something not parsed.
 
 for folding: have a cap of how many rows and cols, and if you go over that, autofold whatever goes over that by programatically setting it. it is hardcoded and not dynamic, though. better would be to have an autofold property that then can be overriden, then you'd need to store the unfolded ones.
+
+If you send @ do to cell at the toplevel, we are going to call that for you. why would you send a lambda/call if not to call it? And no need to prepend this with @ call.
+
+The entrypoint to the entire cell (or should I say the interface) is the dialog. This is where things that run from the toplevel go in. Perhaps we could even have crons entering through the dialog as well, so you can see them happen. It's like unidirectional data flow in a retained mode UI: any change coming from anywhere goes in in the same cycle, through the same door.
+
+This means that the entries to the dialgoue need to be done by cell.call. Take them out of the server.
+
+It's pretty cool to be able to send lambda calls that get executed (IIFEs) over the wire.
+
+You can then send three things through the dialog:
+- Put
+- Do (sequence that gets executed)
+- Normal reference (to anything)
+
+The language is like a service. For every call, there's a notion of time, a notion of who/identity.
 
 ## 2025-09-11
 
@@ -1448,6 +1478,11 @@ TODO
 
 TODO
 
+Three entrypoints:
+- @ do
+- @ put
+- @ ... (reference to anything)
+
 #### `cell.respond`
 
 We now define `cell.respond`, a function that will be called by `cell.put` when an update takes place. This function expands calls, that is: it takes the response to any calls and puts them in the dataspace.
@@ -2091,10 +2126,10 @@ We return the matches or an empty array (in case there were none). This closes t
 - `paths`: the paths to write to the dataspace.
 - `contextPath`: the path where we're currently standing. For calls that come from outside, this will be an empty list. The exact same as what `cell.get` receives.
 - `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
-- `updateDialogue`: a flag that, if truthy, will allow to update the dialogue. This is to protect the `dialogue`, which is a special key. This will be replaced by a better validation mechanism later.
+- `updateDialog`: a flag that, if truthy, will allow to update the dialog. This is to protect the `dialog`, which is a special key. This will be replaced by a better validation mechanism later.
 
 ```js
-cell.put = function (paths, contextPath, get, put, updateDialogue) {
+cell.put = function (paths, contextPath, get, put, updateDialog) {
 ```
 
 We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` and `v`, we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
@@ -2136,10 +2171,10 @@ We forbid overwriting `put`.
    if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
 ```
 
-We forbid overwriting `dialogue` unless the `updateDialogue` flag is passed.
+We forbid overwriting `dialog` unless the `updateDialog` flag is passed.
 
 ```js
-   if (leftSide [0] === 'dialogue' && ! updateDialogue) return [['error', 'A dialogue cannot be supressed by force.']];
+   if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
 ```
 
 We get the entire dataspace onto memory. Isn't inefficiency fun?

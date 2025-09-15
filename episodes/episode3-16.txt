@@ -1,0 +1,23 @@
+Sixteenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, after a lot of readme rewriting, we tackle a new logo and making cell.call make dialog entries. The dialog is quickly becoming central, much more than originally planned.
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Logo [DONE]
+- Make cell.call make an entry on the dialog
+   - Add time+id on dialog calls
+- Add multi put
+- Add push
+- Upload as call
+   - Make it an internal call
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+
+It's pretty cool to be able to send lambda calls that get executed (IIFEs) over the wire.
+
+You can then send three things through the dialog:
+- Put
+- Do (sequence that gets executed)
+- Normal reference (to anything)
+
+The language is like a service. For every call, there's a notion of time, a notion of who/identity.

@@ -1,0 +1,12 @@
+Fifteenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, another short episode, but we move the needle. The upload is working. And we realize that diff is just a call!
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Fix the upload [DONE]
+
+Problem: we make a call that makes calls to put. For example, upload. We want to see the top level of the call, not the expansion. The expansion could be expanded if we wanted.
+
+This means that upload should be a call. A system level call, a cell level call. It then calls put as part of its internal process. It can rely on JS for parsing but at least the mechanism of updating the dialogue and other parts should be internal.
+
+Maybe this is even better than showing a diff. You see the expansion of each call you make, if you want. Although it would be cool to see diffs. Perhaps, the diff viewing can be another call. You pass two different moments (calls) and you get the diff in the middle! diff can be a call!
