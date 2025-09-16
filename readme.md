@@ -403,19 +403,37 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 
 ```
 access
+cron
 dialog
-editor
+editor (client side only, not persisted in the server)
    cursor
    expand
    search
 endpoints
    email
    http
+files
 rules
 views
 ```
 
 ## Development notes
+
+## 2025-09-16
+
+Files can be stored at <cell name>-<file name without double dots (remove the first) or slashes/backslashes (outright remove them)>
+
+Cron can be as simple as a call that happens every n time, and it also goes through the dialog, although the `from` is `cron`.
+
+Cron can delete the dialog (or parts of it) for cleanup every N time, or move them to files and outside the dataspace. This would be a sort of log rotation.
+
+I wonder if just seven toplevel keys (removing the editor, and putting it on the localstorage of the browser rather than saved on the cell, so that if you have multiple contributors they do not step on each other's toes) would be enough: access, cron, dialog, endpoints, files, rules, views. ACDEFRV.
+
+For email: to have cell+cellname+someotherthing@altocode.nl could work. You could then have it sorted per cell and per call inside `endpoints email`
+
+There are echoes of B.log in the dialog: every event (call) goes in there. The state is still kept as a snapshot, but you retain history if you want.
+
+Access levels: read, append, write. Can be masked by prefix.
 
 ## 2025-09-15
 
