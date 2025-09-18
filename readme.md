@@ -419,6 +419,41 @@ views
 
 ## Development notes
 
+## 2025-09-18
+
+The toplevel in cell has a more literal meaning: it means that you are making calls at the outermost level of the cell, in terms of context path. That means that, from the toplevel, the context path is empty.
+
+Two ways to go about running code through the toplevel:
+1: Send a lambda and also a message.
+2: Just send the things you want to do, with the messages already built in.
+
+For 2, just send a list.
+
+1 @ upload file ...
+           ...
+2 @ set p civ2data
+        v @ file civ2 data
+
+
+How would the list be executed?
+
+Before that, why do we need a special command? We want this list to be stored only in the dialog. That's what the entry is asking for. Just put this stuff in the dialog, and expand it.
+
+However, we don't expand the stuff that goes in the dialog. So we need to run it.
+
+A lazy way to do it: put it in a temporary key that is free: wait until all things are resolved. Then copy the result to the dialog and delete the key.
+
+We can do it with just a list! If we send a list, we are going to put it in /tmp-dddd. Then we wait until things settle. Then we take the entire list (together with : and =) and put it in the dialog. End of story.
+
+- The put will not create a dialog entry.
+- Read the value back when the put is done (which is easy, because it runs synchronously).
+- Put it in the dialog.
+- Delete /tmp-dddd
+
+Fun stuff: this list can even refer itself, without you knowing where it is in /tmp-dddd. You can actually do anything! You can define calls, do a lot of things, and it will all just happen. It's just another mechanism for running code that's the same mechanism as everywhere else. If you put an access mask around it, you have remote code execution, really. This is because sequences are lists. So, if you send a list (without telling me to put it anywhere) we are just going to run it. If we get an error, we stop, but that's also a value.
+
+Unrelated: when overwriting an object in a loop, you see the expansion. but if the object is now changed, where would that be held? don't you lose it once it updates? Ah, no, it would only be "erased" if you set the output back to the input! this is an interesting way of removing your traces. if you program functionally in that you don't update things, then you will have the expansions. if you overwrite things, then on the circular loop, the expansion will be gone, assuming your modification is idempotent. and if it's not idempotent, it will either crash or runaway forever. So, overwriting means forgetting. If you keep references to the old things, then you will have the expansions that brought you there.
+
 ## 2025-09-16
 
 Files can be stored at <cell name>-<file name without double dots (remove the first) or slashes/backslashes (outright remove them)>

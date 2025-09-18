@@ -410,7 +410,9 @@ cell.call = function (message, from, to, hide, get, put) {
    }
 
    else if (paths [0] [1] === 'do') {
-      // TODO: call cell.do
+      if (teishi.last (paths) [1] !== 'do') return respond ([['error', 'A call to `@ do` should not have any extra keys.']]);
+      // TODO; rework: accept a list.
+
    }
 
    // Neither a put nor a do, we can just call get to resolve the reference
@@ -1323,7 +1325,7 @@ var test = function () {
           ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 2],
       ]},
 
-      // Call to definition with a location of two
+      // Call to definition with a location of two steps
       {reset: []},
       {f: cell.call, input: ['@ put p eleven', '@ put v @ nested plus1 10'], expected: [['ok']]},
       {f: cell.call, input: ['@ put p nested plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
@@ -1357,6 +1359,13 @@ var test = function () {
          ['def', '=', 'message', 1],
          ['def', '@', 'do', 'message', 1, '@', 'message']
       ]},
+
+      // Call list
+      {reset: []},
+      //{f: cell.call, input: ['@ do', '@ put v @ do message 1 @ message'], expected: [['ok']]},
+
+
+
    ], false, function (test) {
 
       if (test.reset) return dataspace = cell.sorter (test.reset);
