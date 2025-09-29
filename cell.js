@@ -391,7 +391,11 @@ cell.call = function (message, from, to, hide, get, put) {
 
    if (paths.length === 0) return respond ([]);
 
-   if (paths [0] [0] !== '@') return respond ([['error', 'The call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
+   if (type (paths [0]) === 'integer') {
+      // TODO: process a list
+   }
+
+   if (paths [0] [0] !== '@') return respond ([['error', 'A single call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
 
    var extraKey = dale.stopNot (paths, undefined, function (path) {
       if (path [0] !== '@') return path [0];
@@ -407,12 +411,6 @@ cell.call = function (message, from, to, hide, get, put) {
       return respond (cell.put (dale.go (paths, function (path) {
          return path.slice (2);
       }), [], get, put));
-   }
-
-   else if (paths [0] [1] === 'do') {
-      if (teishi.last (paths) [1] !== 'do') return respond ([['error', 'A call to `@ do` should not have any extra keys.']]);
-      // TODO; rework: accept a list.
-
    }
 
    // Neither a put nor a do, we can just call get to resolve the reference
@@ -824,7 +822,7 @@ var test = function () {
          ['" //"', [[' /']]],
          ['"///""', [['/"']]],
          ['" //" " ////" // " //a"', [[' /', ' //', '//', ' /a']]],
-         ['"The call must start with /"@/" but instead starts with /"w/""', [['The call must start with "@" but instead starts with "w"']]],
+         ['"A single call must start with /"@/" but instead starts with /"w/""', [['A single call must start with "@" but instead starts with "w"']]],
          [['dialog "1" from user', '           message "@ foo"'], [['dialog', '1', 'from', 'user'], ['dialog', '1', 'message', '@ foo']]],
          [['dialog 2 from user', '         message "@ foo"'], [['dialog', 2, 'from', 'user'], ['dialog', 2, 'message', '@ foo']]],
          [['dialog " //" from user', '             message "@ foo"'], [['dialog', ' /', 'from', 'user'], ['dialog', ' /', 'message', '@ foo']]],
@@ -893,7 +891,7 @@ var test = function () {
 
       {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: cell.call, input: '', expected: []},
-      {f: cell.call, input: 'foo bar', expected: [['error', 'The call must start with `@` but instead starts with `foo`']]},
+      {f: cell.call, input: 'foo bar', expected: [['error', 'A single call must start with `@` but instead starts with `foo`']]},
       {f: cell.call, input: ['@ foo bar', 'Groovies jip'], expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
       {f: cell.call, input: ['@ something is', '  another thing'], expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
       {f: cell.call, input: ['@ put something', 'Groovies jip'], expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},

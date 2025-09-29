@@ -1,0 +1,123 @@
+Hello Earth! We start silent today, maybe later we switch to talkie.
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+It's been easily the most hectic couple of weeks in the entire year, the last ones. I'm essentially restarting work on cell now.
+
+Let's see where we left off.
+
+General TODO for publishing:
+
+- Bring data from anywhere:
+   - Fixed prompt to ask you to enter data [DONE]
+   - Modes
+      - Clipboard [DONE]
+      - Upload -> We're here
+      - API
+      - AI (bring public data or invent sample data)
+   - Parse
+      - Spreadsheet
+      - CSV
+      - JSON
+   - Ask AI to name the output
+   - Save the file and have a reference to it from the cell (the metadata is in the cell)
+
+TODO upload:
+- Make cell.call support @ do
+- Upload as call
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+
+OK, the approach proposed in last episode works.
+
+In the meantime, I thought of a corner case that I have to put in the todos.
+
+OK, let's support a list. First, the data. An example:
+
+foo 10
+result @ + 1 foo
+           2 10
+
+This is something we could send! It doesn't even need to be a call to @ do! It can just be data, or data with references. You could even send definitions.
+
+- The put will not create a dialog entry.
+- Read the value back when the put is done (which is easy, because it runs synchronously).
+- Put it in the dialog.
+- Delete /tmp-dddd
+
+The above assumes that there is a value, a =. But what if there's just keys, instead of just a call? We could just put the whole thing there. Actually, @ do would not be the default case at all. You could ship definitions over the wire, inlined, but you could also use the existing definitions in context. This is exciting.
+
+In short: we just send data, and because calls can be data, we're sending code to be executed, put in the dialog and then we return whatever was sent. But do we really want the whole thing back? Only if there's just one call. So, if you send:
+
+@ "tome pim"
+
+then you want to get
+
+= "y haga pum"
+
+But, when you send more data, how do we know what is result? You cannot know it. So we just have the whole thing.
+
+Now, in the case of upload, which triggered this:
+
+"- Make it an internal call": we don't need this! We just send the lambda.
+
+So, the endpoint:
+1) Takes raw data
+2) Attemps to process it
+3) Names it with an LLM
+4) Sends the call to cell
+
+What's in that call? Two things: put the file in files; 2) put "name" to a link to the data property of the file, but only if there's data.
+
+A very interesting tangent: instead of calling it "reference", we could just call it "link".
+
+Do we have that endpoint already?
+
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+
+Wait. I don't even need special logic for @ and @ put! And I even have the solution for the = vs the whole thing:
+- When you get something into cell.call, whatever it is, parse it. If you can parse it as valid fourdata, then put it in a temp location. Wait for it to resolve. Then put it in the dialog. AND, if you return something with = at the top level, just show that in the response.
+
+But how would the dialog look like if you send a list? It would be the list, and its expansion. And if you send a hash? Also the hash with the expansions.
+
+Where would the entrypoints be? Actually, there's just one. No need to distinguish @ and @ put, right? As long as the general entrypoint can execute everything, we're good. This basically means we are calling @ do without any arguments. Lists as sequences without arguments, just as is. And they are rendered nontrivial by the context already present in the cell. This is true lambda, because you can send the context and the call together. It's incredibly libeating, it's all in one place.
+
+How would an entry of the dialog look like?
+
+Yeah, this would work.
+
+I might be back this episode, or perhaps the next. OK, am back. Too lazy to talk.
+
+Trying to figure out if if you send invalid JS to the endpoint, it blows up. But no, JSToX is safe, it converts anything.
+
+How could I have broken the test with these changes? It makes no sense. Aha! I did some stupid search and replace. Fixed.
+
+Really feeling like designing. Not sure if it's procrastination or inspiration.
+
+- Interface to the entire system: cell.call.
+- cell.call takes text as fourdata.
+- It always responds with paths.
+- If the text is not fourdata, it responds with an error.
+- It always puts what it gets in a new, random key in the dataspace. It does it with put.
+- When the put finishes, IF the toplevel has a @, then it responds with a =? No, not even, because we want the expansion too! So it always responds with everything. It's up to the editor to see just a part. You basically send a message and get the message back with other things too. Interesting. Makes perfect sense. The waste of bytes is small, unless you're sending in huge messages. But then, there can be a limit and we can abridge things, even quite aggressively.
+- It makes sense. cell.call calls cell.put always. cell.put calls cell.respond. cell.respond calls cell.get and cell.do and cell.native and cell.cond where needed.
+
+cell.call -> cell.put -> cell.respond -> cell.get
+                                      -> cell.do
+                                      -> cell.if
+                                      -> cell.native
+
+The four things that cell.respond calls are: the three essential elements of computation (reference, sequence, conditional) and native calls to provide operations that are given as primitives, so you don't have to create from scratch your primitives for math and comparison. I do wonder what those primitives should be if we wanted to have "lower level primitives". It's probably those copy-and-erase sequences from Turing's U.
+
+Why does cell.call take text and returns paths? Yeah, it should return fourdata text.
+
+Let's coin another term: fourtext.
+
+And respond definitely must do work and change things and have state. But the state is explicit.
+
+TODO:
+- Have an unified interface through cell.call.
+- Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
+- Define fourtext as fourdata text (as opposed to fourpaths?). Or fourJS? Nah. I need to think about calling the IR paths, because it is misleading: there are paths in fourtext. Fourdata can be text or JS arrays.
+
+See you next time! Thanks for watching!

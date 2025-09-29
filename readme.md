@@ -71,7 +71,7 @@ Cell employs seven powerups to make programming as easy (or hard) as writing pro
       - Spreadsheet
       - CSV
       - JSON
-   - Ask AI to name the output making sure it doesn't overwrite the top level hashes
+   - Ask AI to name the output
    - Save the file and have a reference to it from the cell (the metadata is in the cell)
 
 - Prompt the making of a dashboard, a form or a table, with some buttons
@@ -195,6 +195,7 @@ TODO
 - Change dot to dash for placeholders of list
 - Add multi put
 - do
+   - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
    - native calls
       - add validations
       - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
@@ -405,6 +406,12 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 access
 cron
 dialog
+   - call
+     from
+     hide
+     id
+     ms
+     to
 editor (client side only, not persisted in the server)
    cursor
    expand
@@ -419,6 +426,462 @@ views
 
 ## Development notes
 
+## 2025-09-29
+
+A tangent: instead of calling it a *reference*, we could just call it a *link*.
+
+OK, let's support a list. First, the data. An example:
+
+foo 10
+result @ + 1 foo
+           2 10
+
+This is something we could send! It doesn't even need to be a call to @ do! It can just be data, or data with references. You could even send definitions.
+
+- The put will not create a dialog entry.
+- Read the value back when the put is done (which is easy, because it runs synchronously).
+- Put it in the dialog.
+- Delete /tmp-dddd
+
+The above assumes that there is a value, a =. But what if there's just keys, instead of just a call? We could just put the whole thing there. Actually, @ do would not be the default case at all. You could ship definitions over the wire, inlined, but you could also use the existing definitions in context. This is exciting.
+
+In short: we just send data, and because calls can be data, we're sending code to be executed, put in the dialog and then we return whatever was sent. But do we really want the whole thing back? Only if there's just one call. So, if you send:
+
+@ "tome pim"
+
+then you want to get
+
+= "y haga pum"
+
+But, when you send more data, how do we know what is result? You cannot know it. So we just have the whole thing.
+
+Now, in the case of upload, which triggered this:
+
+"- Make it an internal call": we don't need this! We just send the lambda.
+
+So, the endpoint:
+1) Takes raw data
+2) Attemps to process it
+3) Names it with an LLM
+4) Sends the call to cell
+
+What's in that call? Two things: put the file in files; 2) put "name" to a link to the data property of the file, but only if there's data.
+
+A very interesting tangent: instead of calling it "reference", we could just call it "link".
+
+Wait. I don't even need special logic for @ and @ put! And I even have the solution for the = vs the whole thing:
+- When you get something into cell.call, whatever it is, parse it. If you can parse it as valid fourdata, then put it in a temp location. Wait for it to resolve. Then put it in the dialog. AND, if you return something with = at the top level, just show that in the response.
+
+But how would the dialog look like if you send a list? It would be the list, and its expansion. And if you send a hash? Also the hash with the expansions.
+
+Where would the entrypoints be? Actually, there's just one. No need to distinguish @ and @ put, right? As long as the general entrypoint can execute everything, we're good. This basically means we are calling @ do without any arguments. Lists as sequences without arguments, just as is. And they are rendered nontrivial by the context already present in the cell. This is true lambda, because you can send the context and the call together. It's incredibly libeating, it's all in one place.
+
+- Interface to the entire system: cell.call.
+- cell.call takes text as fourdata.
+- It always responds with paths.
+- If the text is not fourdata, it responds with an error.
+- It always puts what it gets in a new, random key in the dataspace. It does it with put.
+- When the put finishes, IF the toplevel has a @, then it responds with a =? No, not even, because we want the expansion too! So it always responds with everything. It's up to the editor to see just a part. You basically send a message and get the message back with other things too. Interesting. Makes perfect sense. The waste of bytes is small, unless you're sending in huge messages. But then, there can be a limit and we can abridge things, even quite aggressively.
+- It makes sense. cell.call calls cell.put always. cell.put calls cell.respond. cell.respond calls cell.get and cell.do and cell.native and cell.cond where needed.
+
+cell.call -> cell.put -> cell.respond -> cell.get
+                                      -> cell.do
+                                      -> cell.if
+                                      -> cell.native
+
+The four things that cell.respond calls are: the three essential elements of computation (reference, sequence, conditional) and native calls to provide operations that are given as primitives, so you don't have to create from scratch your primitives for math and comparison. I do wonder what those primitives should be if we wanted to have "lower level primitives". It's probably those copy-and-erase sequences from Turing's U.
+
+Why does cell.call take text and returns paths? Yeah, it should return fourdata text.
+
+Let's coin another term: fourtext.
+
+And respond definitely must do work and change things and have state. But the state is explicit.
+
+TODO:
+- Have an unified interface through cell.call.
+- Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
+
+## 2025-09-24
+
+What is in an expansion (the :) can also be a call! It could be a call, with its own expansion, and then a response (=) that is then the expansion of the outer call.
+
+Macros are still returning the whole thing. The pattern I'm having in mind is something akin to a turing machine, in that after every step, it looks at what to do.
+
+A way to do this is as a recursive call that responds with one step, then is called again once that step is executed. So it is kind of like a coroutine. Or a continuation, except that the context is already there so there is no need to explicitly pass it.
+
+What is intriguing is that there could be a stack of these things. But rather than a stack somewhere else, the stack is there by going into the expansions. But where would you store this one that steps on things one at a time?
+
+The clear place to see this is a loop.
+
+It might even possible to do it in a sequence too. The part of cell outside cell (in js) would be to jump to the generator of steps one at a time, and then let that one build the next one. Conditionals would have to be built in, but that's fine, because results of conditions are so obvious ("" and 0 are falsy, the rest is truthy) that there should be no doubt.
+
+## 2025-09-22
+
+Thinking of loops.
+
+list 1 foo
+     2 bar
+     3 jip
+
+loop v @ list
+     do ...
+
+Where do can be either a reference to a definition OR a lambda
+
+= 1 "You say: foo"
+  2 "You say: bar"
+  2 "You say: jip"
+@ loop do v 1 = 1 "You say: foo"
+                2 "You say: bar"
+                3 "You say: jip"
+              : 1 = "You say: foo"
+                  : v "foo"
+                    seq 1 = "You say: foo"
+                          @ + - "You say: "
+                              - = foo
+                                @ v
+                        2 = "You say: bar"
+                          @ + - "You say: "
+                              - = bar
+                                @ v
+                        3 = "You say: jip"
+                          @ + - "You say: "
+                              - = jip
+                                @ v
+                  @ + - "You say: "
+                        = foo
+                      - @ v
+
+              @ + - "You say: "
+                  - @ v
+         = 1 foo
+           2 bar
+           3 jip
+       v @ list
+
+(way to define multiple args, how to do it? you can set them as either 1, 2 in :)
+
+If you're putting the steps of the sequences at the numbers, if you put positional numbers, they will be overrwitten! Also, how am I mixing hashes with numbers? No, they are in a sequence. But that means that message(s) can only be named with texts.
+
+I have a problem: v changes value. So v has to be inside each of the steps somehow.
+
+With expansion, 28 lines. Without expansion, 10.
+
+@ loop do v 1 = 1 "You say: foo"
+                2 "You say: bar"
+                3 "You say: jip"
+              : ...
+              @ + - "You say: "
+                  - @ v
+         = 1 foo
+           2 bar
+           3 jip
+       v @ list
+
+Interesting: a reference has no expansion other than its result. How does this work with indirect references?
+
+No, it is like this: inside each step, there is a @, a : and a =. each element in the loop is its own call.
+
+pg onlisp
+"A macro call is a list whose first element is the name of a macro."
+in this, this is like a function.
+
+in cell, I could just return an @ do. Where is the need to make this a macro? It is in the nonevaluation of things.
+Evaluation as the jumping over equals, as well as the resolving/responding of calls.
+
+Interesting that the first macro example is about setq, which is equivalent to put in cell.
+
+In cell, macros will be the returning of functions where the right things are evaled or not in the dynamic definition, then you get the returned def with the proper context and then you just call it and then you get the result. Fully transparent. The only interesting part is that it freezes/unfreezes selectively.
+
+So, basically, cell macros are functions that return functions and have to freeze/unfreeze things in a nonstandard way.
+Yeah, commas are for turning off the quoting. It could be @@ in that you jump up one level and resolve right away. but it should not be global, it should only be one level in, so you can have combinations of freezing and unfreezing.
+
+"Commas work no matter how deeply they appear within a nested list"
+Yeah, but they have to go through levels of freezing/unfreezing, like stop stop. Perhaps it's @ @, instead of @@. This would make it context sensitive, but is it not? I need to figure out the proper defaults through writing.
+
+"One comma counteracts the effect of one backquote, so commas must match backquotes."
+yeah, exactly: levels of freezing with @ do and of unfreezing with @ @.
+
+"Nested backquotes are only likely to be needed in macro-defining macros."
+
+,@ splices things. Do I need this? Perhaps we need a splicing operator. The splicing would be a call in the middle of the thing? Yes, and it would generate its own =, in the middle. then, the engine can "jump over" the value and splice it? Not so sure.
+
+"The object to be spliced must be a list, unless it occurs last."
+This is just a speed bump. Just splice the atom and move on. And if it's nothing, don't splice anything. Bend it like redis.
+
+"Comma-at tends to be used in macros which take an indeterminate number of
+arguments and pass them on to functions or macros which also take an indetermi-
+nate number of arguments. This situation commonly arises when implementing
+implicit blocks. Common Lisp has several operators for grouping code into blocks,
+including block, tagbody, and progn."
+getting a labels feeling here.
+
+I can see now how crippled lisp is by not having hashes (so that everything is annoyingly positional) and also by the fact that it has parenthesis rather than paths to organize nested data.
+
+"To write the body of the macro,
+turn your attention to the expansion. Start the body with a backquote. Now, begin
+reading the expansion expression by expression. Wherever you find a parenthesis
+that isn’t part of an argument in the macro call, put one in the macro definition.
+So following the backquote will be a left parenthesis. For each expression in the
+expansion
+1. If there is no line connecting it with the macro call, then write down the
+expression itself.
+2. If there is a connection to one of the arguments in the macro call, write
+down the symbol which occurs in the corresponding position in the macro
+parameter list, preceded by a comma."
+
+"The approach described in this section enables us to write the simplest
+macros—those which merely shuffle their parameters. Macros can do a lot
+more than that. Section 7.7 will present examples where expansions can’t be
+represented as simple backquoted lists, and to generate them, macros become
+programs in their own right."
+
+"What we need is a way of seeing
+the result after only one step of expansion. This is the purpose of the built-in
+function macroexpand-1, shown in the second example; macroexpand-1 stops
+after just one step, even if the expansion is still a macro call."
+Here you see the problem with this un-self-similar approach. If the process of expansion is the same always, you can see the expansions happening at every level.
+
+"If the expansion contains free variables, you may want to set
+some variables first. In some systems, you will be able to copy the expansion and
+paste it into the toplevel, or select it and choose eval from a menu. In the worst
+case you can set a variable to the list returned by macroexpand-1, then call eval
+on it:"
+ad-hoc tools and long explanations are great pointers to what you can improve.
+
+"Destructuring is usually seen in operators which create bindings, rather than do assignments."
+what's the difference?
+
+"It’s more
+convenient to remember what defmacro does by imagining how it would be
+defined.
+There is a long tradition of such explanations in Lisp. The Lisp 1.5 Pro-
+grammer’s Manual, first published in 1962, gives for reference a definition of ◦
+eval written in Lisp. Since defmacro is itself a macro, we can give it the same
+treatment"
+
+(defmacro our-expander (name) ‘(get ,name ’expander))
+(defmacro our-defmacro (name parms &body body)
+(let ((g (gensym)))
+‘(progn
+(setf (our-expander ’,name)
+#’(lambda (,g)
+(block ,name
+(destructuring-bind ,parms (cdr ,g)
+,@body))))
+’,name)))
+(defun our-macroexpand-1 (expr)
+(if (and (consp expr) (our-expander (car expr)))
+(funcall (our-expander (car expr)) expr)
+expr))
+
+"It wouldn’t handle the &whole keyword
+properly. And what defmacro really stores as the macro-function of its first
+argument is a function of two arguments: the macro call, and the lexical envi-
+ronment in which it occurs. However, these features are used only by the most
+esoteric macros. If you worked on the assumption that macros were implemented
+as in Figure 7.6, you would hardly ever go wrong. Every macro defined in this
+book would work, for example."
+
+"The definition in Figure 7.6 yields an expansion function which is a sharp-
+quoted lambda-expression. That should make it a closure: any free symbols in the
+macro definition should refer to variables in the environment where the defmacro
+occurred."
+
+"As of CLTL2, it is. But in CLTL1, macro expanders were defined in the null lexical
+environment,5 so in some old implementations this definition of our-setq will
+not work."
+interesting that the first implementation put macros in a vacuum, whereas the later one put them in the lexical context of their definition. lexical macros.
+
+"The more general approach to writing macros is to think about the sort of
+expression you want to be able to use, what you want it to expand into, and then
+write the program that will transform the first form into the second. Try expanding
+an example by hand, then look at what happens when one form is transformed into
+another. By working from examples you can get an idea of what will be required
+of your proposed macro."
+
+"On looking at the expansion, it is also clear that we can’t really use foo as
+the loop label. What if foo is also used as a loop label within the body of the
+do? Chapter 9 will deal with this problem in detail"
+would we still have variable capture in cell?
+
+"With the definition of this macro, we begin to see what macros can do. A
+macro has full access to Lisp to build an expansion. The code used to generate
+the expansion may be a program in its own right."
+yeah, this is core.
+
+"There are two different kinds of code associated with a macro definition: ex-
+pander code, the code used by the macro to generate its expansion, and expansion
+code, which appears in the expansion itself."
+man, bad naming, too close together.
+
+"The principles of style are different
+for each. For programs in general, to have good style is to be clear and efficient.
+These principles are bent in opposite directions by the two types of macro code:
+expander code can favor clarity over efficiency, and expansion code can favor
+efficiency over clarity."
+
+"It’s in compiled code that efficiency counts most, and in compiled code the
+macro calls have already been expanded. If the expander code was efficient, it
+made compilation go slightly faster, but it won’t make any difference in how well
+the program runs."
+none of this in cell. it's all runtime, all interpreted, all dynamic. it's all the same and it all counts.
+
+"Proponents of structured programming disliked goto for what it did to source
+code. It was not machine language jump instructions that they considered
+harmful—so long as they were hidden by more abstract constructs in source
+code. Gotos are condemned in Lisp precisely because it’s so easy to hide them:
+you can use do instead, and if you didn’t have do, you could write it. Of course,
+if we’re going to build new abstractions on top of goto, the goto is going to have
+to exist somewhere."
+
+what would goto be? It would be to jump to a certain item in a sequence, perhaps modifying the context, and skipping the other ones. The way it is right now, this is not possible, if you call, you call the whole sequence. But if you're idempotent, you could call the whole thing.
+
+"Similarly, setq is frowned upon because it makes it hard to see where a given
+variable gets its value."
+
+"Macros are often used to implement general-purpose utilities, which are then
+called everywhere in a program. Something used so often can’t afford to be
+inefficient. What looks like a harmless little macro could, after the expansion
+of all the calls to it, amount to a significant proportion of your program. Such a
+macro should receive more attention than its length would seem to demand. Avoid
+consing especially. A utility which conses unnecessarily can ruin the performance
+of an otherwise efficient program."
+
+"If you redefine a function, other functions which call it will automatically get the
+new version.6 The same doesn’t always hold for macros."
+this is plain bad.
+
+"It has been suggested that all the macros in a program be put in a separate file,
+to make it easier to ensure that macro definitions are compiled first. That’s taking
+things too far. It would be reasonable to put general-purpose macros like while
+into a separate file, but general-purpose utilities ought to be separated from the
+rest of a program anyway, whether they’re functions or macros."
+
+"As for condition 7, it is possible to simulate closures with macros, using a
+technique similar to the error described on page 37. But seeing as this is a low
+hack, not consonant with the genteel tone of this book, we shall not go into details."
+
+"CLTL2 introduced a new kind of macro into Common Lisp, the symbol-macro.
+While a normal macro call looks like a function call, a symbol-macro “call” looks
+like a symbol."
+no need for this distinction, because we just do @ whatever, we don't have to wrap a call in parenthesis
+
+"When do macros bring advantages? That is the subject of this chapter. Usually
+the question is not one of advantage, but necessity. Most of the things we do with
+macros, we could not do with functions. "
+
+"in a function call, all the arguments are evaluated before
+the function is even invoked.
+When you do need a macro, what do you need from it? Macros can do two
+things that functions can’t: they can control (or prevent) the evaluation of their
+arguments, and they are expanded right into the calling context. Any application
+which requires macros requires, in the end, one or both of these properties."
+1) We can have a call that unfreezes or freezes reference
+2) everything is expanded in the calling context already.
+
+"Depending on where the argument is placed
+in the macro’s expansion, it could be evaluated once, many times, or not at all.
+Macros use this control in four major ways:"
+
+"1. Transformation. The Common Lisp setf macro is one of a class of macros
+which pick apart their arguments before evaluation. A built-in access func-
+tion will often have a converse whose purpose is to set what the access
+function retrieves."
+
+"2. Binding. Lexical variables must appear directly in the source code. The first
+argument to setq is not evaluated, for example, so anything built on setq
+must be a macro which expands into a setq, rather than a function which
+calls it."
+the p in put is not evaled unless you put @ inside (interesting case, btw).
+
+"3. Conditional evaluation. All the arguments to a function are evaluated."
+
+"4. Multiple evaluation. Not only are the arguments to a function all evaluated,
+they are all evaluated exactly once. We need a macro to define a construct
+like do, where certain arguments are to be evaluated repeatedly."
+This is because you want to implement loops by peeling the list one item at a time.
+
+"It’s important to emphasize that the expansions thus appear in the lexical context
+of the macro call, since two of the three uses for macros depend on that fact."
+yep, in context. good, it also supports what we're doing already in general.
+
+"5. Using the calling environment. A macro can generate an expansion con-
+taining a variable whose binding comes from the context of the macro call. (...)
+This kind of lexical intercourse is usually viewed more as a source of con-
+tagion than a source of pleasure. Usually it would be bad style to write such
+a macro."
+so, no free variables in macros? That's lame. This moral prose around something technical is a red herring for cracks in the paradigm. You either don't put your hand in the fire because it is stupid, or there is something to it and then you should make it not like putting your hand on the fire.
+
+"The ideal of functional programming applies as well to macros:
+the preferred way to communicate with a macro is through its parameters.
+Indeed, it is so rarely necessary to use the calling environment that most
+of the time it happens, it happens by mistake. (See Chapter 9.) Of all the
+macros in this book, only the continuation-passing macros (Chapter 20) and
+some parts of the ATN compiler (Chapter 23) use the calling environment in
+this way."
+
+"6. Wrapping a new environment. A macro can also cause its arguments to
+be evaluated in a new lexical environment. The classic example is let,
+which could be implemented as a macro on lambda (page 144)."
+this one is cool. It could help, for example, to load libraries. except that we don't need much of a macro to do this.
+
+"7. Saving function calls. The third consequence of the inline insertion of
+macroexpansions is that in compiled code there is no overhead associated
+with a macro call."
+this one is irrelevant.
+
+"At compile-time we may not know the values of the arguments,
+but we do know how many there are, so the call to length could just as well be
+made then."
+why would you now? How could you know it at compile time, if you could pass arbitrarily long lists at runtime? I don't get it.
+
+"In earlier dialects of Lisp,
+programmers took advantage of this property of macros to save function
+calls at runtime. In Common Lisp, this job is supposed to be taken over by
+functions declared inline.
+By declaring a function to be inline, you ask for it to be compiled right
+into the calling code, just like a macro."
+
+"In some cases, the combined advantages of efficiency and close integration
+with Lisp can create a strong argument for the use of macros. In the query
+compiler of Chapter 19, the amount of computation which can be shifted forward
+to compile-time is so great that it justifies turning the whole program into a
+single giant macro. Though done for speed, this shift also brings the program
+closer to Lisp: in the new version, it’s easier to use Lisp expressions—arithmetic
+expressions, for example—within queries."
+so it's not just about efficiency, somehow. it's about converting something into basic lisp so that you can then have the basic lisp enhanced when you use it. this hints at something syntactic.
+
+"4. Functions are data, while macros are more like instructions to the compiler."
+this is bullcrap (from a self-similarity perspective).
+"Functions can be passed as arguments (e.g. to apply),returned by functions,
+or stored in data structures. None of these things are possible with macros."
+so basically, no funarg (up or down) or direct reference. lisp doesn't have first class macros!
+Now, that's something to try: first class macros with 2-3 more operators on top of the base language.
+
+"Debugging code which uses a lot of macros will not be as difficult as you
+might expect."
+
+"The closest thing to a general
+description of macro use would be to say that they are used mainly for syntactic
+transformations. This is not to suggest that the scope for macros is restricted.
+Since Lisp programs are made from1 lists, which are Lisp data structures, “syn-
+tactic transformation” can go a long way indeed."
+
+"Made from, in the sense that lists are the input to the compiler. Functions are no longer made of
+lists, as they used to be in some earlier dialects."
+
+Thinking about how to implement loops that exit early. The length is not known. You could stop given a condition. It almost reminds of a Turing machine, where after each step, you check again what you should do next. Loops could be implemented as its own function than sidesteps @ do completely, but this would be wrong. If they were macros, they could be something that responds with an @ do just for one call, but then again, the expansion would look more nested than it has to be.
+Another option, perhaps more intriguing, is that after each step, @ do calls a hook placed by @ loop. it would almost be a continuation: the context is already there.
+What is really pulling me here is the toyota notion of no batching, and making it as you need it. rather than generate a loop by returning a sequence over 20 elements, why can't we unfold the sequence one at a time, and have entry points that bubble up? It's about having nested returns that then emit further code. You jump to the next as needed.
+
+You don't have the inner workings of the loop if you do it in js, just the expansion but not why that expansion.
+
+Macros are a batch, they pass over all and return a new sequence.
+Continuation is one at a time, very turing like. Expand one at a time.
+Would this even work for the normal @ do? Just the keep on going?
+I imagine a stack of continuations (because you can't just have one), one returning something that the next one picks up. Then you see exactly why the loop that stops actually stopped, by looking at the conditional that made it stop.
+You can still respond with many steps on a sequence. My main concern is the sheer nestedness of the expansions. But this approach would truly show you the expansion all the way down, and the only things outside of it would be the basic logic of reference, keeping on going to the next step and conditionals.
 ## 2025-09-18
 
 The toplevel in cell has a more literal meaning: it means that you are making calls at the outermost level of the cell, in terms of context path. That means that, from the toplevel, the context path is empty.

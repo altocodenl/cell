@@ -24,7 +24,6 @@ var stop = function (rs, rules) {
    }, true);
 }
 
-
 // *** PARSING LIBRARIES ***
 
 var csv = require ('csv-parse/sync');
@@ -231,18 +230,21 @@ var routes = [
             method: 'post',
             path: 'call/' + rq.data.params.id,
             body: {
-               call: cell.JSToText ({'@': {'do': {'m': [
-                  {'@': {'upload': {
-                     base64: rq.body.file,
-                     mime: rq.body.mime,
-                     name: rq.body.name,
-                     data: result,
+               call: cell.JSToText ([
+                  {'@': {put: {
+                     p: ['files', rq.body.name],
+                     v: {
+                        base64: rq.body.file,
+                        data: result, // If it's undefined, this will not be stored at all. This will be the case for binary files.
+                        mime: rq.body.mime,
+                        name: rq.body.name,
+                     },
                   }}},
-                  {'@': {'put': {
+                  result ? {'@': {'put': {
                      p: metadata.name,
                      v: ['@', 'files', rq.body.name, 'data']
-                  }}},
-               ]}}})
+                  }}} : undefined
+               ])
             }
          }, function (error, RS) {
             if (error) return reply (rs, error.code ? error.code : 500, {error: error.body || error});
