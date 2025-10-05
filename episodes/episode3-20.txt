@@ -1,0 +1,68 @@
+Twentieth episode of season 3! I'm building a programming environment from scratch while recording myself. Instead of implementing the revelation of the previous episode, somehow I procrastinate and find a good structure for a loop that doesn't require macros, just with recursion and local state at the top of the loop.
+
+Hello Earth! Another silent episode today.
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+How would the loop be? The idea of the last few days is that, rather than taking a list and generating a sequence for it, then executing it (the macro approach), we have a recursive piece of code that unfolds the loop as far as needed.
+
+This unfoldance would be on both : and =. On = because results would be pushed. And on : because you want to see from where these results emerge. But where is this repetitive logic located? Because it is a step that calls itself.
+
+(I know, we had/have a todo list and what's next is to refactor cell.call to have just one interface there; but this somehow feels more interesting, or easy...).
+
+list 1 2 3
+@ loop do v @ + - @ v
+                - 1
+       v @ list
+
+And I expect
+
+= 2 3 4
+
+The interesting one is the second @ here; its expansion, really. But also perhaps its result.
+
+            = ??
+            : ??
+@ loop do v @ + - @ v
+                - 1
+
+Let's see what I was thinking about this before. OK, "data" is an upgrade. But no, it's all data. It would be a value. But everything's a value. What do you call what you're looping?
+
+If you get a list, you start by getting the first element (if it's a hash, it'd be the value of the first key of the hash).
+
+You put the expansion there. Interesting, you're really pushing expansions with that value (v) resolved. What's confusing above is that I write "v" twice.
+
+But going back, the logic:
+- Get next element.
+- If no next element, return output
+- If element, push call to the expansion.
+- Get the value of that step you pushed to the expansion and push it to the output.
+
+What about stopping values? If this somehow uses the logic of cell.do, then we don't need to do anything? Wait, we still would need to check. Unless we really write loop in a way that leverages cell.do.
+
+It's interesting that what loop does is to push things to the expansion one at a time. It would need to keep track of where it is, unless it uses the length of the current expansion. That could be a clean way to do it, if there's an elegant conversion for hashes.
+
+Oki, back from a few days. Will continue this episode because it is too short otherwise.
+
+I think I have a good solution for loops. Simply, one recursive function.
+
+State required:
+1. Which element you are iterating (position).
+2. The list of results to return.
+
+That's it. The rest is the message passed to the loop call, or the surrounding context.
+
+Sequence:
+- Get the next element based on the previous one (if no previous, get the first).
+- If no next element, respond with the value. (I forgot, do we need stop here? Let's check TODIS: it's `res`. Actually, it could just be respond, let's not make a `creat` just yet.). Actually, we don't need to respond early, because there's just one conditional here.
+- Otherwise, call the sequence on that and push the value to the output. Then, call yourself.
+
+Now, this is the fun part. We can simply set this recursive sequence inside :.
+
+(I should probably make these notes straight on readme.md, and just keep more "situational" comments in the desciption of the video. Let's do that)
+
+Apparently it's OK to call myself "silly" in youtube descriptions but not in the readme.
+
+Sanity check with the LLM...
+
+OK, enough for now. See you next time, and thank you for watching!

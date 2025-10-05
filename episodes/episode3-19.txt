@@ -1,3 +1,5 @@
+Nineteenth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, I realize that cell.call can have a single interface to do everything through one thing: putting the call in the dataspace and letting it be expanded. I love the shape of this conclusion.
+
 Hello Earth! We start silent today, maybe later we switch to talkie.
 
 If you're just tuning in for the first time: https://github.com/altocodenl/cell

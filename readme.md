@@ -200,6 +200,8 @@ TODO
       - add validations
       - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
       - test each of them, also with multiple arguments
+   - Allow early response with `response`
+   - allow for multiple args (destructuring of lists) and no args (the sequence just there)
    - test fizzbuzz (http://localhost:2315/#/river-chair-phone)
    - test two step calls
    - test stop
@@ -426,6 +428,128 @@ views
 
 ## Development notes
 
+## 2025-10-05
+
+there has to be a linear flow in the app, a way we do things. but how does it work in a spreadsheet? we bring data and then we work on it gradually. there are flows for searching for data, flows for creating new data. these flows/unfoldances are the core of what we do with the tool, and how we make it useful. I still don't understand them in cell.
+if you put the intermediate steps in the dataspace, if the process goes into error, you can resume them. it's like programming in disk rather than ram, nonvolatile state. echoes of garbage collection, simply that you have rules for when you get rid of things. only that it's the other way around, you have to be explicit about it, like going more low level. but the benefit is huge for such a small price. nonvolatile programming.
+the state is always living somewhere. you start by writing
+
+A doubt: if Babylonian astronomy was based on collecting data and deriving patterns from the data for prediction, without trying to understand why those regularities happen, wouldn't TODIS be proposing a Babylonian approach to data, by just looking at it and working with it, without predicting it further? Well, the framework doesn't preclude thinking about why. But it asks that you start with data first, and from the data you find patterns and explanations. Theories without data and that don't fit at all the data can be understood to be useless and misguided. A sublime theoretical breakthrough has to match the data quite well. Looking at the data is just the beginning.
+
+I think I have a good solution for loops. Simply, one recursive function.
+
+State required:
+1. Which element you are iterating (position).
+2. The list of results to return.
+
+That's it. The rest is the message passed to the loop call, or the surrounding context.
+
+Sequence:
+- Get the next element based on the previous one (if no previous, get the first).
+- If no next element, respond with the value. (I forgot, do we need stop here? Let's check TODIS: it's `res`. Actually, it could just be respond, let's not make a `creat` just yet.). Actually, we don't need to respond early, because there's just one conditional here.
+- Otherwise, call the sequence on that and push the value to the output. Then, call yourself.
+
+Now, this is the fun part. We can simply set this recursive sequence inside :.
+
+```
+@ loop do v @ + - @ v
+                - 1
+       v @ list
+```
+
+How do we define loop with just @ do (and @ cond and plain @, of course)?
+
+Let's use multiput to see it quicker
+
+```
+loop @ do m 1 @ put p1 . current
+                    v1 ""
+                    p2 . output
+                    v2 ""
+                    p3 . "process one"
+                    v3 @ do 1 p . current
+                              v @ next current @ current
+                                       v @ m v
+                            2 @ if cond @ not @ current
+                                   then respond @ output
+                            3 @ push p . output
+                                     v @ m do @ m v current
+                            4 @ "process one"
+            2 @ "process one"
+```
+
+(Interesting note: support @ do calls without message, just by putting the list!).
+(We also need a "next" call? It would be useful, especially for hashes)
+(We'd need a special value for "out of bounds". But that goes completely against what I'm doing here. Ah, wait, it could be done on keys, rather than on values. But what if a hash has an empty text? Then I'd have to keep track of whether the empty text was seen. We could perhaps omit this for now.)
+I would also need a call for exists? No, otherwise the @ next would give you "".
+
+Pushes should be done without initialization! What would the operators be for hashes instead of lists? Definitely not push, that's a set. Set for lists is more cumbersome because you need to query the length. In hashes you don't care.
+
+Would the locality of current and output work? I want them to be at the outermost level. Perhaps I need a conditional on top, otherwise they will be trapped in the nested expansions of the recursive calls.
+
+I wonder if the dot not being a default is the right choice. Do we always want to put variables as far left as they will go? Yet, I feel the answer is yes. You need to make locals local, rather than go with another operator that makes them go left. If anyone ever cares about cell, this will eventually be controversial.
+
+I think this would work. The recursive expansion would go right on step 4. But current and output would walk up. The only risk I see is that whatever is inside @ m do could perform a variable capture of sorts and compromises current and output. This could innocently and quickly happen with nested loops. You see there the benefit of keeping an opaque layer where the inner state of a loop is not referenced. But wait: in JS, doing this with free variables, it would work. Why can't it work here? When you define the nested loop, you would simply set those variables in more depth, so that it should work. The only possible variable capture would be with a call that looks for current and output without first setting them. Those could indeed use it. But those calls would be "wrong", unless they meant to do what they do. I'm OK with this. I think the gensym approach is wrong here, because we want the whole thing to be readable! Why did my loop stop? Now you know.
+
+The key to all of this is twofold:
+- Setting the two state variables at the toplevel of the expansion of the loop.
+- Setting the logic of the loop as a recursive call, also at the toplevel of the loop, that calls itself until it is done.
+
+Why this works:
+- Nested loops set up new state variables that don't clash with the old ones. When referencing, @ walks up until it finds something, so it doesn't overshoot.
+- The response from the innermost recursive step bubbles up. The `respond` is peeled off by @ do the first time it comes up, for the rest it is just the value of the last sequence, so it works.
+
+As for no initialization of pushing, we need to initialize the state in a way that will be exactly at the toplevel of the loop. There's no going around this. We need to not overshoot, and we need to set it to some value. We could make it to create the list if it's set to "", because we need to set it to something and we do not have empty lists. Maybe "" really represents an empty "everything".
+
+## 2025-10-02
+
+How would the loop be? The idea of the last few days is that, rather than taking a list and generating a sequence for it, then executing it (the macro approach), we have a recursive piece of code that unfolds the loop as far as needed.
+
+This unfoldance would be on both : and =. On = because results would be pushed. And on : because you want to see from where these results emerge. But where is this repetitive logic located? Because it is a step that calls itself.
+
+```
+list 1 2 3
+= 2 3 4
+@ loop do v @ + - @ v
+                - 1
+       v @ list
+```
+
+The interesting one is the second @ here; its expansion, really. But also perhaps its result.
+
+```
+            = ??
+            : ??
+@ loop do v @ + - @ v
+                - 1
+```
+
+You put the expansion there. Interesting, you're really pushing expansions with that value (v) resolved. What's confusing above is that I write "v" twice.
+
+But going back, the logic:
+- Get next element.
+- If no next element, return output
+- If element, push call to the expansion.
+- Get the value of that step you pushed to the expansion and push it to the output.
+
+What about stopping values? If this somehow uses the logic of cell.do, then we don't need to do anything? Wait, we still would need to check. Unless we really write loop in a way that leverages cell.do.
+
+It's interesting that what loop does is to push things to the expansion one at a time. It would need to keep track of where it is, unless it uses the length of the current expansion. That could be a clean way to do it, if there's an elegant conversion for hashes.
+
+Things always get expanded so you need to use the special operators.
+
+Could the loop just push to its own expansion? but you can't control the expansion, you have just one step. Wouldn't this require multiple evaluation? Or put your own call again on the sequence with the next one! Just copy it? but that's not pretty.
+
+## 2025-10-01
+
+You start by writing to the dataspace. How can you compute if the data is not there? That's why writing is first. And the response is also something written in the dataspace. To me, this is only natural in retrospective, but surprising.
+
+How would the loop be unfolded one at a time? With a recursive piece of code that deals with the items one at a time.
+
+Recursion as idempotence: you call the same piece of code but with different arguments, therefore getting different results. In that way, the function is a sort of configuration that calls itself until the job is done; it can do this because unlike a Turing Machine configuration, it can do a few things inside itself.
+
+Macros with ,@ and sharp quote: they are positional, essentially the these macro operators are parenthesis that control replacement. This is positional, because you're counting jumps over parenthesis. What would be a hash equivalent of this (based on text, rather than on implicit numbers?). A bit like a label, unfreeze here.
+
 ## 2025-09-29
 
 A tangent: instead of calling it a *reference*, we could just call it a *link*.
@@ -484,10 +608,12 @@ Where would the entrypoints be? Actually, there's just one. No need to distingui
 - When the put finishes, IF the toplevel has a @, then it responds with a =? No, not even, because we want the expansion too! So it always responds with everything. It's up to the editor to see just a part. You basically send a message and get the message back with other things too. Interesting. Makes perfect sense. The waste of bytes is small, unless you're sending in huge messages. But then, there can be a limit and we can abridge things, even quite aggressively.
 - It makes sense. cell.call calls cell.put always. cell.put calls cell.respond. cell.respond calls cell.get and cell.do and cell.native and cell.cond where needed.
 
+```
 cell.call -> cell.put -> cell.respond -> cell.get
                                       -> cell.do
                                       -> cell.if
                                       -> cell.native
+```
 
 The four things that cell.respond calls are: the three essential elements of computation (reference, sequence, conditional) and native calls to provide operations that are given as primitives, so you don't have to create from scratch your primitives for math and comparison. I do wonder what those primitives should be if we wanted to have "lower level primitives". It's probably those copy-and-erase sequences from Turing's U.
 
