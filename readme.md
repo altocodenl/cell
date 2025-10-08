@@ -191,9 +191,16 @@ TODO
 
 ### Language
 
+- Refactor cell.call
+   - Have an unified interface through cell.call.
+   - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
+- Upload
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+- Add multi put
+- Loop (without macro?)
 - More calls: edit, wipe, push, lepush (left add), pop, lepop
 - Change dot to dash for placeholders of list
-- Add multi put
 - do
    - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
    - native calls
@@ -209,7 +216,6 @@ TODO
    - test recursive calls
    - test descending funarg (pass function)
    - test ascending funarg (return function)
-- loop
 - error (catch)
 - search (general call to get matching paths)
 - replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
@@ -427,6 +433,59 @@ views
 ```
 
 ## Development notes
+
+## 2025-10-07
+
+A cell is a unit of consistency. You could have a monolith inside one cell, or one microservice per cell. If you wanted to split a monolith and keep it consistent, you could implement synchronization/blocking across cells.
+
+If a cell is a unit of consistency, technically we need just one tmp key, for whatever we are processing at the moment.
+
+The tests need to go in a separate file, at least the ones with cell.call (the other are more bootstrapping tests, although I could still express them as fourtext).
+
+The fourtext extension should be .4tx , to keep more of a 1:1 naming. Fourdata is not just its text representation.
+
+For new tests:
+- Leave those that are above cell.call as is, inside JS, at least for now.
+- Take the tests below and put them in a .4tx file.
+- The file is a list of tests, each test being a hash with c (call), r (res) and t (tag describing the test).
+- Any test that calls cell.get and cell.put directly, find a way to do it through cell.call (even if it's a bit more indirect), so there's a single interface.
+- Rename "foo" and "bar" to more meaningful names and make them more varied, to easier identify the tests (although tags will also help with that).
+- Commented out tests can be set to `off 1`.
+- The frontend won't execute the tests, only the backend. Conditional fs.readFileSync on start for node inside cell.js.
+- reset should be a call. It will clean everything and perhaps give out the amount of bytes and paths deleted. And reset should not put things, that should be done by put itself.
+
+Lines that start with /* and are outside of a multiline text are comments! Therefore, ignored. The worst part of JSON, to me, is that it allows for no comments.
+No, decided against it. Because then, when reading 4tx into cell and then writing it back out, the comments are lost. We are breaking the unification of the dataspace. Comments need to go inside the data and can simply be texts that are not executed.
+
+Rather than saying "context path", I should just refer to a "prefix". A path is the whole thing, from left to right. A prefix is the left part of a path, where the left is either the first element, the whole thing minus the rightmost one, or something in the middle.
+
+## 2025-10-06
+
+Multi put should be just pairs of things, where the odds are paths and the evens are values.
+
+```
+loop @ do m 1 @ put 1 . current
+                    2 ""
+                    3 . output
+                    4 ""
+```
+
+Great idea from ChatGPT: when demoing with data, use the same data for demoing both publishing and thinking.
+
+I'm sensing that this query call that goes through to paths at arbitrary depth and with arbitrary predicates could replace a lot of loops. For sure it could replace them at query time, but perhaps even as a tool for transformation of them too.
+
+Going back to cell.call, we are:
+1. Parsing text into fourdata, and responding with an error if it is invalid.
+2. Putting data into a temporary location in the dataspace.
+3. Taking its result (or the whole thing, if there is no result) and responding with it.
+4. Putting the whole thing into the dialog (we already do this).
+
+Why a temporary place? Because we cannot do it in the dialog, the dialog is full of calls that should not be updated, you want to see what was responded in the moment. The dialog is the nonreactive piece of the dataspace which keeps history.
+
+But just putting it won't do it. We have to wrap it into @ do, right? With no arguments.
+
+Cases:
+- @ do with just a single reference. It has a single =, you can just return that.
 
 ## 2025-10-05
 
@@ -2927,6 +2986,73 @@ We return `[['ok']]`. This closes the function.
 
 ```js
    return [['ok']];
+}
+```
+
+#### `cell.wipe`
+
+`cell.wipe` is the function that removes data from the dataspace. It takes a main argument which is `prefix`. When `prefix` is empty or undefined, `cell.wipe` will remove all paths from the dataspace. If it's defined and non-empty, `cell.wipe` will only remove from the dataspace the paths that start with that prefix.
+
+Besides `prefix`, it also takes `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
+
+```js
+cell.wipe = function (prefix, get, put) {
+
+   var dataspace = get ();
+```
+
+We iterate all paths in the dataspace; if a path is shorter than the prefix, we keep it (the prefix can only delete things that fully match it). If not, we compare the first n elements of the path with the prefix (where n is the length of the prefix) and if they are the same, we remove that path.
+
+```js
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (prefix.length > path.length) return path;
+      if (! teishi.eq (prefix, path.slice (0, prefix.length))) return path;
+   });
+```
+
+Now for the tricky bit. We might have left gaps in lists. So we fill them up. The logic is as follows:
+
+- Iterate all paths.
+- For each path, iterate all steps.
+- For number steps that are not the last step of the path, take their prefix (without the number itself) and initialize a count.
+- When finding a gap, update the step.
+- The logic goes top down, left to right, so multiple gaps can be patched at the same time.
+
+```js
+   var listPrefixCount = {};
+
+   dale.go (dataspace, function (path) {
+      dale.go (path, function (v, k) {
+```
+
+We ignore text or rightmost steps.
+
+```js
+         if (type (v) === 'string' || k + 1 === path.length) return;
+```
+
+We get the current count or initialize it to 0. If the current count plus 1 is less than what the step is, we update the step directly in the path.
+
+```js
+         var currentCount = listPrefixCount [JSON.stringify (path.slice (0, k))] || 0;
+         if (currentCount + 1 < v) path [k] = currentCount + 1;
+```
+
+We update the `listPrefixCount` entry. This concludes the logic for filling up gaps in lists.
+
+```js
+         listPrefixCount [JSON.stringify (path.slice (0, k))] = path [k];
+      });
+   });
+```
+
+
+We update the dataspace through `put`, return OK and close the function.
+
+```js
+   put (dataspace);
+
+   return ['ok'];
 }
 ```
 

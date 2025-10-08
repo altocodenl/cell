@@ -147,10 +147,10 @@ var routes = [
             [new Date ().toISOString () + '-' + (Math.random () + '').slice (2, 6)]: {
                cell: rq.data.params.id,
                call: rq.body.call,
-               resp: cell.pathsToText (response)
+               resp: response
             }
          }) + '\n', function () {
-            reply (rs, 200, cell.pathsToText (response));
+            reply (rs, 200, response);
          });
       });
    }],

@@ -327,7 +327,7 @@ views.about = function () {
                ['li', {class: 'mb3'}, 'Bring data from anywhere: Excel, API, DB, even AI.'],
                ['li', {class: 'mb3'}, 'Create a dashboard to share the key points.'],
                ['li', {class: 'mb3'}, 'Add a form so that others can share more data.'],
-               ['li', {class: 'mb3'}, 'Create a table so that collaborators to analyze the data.']
+               ['li', {class: 'mb3'}, 'Create a table so that collaborators can directly look at the data.']
             ]]
          ]]
       ]],

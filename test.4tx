@@ -1,0 +1,116 @@
+1 "GET & PUT" 1 c @
+                r ""
+                tag "Get everything when the dataspace is empty"
+
+              2 c @ x
+                r ""
+                tag "Get one prefix when the dataspace is empty"
+
+              3 c @ put p party
+                        v list 1 Jan
+                               2 Jip
+                          open 1
+                r ok
+                tag "Create a hash with three paths"
+
+              4 c @ put p serious
+                        v business
+                r ok
+                tag "Create another hash"
+
+              5 c @
+                r party list 1 Jan
+                             2 Jip
+                        open 1
+                  serious business
+                tag "Get everything and obtain both hashes"
+
+              6 c @ party
+                r list 1 Jan
+                       2 Jip
+                  open 1
+                tag "Get one prefix to get the entire party"
+
+              7 c @ party list
+                r 1 Jan
+                  2 Jip
+                tag "Get a longer prefix to get just the list"
+
+              8 c @ party list 1
+                r Jan
+                tag "Get the first guest only"
+
+              9 c @ party list 1 Jan
+                r ""
+                tag "Get the entire first path and obtain nothing"
+
+              10 c @ no such thing
+                 r ""
+                 tag "Get no such thing"
+
+              11 c @ party open
+                 r 1
+                 tag "Get the status of the party"
+
+              12 c @ serious
+                 r business
+                 tag "Get just the business"
+
+              13 c @ serious business
+                 r ""
+                 tag "Get the entire last path and obtain nothing"
+
+2 WIPE 1 c @ wipe serious
+         r ok
+         tag "Wipe serious"
+
+       2 c @
+         r party list 1 Jan
+                      2 Jip
+                 open 1
+         tag "Get everything after serious was wiped"
+
+       3 c @ wipe party list 1 Jan Hertog
+         r ok
+         tag "Wipe a path that does not exist, should change nothing"
+
+       4 c @
+         r party list 1 Jan
+                      2 Jip
+                 open 1
+         tag "Get everything after wipe no-op"
+
+       5 c @ wipe party list 1
+         r ok
+         tag "Wipe the first member of the list"
+
+       6 c @ party
+         r list 1 Jip
+           open 1
+         tag "Get party after one element was wiped"
+
+       7 c @ wipe
+         r ok
+         tag "Wipe everything"
+
+       8 c @
+         r ""
+         tag "Get everything after wipe and obtain nothing"
+
+       9 c @ put p nested
+                 v 1 list 1 Jan
+                          2 Jip
+                   2 open
+         r ok
+         tag "Setting a nested list"
+
+       10 c @ wipe nested 1 list 1
+          r ok
+          tag "Wiping part of a nested list"
+
+       11 c @
+          r nested 1 list 1 Jip
+                   2 open
+          tag "Get everything after wiping part of a nested list"
+
+

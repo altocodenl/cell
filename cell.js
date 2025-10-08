@@ -342,6 +342,7 @@ cell.validator = function (paths) {
 cell.call = function (message, from, to, hide, get, put) {
 
    var startTime = new Date ();
+   var callId = startTime.toISOString () + '-' + (Math.random () + '').slice (2, 6);
 
    var respond = function (response) {
 
@@ -358,18 +359,18 @@ cell.call = function (message, from, to, hide, get, put) {
          ['v', to],
       ], [], get, put, true);
       cell.put ([
-         ['p', 'dialog', length + 1, '@'],
+         ['p', 'dialog', length + 1, 'c'],
          ['v', message],
       ], [], get, put, true);
       if (response.length) cell.put ([
-         ['p', 'dialog', length + 1, '='],
+         ['p', 'dialog', length + 1, 'r'],
          ...dale.go (message === '@' ? [['[OMITTED]']] : response, function (v) {
             return ['v', ...v];
          }),
       ], [], get, put, true);
       cell.put ([
          ['p', 'dialog', length + 1, 'id'],
-         ['v', startTime.toISOString () + '-' + (Math.random () + '').slice (2, 6)],
+         ['v', callId],
       ], [], get, put, true);
       if (hide) cell.put ([
          ['p', 'dialog', length + 1, 'hide'],
@@ -380,7 +381,7 @@ cell.call = function (message, from, to, hide, get, put) {
          ['v', new Date ().getTime () - startTime.getTime ()],
       ], [], get, put, true);
 
-      return response;
+      return cell.pathsToText (response);
    }
 
    // Note that even if the call is not valid, we still store it in the dialog!
@@ -391,9 +392,14 @@ cell.call = function (message, from, to, hide, get, put) {
 
    if (paths.length === 0) return respond ([]);
 
-   if (type (paths [0]) === 'integer') {
-      // TODO: process a list
-   }
+   /* TODO: new logic
+   cell.put ([
+      ['p', 'tmp', callId],
+      ['v', paths]
+   ], [], get, put, true);
+
+   var response = cell.get (['tmp', callId], [], get);
+   */
 
    if (paths [0] [0] !== '@') return respond ([['error', 'A single call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
 
@@ -411,6 +417,10 @@ cell.call = function (message, from, to, hide, get, put) {
       return respond (cell.put (dale.go (paths, function (path) {
          return path.slice (2);
       }), [], get, put));
+   }
+
+   if (paths [0] [1] === 'wipe') {
+      return respond (cell.wipe (paths [0].slice (2), get, put));
    }
 
    // Neither a put nor a do, we can just call get to resolve the reference
@@ -776,6 +786,30 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    return [['ok']];
 }
 
+cell.wipe = function (prefix, get, put) {
+
+   var dataspace = get ();
+
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (prefix.length > path.length) return path;
+      if (! teishi.eq (prefix, path.slice (0, prefix.length))) return path;
+   });
+
+   var listPrefixCount = {};
+   dale.go (dataspace, function (path) {
+      dale.go (path, function (v, k) {
+         if (type (v) === 'string' || k + 1 === path.length) return;
+         var currentCount = listPrefixCount [JSON.stringify (path.slice (0, k))] || 0;
+         if (currentCount + 1 < v) path [k] = currentCount + 1;
+         listPrefixCount [JSON.stringify (path.slice (0, k))] = path [k];
+      });
+   });
+
+   put (dataspace);
+
+   return ['ok'];
+}
+
 // *** TESTS ***
 
 var test = function () {
@@ -875,6 +909,7 @@ var test = function () {
       {f: cell.validator, input: [], expected: []},
       {f: cell.validator, input: [['foo'], [1]], expected: [['error', 'The path `1` is setting a number but there is already a text at path ``']]},
       {f: cell.validator, input: [['foo', 'bar'], ['foo', 'jip']], expected: [['error', 'The path `foo jip` is repeated.']]},
+      // TODO: add a nonconsecutive list
 
       // *** PATHS <-> JS ***
 
@@ -978,12 +1013,12 @@ var test = function () {
       {reset: []},
       {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
       {f: cell.call, input: '@', expected: [
+         ['dialog', 1, 'c', '@ put p foo\n@ put v bar'],
          ['dialog', 1, 'from', 'user'],
          ['dialog', 1, 'id', '<OMITTED>'],
          ['dialog', 1, 'ms', '<OMITTED>'],
+         ['dialog', 1, 'r', 'ok'],
          ['dialog', 1, 'to', 'cell'],
-         ['dialog', 1, '=', 'ok'],
-         ['dialog', 1, '@', '@ put p foo\n@ put v bar'],
          ['foo', 'bar']
       ], keepDialog: true},
 
@@ -1371,6 +1406,7 @@ var test = function () {
       if (test.f === cell.textToPaths  && type (test.input)    === 'array') test.input    = test.input.join ('\n');
       if (test.f === cell.call         && type (test.input)    === 'array') test.input    = test.input.join ('\n');
       if (test.f === cell.pathsToText  && type (test.expected) === 'array') test.expected = test.expected.join ('\n');
+      if (test.f === cell.call) test.expected = cell.pathsToText (test.expected);
 
       var get = function () {
          return dataspace;
@@ -1384,12 +1420,13 @@ var test = function () {
       else if (test.f === cell.call) var result = cell.call (test.input, 'user', 'cell', false, get, put);
       else                           var result = test.f (test.input);
 
-      if (test.f === cell.call) result = dale.fil (result, undefined, function (path) {
+      // Remove the dialog or omit id and ms
+      if (test.f === cell.call) result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
          if (path [0] !== 'dialog') return path;
          if (! test.keepDialog) return;
          if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
          return path;
-      });
+      }));
 
       if (teishi.eq (result, test.expected)) return true;
       clog ('Test mismatch', {input: test.input, expected: test.expected, obtained: result});
@@ -1397,7 +1434,43 @@ var test = function () {
       pretty ('result', result);
       return false;
    });
-   if (errorFound) clog ('A test did not pass');
+
+   var isNode = typeof exports === 'object';
+   if (isNode) {
+      var dataspace = [];
+      var get = function () {
+         return dataspace;
+      }
+      var put = function (v) {
+         dataspace = v;
+      }
+
+      var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      dale.go (newTests, function (suite) {
+         clog (dale.keys (suite) [0]);
+         dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
+            clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
+            var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+
+            // Remove the dialog or omit id and ms
+            result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
+               if (path [0] !== 'dialog') return path;
+               if (! test.keepDialog) return;
+               if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
+               return path;
+            }));
+
+            if (result !== (teishi.simple (test.r) ? (test.r + '') : cell.JSToText (test.r))) {
+               pretty ('expected', cell.JSToPaths (test.r));
+               pretty ('result', cell.textToPaths (result));
+               errorFound = true;
+               return false
+            }
+         });
+      });
+   }
+
+   if (errorFound) return clog ('A test did not pass');
    else clog ('All tests successful', (teishi.time () - start) + 'ms');
 }
 

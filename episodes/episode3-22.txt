@@ -1,0 +1,8 @@
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Finish wipe with cleaning up of empty spaces in lists after wipe
+- Port rest of the test suite to 4tx, perhaps add multi put
+- Unified cell.call interface on tmp
+- Upload

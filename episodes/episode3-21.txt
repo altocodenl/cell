@@ -1,0 +1,9 @@
+Twenty-first episode of season 3! I'm building a programming environment from scratch while recording myself. I'm rewriting the tests. It just feels right.
+
+https://github.com/altocodenl/cell
+
+TODO:
+- Perhaps revert the text change so we can quickly test if the approach works (or just go forward and finish that change anyway).
+- Make sure we don't have to wrap it in @ do.
+- Extract just the = when making a call that has @ at the top level.
+- Figure out how to store it in the dialog.
