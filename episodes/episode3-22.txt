@@ -1,3 +1,4 @@
+Twenty-second episode of season 3! I'm building a programming environment from scratch while recording myself. Rewriting tests. Everything expands fractally? It feels like that today.
 
 https://github.com/altocodenl/cell
 

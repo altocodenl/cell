@@ -736,7 +736,7 @@ cell.get = function (queryPath, contextPath, get) {
 cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
-   if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
+   if (! teishi.eq (topLevelKeys, ['p', 'v']) && ! teishi.eq (topLevelKeys, ['v'])) return [['error', 'A put call has to be a hash with a value (`v`) and an optional path (`p`).']];
 
    var leftSide = [], rightSide = [];
    dale.go (paths, function (path) {
@@ -745,7 +745,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
 
-   leftSide = leftSide [0];
+   leftSide = leftSide [0] || [];
 
    if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
    if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
@@ -924,6 +924,7 @@ var test = function () {
 
       // *** CALL ***
 
+      /* TODO: remove
       {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
       {f: cell.call, input: '', expected: []},
       {f: cell.call, input: 'foo bar', expected: [['error', 'A single call must start with `@` but instead starts with `foo`']]},
@@ -979,6 +980,7 @@ var test = function () {
          ['else']
       ]},
       {f: cell.call, input: '@ something else', expected: []},
+      */
 
       // *** GET WITH CONTEXT ***
 

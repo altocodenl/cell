@@ -1,4 +1,31 @@
-1 "GET & PUT" 1 c @
+1 "PUT VALIDATION" 1 c @ put foo bar 1
+                                 jip 2
+                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
+                     tag "Invalid put with direct values"
+
+                   2 c @ put 1 foo
+                             2 bar
+                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
+                     tag "Invalid put with numeric keys"
+
+                   3 c @ put k foo
+                             v bar
+                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
+                     tag "Invalid put with wrong key names"
+
+                   4 c @ put p foo
+                             v bar
+                             x jip
+                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
+                     tag "Invalid put with extra key x"
+
+                   5 c @ put p foo
+                             v bar
+                             x jip
+                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
+                     tag "Invalid put with extra key x (duplicate)"
+
+2 "GET & PUT" 1 c @
                 r ""
                 tag "Get everything when the dataspace is empty"
 
@@ -60,7 +87,24 @@
                  r ""
                  tag "Get the entire last path and obtain nothing"
 
-2 WIPE 1 c @ wipe serious
+              14 c @ put p party
+                         v 1
+                 r ok
+                 tag "Overwrite prefix with multiple paths"
+
+              15 c @
+                 r party 1
+                   serious business
+                 tag "Get everything after overwriting prefix with multiple paths"
+
+              16 c @ put p party
+                         v list 1 Jan
+                                2 Jip
+                           open 1
+                 r ok
+                 tag "Restore party"
+
+3 WIPE 1 c @ wipe serious
          r ok
          tag "Wipe serious"
 
@@ -113,4 +157,33 @@
                    2 open
           tag "Get everything after wiping part of a nested list"
 
+       12 c @ wipe
+          r ok
+          tag "Wipe everything"
+
+4 "GET WITH CONTEXT" 1 c @ put v employee price 15
+                                 friend price 20
+                                 price 30
+                       r ok
+                       tag "Initialize the three prices"
+
+                     2 c @
+                       r employee price 15
+                         friend price 20
+                         price 30
+                       tag "Verify that the three prices are initialized"
+
+                     3 c @ price
+                       r 30
+                       tag "Get outermost price"
+
+                     4 c @ put p employee gets
+                               v @ price
+                       r ok
+                       tag "Set reference to employee price"
+
+                     5 c @ employee gets
+                       r = 15
+                         @ price
+                       tag "Get employee price"
 

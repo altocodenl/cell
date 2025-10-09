@@ -434,6 +434,69 @@ views
 
 ## Development notes
 
+## 2025-10-09
+
+The pattern for multi put: if you get a hash, wrap it in an array. If it's an array, iterate it. If the inner things are not objects with the required shape, respond with an error.
+
+Iterate and respond with an error. Put + cell.respond only at the end
+
+Big decision: rather than doing 1 2 3 4 (where the odds are paths and the evens are values), let's be more explicit and specify p and v. Slightly more typing, but way more clarity. I think it's going to be worth it, especially for those coding when tired (been doing quite some of that lately).
+
+Actually, no. I was thinking: it'd be a mess to figure out if the calls of a multi put overlap with each other. Let's make multiput to be just calling put in sequence. The outermost can simply be a detection of an array and then, if it is, just call itself recursively, and return either the error or the ok.
+
+Ah, because this decision in dale: return what === 'stop' ? result === second : result !== second;, I cannot do dale.stop against a complex key ([['ok']]). But dale goes before teishi and teishi.eq.
+
+From cell.call, we cannot trigger any errors in cell.get. If there's nothing to get, there's nothing to get. But there's nothing invalid. Calling cell.get with context path is only done from cell.respond and cell.if, not from cell.call.
+
+So, from the top, if we're testing through cell.call, we need to start by validating cell.put.
+
+How restrictive it was to allow cell.call to only take one call! We can now send an entire program at once (well, I think soon). All by relaxing the restriction and putting the incoming data somewhere in the dataspace.
+
+Do we really need multiput? Taking the loop example:
+
+```
+loop @ do m 1 @ put 1 p . current
+                      v ""
+                    2 p . output
+                      v ""
+                    3 p . "process one"
+                      v @ do 1 p . current
+                               v @ next current @ current
+                                        v @ m v
+                             2 @ if cond @ not @ current
+                                    then respond @ output
+                             3 @ push p . output
+                                      v @ m do @ m v current
+                             4 @ "process one"
+            2 @ "process one"
+```
+
+Perhaps this is a good pattern to repeat: when you pass a list to certain calls, it's like making that call sequentially to each of the elements of the list.
+
+However, this is really a map. Does it really have to be baked in?
+
+```
+loop do @ put
+     v ...
+```
+
+No, I'm not going to do multiput. We can just use a loop later. I don't want things to be baked in in the main calls.
+
+This was the implementation, straight on the top of the function:
+
+```
+   if (paths [0] && paths [0] [0] === 1) {
+      var error;
+      dale.stopNot (cell.pathsToJS (paths), undefined, function (v) {
+         var result = cell.put (cell.JSToPaths (v), contextPath, get, put, updateDialog);
+         if (! teishi.eq (result, [['ok']])) return error = result;
+      });
+      return error || [['ok']];
+   }
+```
+
+Cell is not meta, it is self-similar (reaction to what claude said yesterday about tests being written in fourdata). This is the main property.
+
 ## 2025-10-07
 
 A cell is a unit of consistency. You could have a monolith inside one cell, or one microservice per cell. If you wanted to split a monolith and keep it consistent, you could implement synchronization/blocking across cells.
@@ -2833,11 +2896,13 @@ We return the matches or an empty array (in case there were none). This closes t
 cell.put = function (paths, contextPath, get, put, updateDialog) {
 ```
 
-We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` and `v`, we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
+We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` (optional) and `v` (mandaatory), we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
+
+`p` can be absent, in which case we'll default to an empty path. This allows you to write multiple values at the top level.
 
 ```js
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
-   if (! teishi.eq (topLevelKeys, ['p', 'v'])) return [['error', 'A put call has to be a hash with path and value (`p` and `v`).']];
+   if (! teishi.eq (topLevelKeys, ['p', 'v']) && ! teishi.eq (topLevelKeys, ['v'])) return [['error', 'A put call has to be a hash with a value (`v`) and an optional path (`p`).']];
 ```
 
 We initialize two arrays, one for the "left side" of the assignment (the path that is inside the key `p`) and one for the "right side" (the values (paths) that will go on this path).
@@ -2860,10 +2925,10 @@ If there's more than one path in `leftSide`, we return an error. Inside a `put` 
    if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
 ```
 
-We take the sole path inside `leftSide` and set `leftSide` to it.
+We take the sole path inside `leftSide` and set `leftSide` to it. If there's no `leftSide` because there was no `p`, we initialize it to an empty list.
 
 ```js
-   leftSide = leftSide [0];
+   leftSide = leftSide [0] || [];
 ```
 
 We forbid overwriting `put`.

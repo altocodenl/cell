@@ -1,0 +1,31 @@
+Twenty-third episode of season 3! I'm building a programming environment from scratch while recording myself. More tests, decided against multi put. Feeling quite good about the whole thing.
+
+Hello Earth! Silent episode today, then maybe it becomes a talkie.
+
+If you're checking this out for the first time: https://github.com/altocodenl/cell
+
+Where were we?
+
+test.4tx became the most important file of the project.
+
+Mind the indent.
+
+OK, let's test get with context through where we place things!
+
+Olrait, let's do multi put.
+
+Again the tests badly written.
+
+More tests:
+- multiput with one key
+- multiput with two overlapping keys
+- multiput with error
+- put with error
+
+Claude got it mostly correct!
+
+Ah, beauty.
+
+brb
+
+
