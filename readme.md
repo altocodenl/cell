@@ -1,5 +1,7 @@
 # cell
 
+cell is a programming environment for anyone who wants to work with data.
+
 ## Why
 
 Programming is currently much harder than writing prose. Reading programs is also much harder than reading prose.
@@ -17,7 +19,7 @@ The goal of cell is to make programming easier, so that it is only as demanding 
 My contention is: if you want to build data systems using AI, you need to do three things:
 
 1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
-2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that maintain important constraints.
+2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that uphold important constraints.
 3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
 
 Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence.
@@ -42,12 +44,22 @@ Here's an illustration:
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
+### The seven problems
+
+1. Different ways to represent data with text. High noise (syntax).
+2. Data being fragmented everywhere. Takes a long time to find where things are and more to make them reference each other cleanly.
+3. Lack of visibility between inputs and outputs. Console log everywhere.
+4. A panoply of ways to program, none of which are straightforward or procedural. Think OOP vs pure functional vs low-level programming with pointers.
+5. Systems that you need to re-run.
+6. 3-8 libraries and subsystems to do anything useful.
+7. Facing the blank paper and having to read a lot to do anything.
+
 ### The seven powerups
 
 Cell employs seven powerups to make programming as easy (or hard) as writing prose:
 
-1. **Fourdata**: a simple way to **represent data with text**. This allows you to look directly at any data that comes your way.
-2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location.
+1. **Fourdata**: a simple way to **represent data**. This allows you to look directly at any data that comes your way.
+2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location. Everything is organized in the same place.
 3. **Dialog**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
 4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
 5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
@@ -191,6 +203,7 @@ TODO
 
 ### Language
 
+- Change dot to dash for placeholders of list
 - Refactor cell.call
    - Have an unified interface through cell.call.
    - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
@@ -200,7 +213,6 @@ TODO
 - Add multi put
 - Loop (without macro?)
 - More calls: edit, wipe, push, lepush (left add), pop, lepop
-- Change dot to dash for placeholders of list
 - do
    - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
    - native calls
@@ -230,7 +242,7 @@ TODO
 - access masks
 - Recursive lambdas by referencing itself?
 - Parsing issues:
-   - Distinguishing literal dots in hashes.
+   - Distinguishing literal dashes in hashes.
    - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
 - Efficient recalculation in cell.respond
 - @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
@@ -433,6 +445,77 @@ views
 ```
 
 ## Development notes
+
+## 2025-10-13
+
+cell.call must return the whole thing: call, expansion and response. Later this can be modified if we're sending large amounts of data, perhaps through a variant of cell.call that omits things. This change also should be reflected in the tests.
+
+A call without side effects is a call that doesn't make any changes outside of the dialog! Side-effects are just changes to the dataspace that are outside the dialog.
+
+Perhaps real native calls are those that have no expansion.
+
+Would it be possible to store and see all the expansions? I think so. The dialog would have to be pruned quite often, but that's fine. And new expansions overwrite old ones. This is then two challenges: a backend challenge (be able to scale to a certain amount of data) and a UI challenge (elegantly fold and unfold expansions).
+
+It is interesting that a mere reference (@) and @ put do not have an expansion, just a result.
+
+Does it make sense to respond with also the call? If you're doing calls to another cell, you'd have to jump over two equals:
+
+```
+= = result
+  @ callToAnotherCell
+@ callToAnotherCell
+```
+
+When would it make sense?
+
+If you're sending over a boundary (to another cell): you always know the literal call you are sending. It's data. The call is data and you can see all the references resolved. (interesting point: we need a call to wipe the references when you're sending data over the wire so that you only have the results; this makes me think of macros).
+
+Let's say you send a sequence:
+
+```
+@ do 1 ...
+     2
+```
+
+It would make sense to get the expansion and the result, not the call itself. You have the call.
+
+```
+= ...
+: ...
+  seq 1 ...
+      2 ...
+@ do 1 ...
+```
+
+And if you send further data, instead of just one call?
+
+```
+foo 10
+bar 20
+@ do 1 @ foo
+```
+
+Then, in that case, it makes sense to respond with the whole thing. (side note: interesting to see in the above example that you could have @ and = at the toplevel, because the other toplevel prefixes are texts as well, the whole thing is a hash).
+
+Then we go back to the original idea: if you send just one call, you get back = and : but not the call itself. If you send a hash or a list with more than one thing, you get the whole thing expanded.
+
+We can just send literal calls to validate the parsing calls, everything coming before the parsed calls. Also, start with a newline because those are ignored and then the whole example can be aligned to the left.
+
+## 2025-10-12
+
+Perhaps the driver for adoption for a language is more libraries than the language itself. Then that begets the question: what makes library makers pick up a language and build libraries in it? I am particularly struck by the amount of useful libraries in Python.
+
+When a long call is done (perhaps an HTTP or a DB call), what if the "from" is not the user that initiated the call, but actually "http" or "db" that responds with the result? It would be a more meaningful way to see who did the change. Of course, it comes from a call made by a user. But the response comes from http and db. It could be said that the user makes the call, http or db respond, and cell is in the middle. You could even query the dialog by it, to see responses coming from http or db.
+
+chatgpt: "You’re making Cell a space of dialogue among agents, rather than a process owned by a single user."
+
+Another way to display the view: full width above, then take a "developer console" from below and put the conversation bubbles left to right, with the last input box on the bottom right. This would allow to easily break the top part into two to see two different parts of the dataspace at the same time.
+
+It would be interesting to see if the test suite could become more and more powerful as we go down, and actually allow constructs like loops (for example) after a certain point. The test suite as a negative impression of the bootstrapping of cell.
+
+Even if you are able (as we will be soon) to send a program over the wire so that cell.call can run it and you get its expansion/response, could you run that program in a context? Like, specifically saying where it should run? Passing a context path as a parameter? This is intriguing, but I think it's wrong. If you don't have this ability, you need to put things in context, then get their results. This requires putting, rather than just sending a call that doesn't persist your program (except in the dialog). The problem with requesting a context is that "you haven't earned it". You need to have access to the context in order to run something. To have a second channel that injects code into a context without really putting it there feels complex, even dangerous. What you can do is simply to put and later wipe. We could even make a shorthand for that inside a call. But we need, I think, to have the foundation of all incoming calls always being executed at the outermost context/level, and only through access masks to be able to put and get inside certain places.
+
+If we ever allow context as part of the message, then write the temp key where we run the call right there in the context. No second channels.
 
 ## 2025-10-09
 
@@ -1659,7 +1742,7 @@ for example: a number `1` becomes `1`; a text `1` becomes `"1"`; a text ` ` beco
 cell.unparseElement = function (v) {
 ```
 
-But wait, how can `v` be `null`? I forgot to mention that, because we allow dots as placeholders of the keys of lists, we need to account for when there's indentation below these dot placeholders. The only unambiguous way I found to do this (see `cell.textToPaths` below) is using `null`. In these cases, `null` will be a single space. Therefore, in this function, we return a single space. Moving on...
+But wait, how can `v` be `null`? I forgot to mention that, because we allow dashes as placeholders of the keys of lists, we need to account for when there's indentation below these dash placeholders. The only unambiguous way I found to do this (see `cell.textToPaths` below) is using `null`. In these cases, `null` will be a single space. Therefore, in this function, we return a single space. Moving on...
 
 ```js
    if (v === null) return ' ';
@@ -1838,11 +1921,11 @@ And if the iteration returned an error, we just return it.
 
 If we are here, we successfully matched our indentation with some elements of the previous path. We make `path` to be a copy of those elements from the previous path, using the `matchUpTo` index we obtained in the iteration we just finished.
 
-However, a subtle point! If we have a dot on the previous path, we don't want to copy that, because if we add a dot, the `cell.dedotter` function will understand this to be a new element of a list, rather than belonging to the existing one. To mark these indentations that stand for belonging to the same (dotted) element of a list, we cover our noses and use `null`.
+However, a subtle point! If we have a dash on the previous path, we don't want to copy that, because if we add a dash, the `cell.dedasher` function will understand this to be a new element of a list, rather than belonging to the existing one. To mark these indentations that stand for belonging to the same (dashed) element of a list, we cover our noses and use `null`.
 
 ```js
          path = dale.go (lastPath.slice (0, matchUpTo + 1), function (v) {
-            return v === '.' ? null : v;
+            return v === '-' ? null : v;
          });
 ```
 
@@ -2207,14 +2290,22 @@ If the flag that marks we are inside multiline text is still set, there's an err
    if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`']];
 ```
 
-If we are here, the parsing was successful. We return `paths` and close `textToPaths`.
+If we are here, the parsing was successful. We dedash (change dashes to numbers in lists) and sort the paths.
 
 ```js
+   paths = cell.sorter (cell.dedasher (paths));
+```
+
+We validate the resulting paths. If we get an error, we return it; otherwise, we return the paths. This closes the function.
+
+```js
+   var error = cell.validator (paths);
+   return error.length ? error : paths;
    return paths;
 }
 ```
 
-#### `cell.dedotter`
+#### `cell.dedasher`
 
 TODO
 

@@ -62,7 +62,7 @@ cell.textToPaths = function (message) {
          if (matchUpTo.error) return matchUpTo.error;
 
          path = dale.go (lastPath.slice (0, matchUpTo + 1), function (v) {
-            return v === '.' ? null : v;
+            return v === '-' ? null : v;
          });
          line = line.slice (matchedSpaces);
 
@@ -169,17 +169,17 @@ cell.textToPaths = function (message) {
    if (error) return [['error', error]];
    if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`']];
 
-   paths = cell.sorter (cell.dedotter (paths));
+   paths = cell.sorter (cell.dedasher (paths));
    var error = cell.validator (paths);
    return error.length ? error : paths;
 }
 
-cell.dedotter = function (paths) {
+cell.dedasher = function (paths) {
    dale.go (paths, function (v, k) {
       dale.go (v, function (v2, k2) {
          if (v2 === null) return paths [k] [k2] = paths [k - 1] [k2];
 
-         if (v2 !== '.' && v !== null) return;
+         if (v2 !== '-' && v !== null) return;
          var lastPath = paths [k - 1];
          var continuing;
          if (lastPath === undefined) continuing = false;
@@ -315,7 +315,7 @@ cell.textToJS = function (text) {
    return cell.pathsToJS (cell.textToPaths (text));
 }
 
-// Assumes that paths are dedotted and sorted!
+// Assumes that paths are dedashed and sorted!
 cell.validator = function (paths) {
 
    var seen = {};
@@ -870,7 +870,7 @@ var test = function () {
          [['" ', '/a"'], [['error', 'Unmatched slash in text with spaces or double quotes: `/a`']]],
          ['" //a"', [[' /a']]],
          ['" ///a"', [['error', 'Unmatched slash in text with spaces or double quotes: ` ///a`']]],
-         [['. foo bar', '  sub acu ', '  jip heh'], [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']], {nonreversible: true}],
+         [['- foo bar', '  sub acu ', '  jip heh'], [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']], {nonreversible: true}],
       ], function (test) {
          var output = [
             {f: cell.textToPaths, input: test [0], expected: test [1]},
@@ -878,15 +878,15 @@ var test = function () {
          if (! (test [1] [0] && test [1] [0] [0] === 'error' || test [2])) output.push ({f: cell.pathsToText, input: test [1], expected: test [0]});
          return output;
       }).flat (),
-      {f: cell.pathsToText, expected: ['. foo bar', '  jip heh', '  sub acu'], input: [['.', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']]},
+      {f: cell.pathsToText, expected: ['- foo bar', '  jip heh', '  sub acu'], input: [['-', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']]},
 
       // *** TEXT <-> PATHS HELPERS ***
 
-      {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
-      {f: cell.dedotter, input: [['foo', '.', 'first'], ['bar', '.', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
-      {f: cell.dedotter, input: [['foo', 'klank', 'first'], ['foo', '.', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
-      {f: cell.dedotter, input: [['foo', '.', 'first'], ['foo', '.', 'second'], ['foo', '.', 'third']], expected: [['foo', 1, 'first'], ['foo', 2, 'second'], ['foo', 3, 'third']]},
-      {f: cell.dedotter, input: [['.', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']], expected: [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']]},
+      {f: cell.dedasher, input: [['foo', '-', 'first'], ['foo', '-', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
+      {f: cell.dedasher, input: [['foo', '-', 'first'], ['bar', '-', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
+      {f: cell.dedasher, input: [['foo', 'klank', 'first'], ['foo', '-', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
+      {f: cell.dedasher, input: [['foo', '-', 'first'], ['foo', '-', 'second'], ['foo', '-', 'third']], expected: [['foo', 1, 'first'], ['foo', 2, 'second'], ['foo', 3, 'third']]},
+      {f: cell.dedasher, input: [['-', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']], expected: [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']]},
 
       {f: cell.sorter, input: [['foo', 'bar', 1], ['foo', 'bar', 2]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
       {f: cell.sorter, input: [['foo', 'bar', 2], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
@@ -980,7 +980,6 @@ var test = function () {
          ['else']
       ]},
       {f: cell.call, input: '@ something else', expected: []},
-      */
 
       // *** GET WITH CONTEXT ***
 
@@ -1009,6 +1008,7 @@ var test = function () {
       {f: cell.get, query: ['.', 'inner', 'foo'], context: [], expected: [[20]]},
       {f: cell.get, query: ['.'], context: ['inner', 'foo'], expected: [[20]]},
       {f: cell.get, query: ['.', 'foo'], context: ['something', 'else', 'completely'], expected: []},
+      */
 
       // *** PUT ***
 
@@ -1331,7 +1331,7 @@ var test = function () {
       // Valid sum
       {reset: []},
       {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 1'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
           ['eleven', '=', 11],
           ['eleven', ':', 'int', 10],
@@ -1346,7 +1346,7 @@ var test = function () {
       ]},
 
       // Update value, the sum should update
-      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 2'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 2'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
           ['eleven', '=', 12],
           ['eleven', ':', 'int', 10],
@@ -1363,7 +1363,7 @@ var test = function () {
       // Call to definition with a location of two steps
       {reset: []},
       {f: cell.call, input: ['@ put p eleven', '@ put v @ nested plus1 10'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p nested plus1', '@ put v @ do int 1 @ + . @ int', '@ put v @ do int 1 @ + . 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ put p nested plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 1'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [
           ['eleven', '=', 11],
           ['eleven', ':', 'int', 10],
@@ -1448,11 +1448,12 @@ var test = function () {
       }
 
       var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
-      dale.go (newTests, function (suite) {
-         clog (dale.keys (suite) [0]);
-         dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
+      dale.stop (newTests, false, function (suite) {
+         clog ('\n' + dale.keys (suite) [0]);
+         return dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
             clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
-            var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+            if (test.c !== undefined) var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+            else var result = cell.call (test.ct, 'user', 'cell', false, get, put);
 
             // Remove the dialog or omit id and ms
             result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
@@ -1462,6 +1463,9 @@ var test = function () {
                return path;
             }));
 
+            // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
+            // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
+            if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
             if (result !== (teishi.simple (test.r) ? (test.r + '') : cell.JSToText (test.r))) {
                pretty ('expected', cell.JSToPaths (test.r));
                pretty ('result', cell.textToPaths (result));

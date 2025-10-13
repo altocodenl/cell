@@ -89,7 +89,6 @@
 
               14 c @ put p party
                          v 1
-                 r ok
                  tag "Overwrite prefix with multiple paths"
 
               15 c @
@@ -101,7 +100,6 @@
                          v list 1 Jan
                                 2 Jip
                            open 1
-                 r ok
                  tag "Restore party"
 
 3 WIPE 1 c @ wipe serious
@@ -125,7 +123,6 @@
          tag "Get everything after wipe no-op"
 
        5 c @ wipe party list 1
-         r ok
          tag "Wipe the first member of the list"
 
        6 c @ party
@@ -134,7 +131,6 @@
          tag "Get party after one element was wiped"
 
        7 c @ wipe
-         r ok
          tag "Wipe everything"
 
        8 c @
@@ -145,11 +141,9 @@
                  v 1 list 1 Jan
                           2 Jip
                    2 open
-         r ok
          tag "Setting a nested list"
 
        10 c @ wipe nested 1 list 1
-          r ok
           tag "Wiping part of a nested list"
 
        11 c @
@@ -158,13 +152,11 @@
           tag "Get everything after wiping part of a nested list"
 
        12 c @ wipe
-          r ok
           tag "Wipe everything"
 
 4 "GET WITH CONTEXT" 1 c @ put v employee price 15
                                  friend price 20
                                  price 30
-                       r ok
                        tag "Initialize the three prices"
 
                      2 c @
@@ -179,11 +171,70 @@
 
                      4 c @ put p employee gets
                                v @ price
-                       r ok
                        tag "Set reference to employee price"
 
                      5 c @ employee gets
                        r = 15
                          @ price
                        tag "Get employee price"
+
+                     6 c @ put p friend gets
+                               v @ price
+                       tag "Set reference to friend price"
+
+                     7 c @ friend gets
+                       r = 20
+                         @ price
+                       tag "Get friend price"
+
+                     8 c @ put p outside gets
+                               v @ price
+                       tag "Set reference to outside price"
+
+                     9 c @ outside gets
+                       r = 30
+                         @ price
+                       tag "Get outside price"
+
+                     10 c @ wipe
+                        tag "Wipe everything"
+
+5 "GET WITH DOT" 1 c @ put v employee @ . price
+                                      price 15
+                             @ . price
+                             price 30
+                             z @ . price
+                   tag "Set two prices and three dot references"
+
+                 2 c @
+                   r employee price 15
+                              = 15
+                              @ . price
+                     price 30
+                     z = ""
+                       @ . price
+                     = 30
+                     @ . price
+
+                   tag "Get all dot references"
+
+                 3 ct "
+foo jip
+    bar 1
+"
+                   r error "The path `foo jip` is setting a text but there is already a hash at path `foo`"
+                   tag "validator 1"
+
+                 4 ct ""
+                   r ""
+                   tag "validator 1"
+
+                 5 ct " "
+                   r error "The first line of the message cannot be indented"
+                   tag "validator 1"
+
+                 6 ct "
+ "
+                   r error "The first line of the message cannot be indented"
+                   tag "validator 1"
 
