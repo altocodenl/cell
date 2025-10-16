@@ -10,10 +10,8 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 
 var clog = console.log, type = teishi.type;
 
-var pretty = function (label, paths) {
-   if (type (paths [0]) !== 'array') paths = [paths];
-   if (paths.length === 1) return teishi.clog (cell.pathsToText ([[label].concat (paths [0])]));
-   teishi.clog (label, (paths.length > 1 ? '\n' : '') + cell.pathsToText (paths));
+var pretty = function (label, ftx) {
+   teishi.clog (label, '\n' + ftx);
 }
 
 // *** MAIN FUNCTIONS ***
@@ -117,6 +115,10 @@ cell.textToPaths = function (message) {
       }
 
       if (insideMultilineText) {
+
+         if (line.length > 0 && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
+         line = line.slice (insideMultilineText);
+
          var dequoted = dequoter (line);
          if (type (dequoted) === 'string') return dequoted;
          if (dequoted.start === -1) {
@@ -141,7 +143,12 @@ cell.textToPaths = function (message) {
             var dequoted = dequoter (line);
             if (type (dequoted) === 'string') return dequoted;
             if (dequoted.end === -1) {
-               insideMultilineText = true;
+               insideMultilineText = dale.acc (path, 0, function (a, v) {
+                  v = cell.unparseElement (v);
+                  if (! v.match ('\n')) return a + v.length + 1;
+                  return a + teishi.last (v.split ('\n')).length + 1 + 1;
+               }) + 1;
+
                path.push (dequoted.text + '\n');
                line = '';
             }
@@ -239,8 +246,26 @@ cell.pathsToText = function (paths) {
 
    var output = [];
 
-   var pathToText = function (path) {
-      return dale.go (path, cell.unparseElement).join (' ');
+   var pathToText = function (path, prefixIndent) {
+      var indentCount = 0;
+      return dale.go (path, function (step) {
+         step = cell.unparseElement (step);
+         if (! step.match (/\n/)) {
+            indentCount += step.length + 1;
+            return step;
+         }
+         return dale.go (step.split (/\n/), function (line, k) {
+            if (k === 0) {
+               indentCount++;
+               return line;
+            }
+            var indent = spaces (indentCount);
+            if (k === step.split (/\n/).length - 1) {
+               indentCount += line.length + 1;
+            }
+            return (prefixIndent || '') + indent + line;
+         }).join ('\n');
+      }).join (' ');
    }
 
    dale.go (paths, function (path, k) {
@@ -249,9 +274,10 @@ cell.pathsToText = function (paths) {
          if (v === path [k]) commonPrefix.push (v);
          else return false;
       });
-      path = path.slice (commonPrefix.length);
-      var indent = spaces (pathToText (commonPrefix).length);
-      output.push (indent + (indent.length > 0 ? ' ' : '') + pathToText (path));
+      if (commonPrefix.length === 0) return output.push (pathToText (path));
+
+      var prefixIndent = spaces (pathToText (commonPrefix).length + 1);
+      output.push (prefixIndent + pathToText (path.slice (commonPrefix.length), prefixIndent));
    });
 
    return output.join ('\n');
@@ -825,7 +851,7 @@ var test = function () {
          [' ', [['error', 'The first line of the message cannot be indented']]],
          ['\t ', [['error', 'The line `\t ` contains a space that is not contained within quotes.']]],
          ['holding"out', [['error', 'The line `holding"out` has an unescaped quote.']]],
-         [['"multiline', 'trickery" some 2 "calm', 'animal"'], [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]],
+         [['"multiline', ' trickery" some 2 "calm', '                   animal"'], [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]],
          [['a b', 'c d'], [['a', 'b'], ['c', 'd']]],
          [['foo bar 1', '   jip 2'], [['error', 'The indent of the line `   jip 2` does not match that of the previous line.']]],
          [['foo bar 1', '                        jip 2'], [['error', 'The indent of the line `                        jip 2` does not match that of the previous line.']]],
@@ -840,17 +866,17 @@ var test = function () {
          ['"foo" "bar" 1', [['foo', 'bar', 1]], {nonreversible: true}],
          ['"/"foo/" /"bar/" 1"', [['"foo" "bar" 1']]],
          ['"foo bar"x1', [['error', 'No space after a quote in line `"foo bar"x1`']]],
-         [['foo "bar', 'i am on a new line but I am still the same text" 1'], [['foo', 'bar\ni am on a new line but I am still the same text', 1]]],
+         [['foo "bar', '     i am on a new line but I am still the same text" 1'], [['foo', 'bar\ni am on a new line but I am still the same text', 1]]],
          ['foo "1" bar', [['foo', '1', 'bar']]],
          ['foo "\t" bar', [['foo', '\t', 'bar']]],
-         [['"i am text', '', '', 'yep"'], [['i am text\n\n\nyep']]],
+         [['"i am text', ' ', ' ', ' yep"'], [['i am text\n\n\nyep']]],
          ['foo "bar"', [['foo', 'bar']], {nonreversible: true}],
          ['foo "bar yep"', [['foo', 'bar yep']]],
          ['date 2025-01-01', [['date', '2025-01-01']]],
          ['empty "" indeed', [['empty', '', 'indeed']]],
-         [['"just multiline', '', '"'], [['just multiline\n\n']]],
-         [['"just multiline', '', '"foo'], [['error', 'No space after a quote in line `"foo`']]],
-         [['"just multiline', '//', '/""'], [['just multiline\n/\n"']]],
+         [['"just multiline', ' ', ' "'], [['just multiline\n\n']]],
+         [['"just multiline', ' ', ' "foo'], [['error', 'No space after a quote in line ` "foo`']]],
+         [['"just multiline', ' //', ' /""'], [['just multiline\n/\n"']]],
          [['foo bar 1 jip', '        2 yes'], [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]],
          ['"/""', [['"']]],
          ['" //"', [[' /']]],
@@ -867,7 +893,7 @@ var test = function () {
          ['//', [['//']]],
          ['"//"', [['//']], {nonreversible: true}],
          ['" /a"', [['error', 'Unmatched slash in text with spaces or double quotes: ` /a`']]],
-         [['" ', '/a"'], [['error', 'Unmatched slash in text with spaces or double quotes: `/a`']]],
+         [['" ', ' /a"'], [['error', 'Unmatched slash in text with spaces or double quotes: `/a`']]],
          ['" //a"', [[' /a']]],
          ['" ///a"', [['error', 'Unmatched slash in text with spaces or double quotes: ` ///a`']]],
          [['- foo bar', '  sub acu ', '  jip heh'], [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']], {nonreversible: true}],
@@ -1065,8 +1091,8 @@ var test = function () {
          ['soda', 'wey']
       ]},
       {f: cell.call, input: ['@ put p foo bar yes', '@ put v sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
-      {f: cell.call, input: ['@ put p foo "\n\nbar"', '@ put v 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@ foo "\n\nbar"'], expected: [[1]]},
+      {f: cell.call, input: ['@ put p foo "\n             \n             bar"', '@ put v 1'], expected: [['ok']]},
+      {f: cell.call, input: ['@ foo "\n       \n       bar"'], expected: [[1]]},
 
       {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
       {f: cell.call, input: ['@ put p dialog', '@ put v 1'], expected: [['error', 'A dialog cannot be supressed by force.']]},
@@ -1399,8 +1425,6 @@ var test = function () {
       {reset: []},
       //{f: cell.call, input: ['@ do', '@ put v @ do message 1 @ message'], expected: [['ok']]},
 
-
-
    ], false, function (test) {
 
       if (test.reset) return dataspace = cell.sorter (test.reset);
@@ -1447,7 +1471,8 @@ var test = function () {
          dataspace = v;
       }
 
-      var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      //var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      var newTests = [];
       dale.stop (newTests, false, function (suite) {
          clog ('\n' + dale.keys (suite) [0]);
          return dale.stop (suite [dale.keys (suite) [0]], false, function (test) {

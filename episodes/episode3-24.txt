@@ -1,0 +1,3 @@
+Twenty-fourth episode of season 3! I'm building a programming environment from scratch while recording myself. Replaced dots with dashes as dynamic placeholders of numbers in lists. And realized I can write all the tests inside text.4tx if I use quoted text! I'm following the vibrance.
+
+https://github.com/altocodenl/cell

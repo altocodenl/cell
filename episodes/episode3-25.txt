@@ -1,0 +1,3 @@
+Twenty-fifth episode of season 3! I'm building a programming environment from scratch while recording myself. The fractal keeps expanding: rewriting the logic for multiline text. But it's just right, and it gets rid of one of the two (and by far the biggest) parsing issue that I know of.
+
+https://github.com/altocodenl/cell

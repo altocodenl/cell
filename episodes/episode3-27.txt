@@ -1,0 +1,12 @@
+Twenty-seventh episode of season 3! I'm building a programming environment from scratch while recording myself. Subtle bug fixed, all old tests passing again! And I use claude code to write annotated source code and I think it could be the beginning of a beautiful friendship.
+
+https://github.com/altocodenl/cell
+
+The tests can be the negative of an executable specification.
+
+Our mystery/thriller tonight: how can a test already quite deep into the suite, just getting the entire dataspace, can trigger an error from cell.textToPaths?
+
+       3 c "@ put p foo 2
+     @ put v something"
+
+It's almost certainly the abridging before 3! We're not taking THAT into account.

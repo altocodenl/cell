@@ -243,7 +243,7 @@ TODO
 - Recursive lambdas by referencing itself?
 - Parsing issues:
    - Distinguishing literal dashes in hashes.
-   - Multiline texts in the middle of paths that then have one below that's indented up (or further) than the position of the multiline text in the previous path.
+   - Multiline texts in the middle of paths that then have one path below that's indented up (or further) than the position of the multiline text in the previous path.
 - Efficient recalculation in cell.respond
 - @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
 
@@ -445,6 +445,102 @@ views
 ```
 
 ## Development notes
+
+## 2025-10-16
+
+The tests can be the negative of an executable specification.
+
+## 2025-10-15
+
+https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell
+"I think the main reason that yaml is so prevalent despite its pitfalls, is that for a long time it was the only viable configuration format. Often we need lists and nested data, which rules out flat formats like ini. Xml is noisy and annoying to write by hand. But most of all, we need comments, which rules out json."
+Why can't the comments be inside the data and just be ignored by what processes the data?
+
+"Many of the problems with yaml are caused by unquoted things that look like strings but behave differently. This is easy to avoid: always quote all strings. (Indeed, you can tell that somebody is an experienced yaml engineer when they defensively quote all the strings.)"
+
+## 2025-10-14
+
+Expansions for @ do should go in each of the steps!! Rather than outside. We only need to put variables in :, including the message. But not seq. seq can go right there!
+
+1 = ...
+  @ foo
+
+What memory allocation errors are to C, runtime exceptions are to very high level languages (JS/Python/Ruby). If the memory allocator or something fundamental fails, it makes sense that the process crashes because all bets are off. But checking a property of undefined making the entire process crash and wipe all the intermediate state that is nowhere persisted? That is nuts.
+
+The issue can be solved by:
+- Making exceptions simple values that are stopping. Unless something fundamental in the engine breaks, the process never breaks.
+- All state is first class and persisted until cleaned. So there is no collateral damage of an error, which is typical on high level runtimes.
+
+It's not even "let it crash" (like Erlang). Errors are not crashes.
+
+I would say it's nuts that this is like this, but then again, we're in 2025 and we're still seeing a ton of high profile bugs coming from manual memory allocation in software that doesn't need to allocate its own memory. (I published the point [here](https://federicopereiro.com/sunsetting-crashes/)].
+
+Rethinking multiline text coming from fourdata. When it starts, wherever it starts, indent it (and expect it to be indented) by as many spaces as you need to get to the non literal double quote that opens the multiline (quoted) text.
+
+Test that doesn't work yet:
+
+                  5 ct "/"multiline
+                        trickery" some 2 /"calm
+                        animal/""
+                    r 1 1 "multiline
+                           trickery"
+                        2 some
+                      3 2
+                      4 "calm
+                         animal"
+
+If I was just writing it plainly:
+
+```
+"multiline
+ trickery" some "calm
+                 animal"
+```
+
+The way to do this would be to store the offset of that quote, and 1) expect that each line on the multiline text starts with that amount of space or more, otherwise there is a validation error; and 2) remove it.
+
+And this solves the parsing issue with multiline paths in the middle!
+
+```
+how "it
+     would" "be
+             ?"
+```
+
+Do I really want this? I think so.
+
+```
+doc 1 md "Here goes my text:
+
+          It was a fine day, honestly.
+          <table><tr><td>foo</td></tr></table>
+         "
+      title "One doc"
+```
+
+Vs:
+
+```
+doc 1 md "Here goes my text:
+
+It was a fine day, honestly.
+<table><tr><td>foo</td></tr></table>
+"
+      title "One doc"
+```
+
+How to get the proper offset for inside multiline text? Take the current path and compute the width. For this, if it's a non-multiline, take the length + 1. If it is multiline, take the length of the first line of that multiline and do also plus 1 (for the quote at the beginning). Keep on going until the end. Then add one more for the quote that you are starting now.
+
+You could have something like this:
+
+```
+this is a newline: "
+                   "
+```
+
+The only semantic whitespace of fourtext is space.
+
+Idea for tomorrow: how to use literal dashes: when the dash is in a hash, it's a literal, otherwise it's a placeholder for a number. Although I wonder if we need to make many lists of one, honestly.
 
 ## 2025-10-13
 
@@ -1801,7 +1897,7 @@ We will put the output `paths` here.
    var paths = [];
 ```
 
-A flag that tells us whether we are inside a multiline text, which starts as `false`.
+A variable that tells us whether we are inside a multiline text, which starts as `false`. If it is not `false`, it will have a number, which represents the number of spaces that should be prepended to any lines inside the multiline text (besides the first line, which is already indented).
 
 ```js
    var insideMultilineText = false;
@@ -1938,7 +2034,7 @@ We chop off the indentation off the line.
 ```
 
 ```js
-         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace';
+         if (line.length === 0) return 'The line `' + originalLine + '` has no data besides whitespace.';
 ```
 
 We're done with indentation/abridged lines.
@@ -1992,7 +2088,7 @@ If we don't find a double quote, we go to the next character.
 We see how many slashes are before the double quote we just found.
 
 ```js
-               var slashes = text.slice (0, k + 1).match (/\/{0,}"$/);
+               var slashes = text.slice (0, k + 1).match (/\/{0,}"$/g);
 ```
 
 Now for the tricky bit. If there's an even amount of slashes before the double quote (even 0), this is a non-literal double quote, therefore we return `k` and stop the iteration.
@@ -2117,6 +2213,18 @@ What makes multiline text particularly interesting is that it *spans* lines. The
       if (insideMultilineText) {
 ```
 
+If we are inside multiline text, we'll validate that the line starts with at least n spaces (where n is `insideMultilineText`). The only exception is the when the line is empty, to avoid people the trouble of indenting empty lines inside multiline text.
+
+```js
+         if (line.length > 0 && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
+```
+
+Now that we validated this indent, we remove it from this line. Note that this will never happen on the *first* line of multiline text, because we only have this flag on for the second and any subsequent lines. And in the case where the line is empty, we can still slice it with no consequence.
+
+```js
+         line = line.slice (insideMultilineText);
+```
+
 We run the `line` through `dequoted`. If there is no non-literal double quote, the entire line belongs to the last element of the last path. There already has to be a path with at least an element there, which was initialized by the beginning of the multiline text we are still processing.
 
 Therefore, we just append the entire `line` (taking care to use `dequoted.text`, in case there are characters we need to unescape such as slashes and literal double quotes) into the last element of the last path, also taking care of adding the newline that we removed when we started to iterate each of the lines of the original text.
@@ -2187,15 +2295,37 @@ If `dequoted` is text, it must be an error. In that case, we return it directly.
             if (type (dequoted) === 'string') return dequoted;
 ```
 
-If there is no second non-literal double quote, we just opened a new multilinte text! We set the flag.
+If there is no second non-literal double quote, we just opened a new multiline text! We need to calculate how many spaces the continuation lines should be indented. This indentation ensures that subsequent lines of the multiline text align one character to the right of the opening quote.
+
+We use `dale.acc` to accumulate the total length, starting from 0. We iterate through all the elements of the current `path` that we've parsed so far.
 
 ```js
             if (dequoted.end === -1) {
-               insideMultilineText = true;
+               insideMultilineText = dale.acc (path, 0, function (a, v) {
 ```
 
-Then, we push the entire dequoted text (plus a newline) to the path as a new element. We then set `line` to an empty text.
+We unparse the element to get its text representation, which will include quotes if necessary.
 
+```js
+                  v = cell.unparseElement (v);
+```
+
+If this element doesn't contain a newline, we just add its length plus one (for the space after it) to the accumulator.
+
+```js
+                  if (! v.match ('\n')) return a + v.length + 1;
+```
+
+If this element contains newlines (it's multiline text itself!), we only care about the length of the last line, since that's what determines the horizontal position where the next element starts. We add the length of the last line, plus one for the non-literal quote that follows it, plus one for the space after that quote.
+
+```js
+                  return a + teishi.last (v.split ('\n')).length + 1 + 1;
+               }) + 1;
+```
+
+Finally, we add one more to account for the opening quote of the multiline text we're about to start. This total becomes the value of `insideMultilineText`, which is the number of spaces that continuation lines must be indented.
+
+We push the entire dequoted text (plus a newline) to the path as a new element. We then set `line` to an empty text.
 
 ```js
                path.push (dequoted.text + '\n');
@@ -2315,7 +2445,163 @@ TODO
 
 #### `cell.pathsToText`
 
-TODO
+This function takes an array of `paths` and returns text. This is the main unparsing function, the inverse of `cell.textToPaths`.
+
+```js
+cell.pathsToText = function (paths) {
+```
+
+We define a helper function `spaces` that returns a string of `n` spaces.
+
+```js
+   var spaces = function (n) {
+      return Array (n).fill (' ').join ('');
+   }
+```
+
+We will put the output lines here.
+
+```js
+   var output = [];
+```
+
+We define `pathToText`, a helper function that takes a single path and converts it to text. It also takes an optional `prefixIndent`, which is a string of spaces that will be prepended to continuation lines of multiline text. This is necessary when the path is abridged (has a common prefix with the previous path), so that multiline text continuation lines are indented correctly. This function has to handle multiline text elements within paths, which is the main source of complexity.
+
+```js
+   var pathToText = function (path, prefixIndent) {
+```
+
+We keep track of how many characters we've written on the current line. This is essential for properly indenting subsequent lines when we encounter multiline text.
+
+```js
+      var indentCount = 0;
+```
+
+We iterate through each step of the path.
+
+```js
+      return dale.go (path, function (step) {
+```
+
+We unparse the step, which converts it to its text representation. If it's a number, it becomes a string. If it's text that looks like a number or contains spaces or quotes, `unparseElement` will surround it with double quotes and escape any literal quotes or slashes.
+
+```js
+         step = cell.unparseElement (step);
+```
+
+If the step doesn't contain a newline, we just need to add its length plus one (for the space after it) to our indent count, and return the step as is.
+
+```js
+         if (! step.match (/\n/)) {
+            indentCount += step.length + 1;
+            return step;
+         }
+```
+
+If we are here, the step contains newlines. We need to split it by newlines and handle each line separately.
+
+```js
+         return dale.go (step.split (/\n/), function (line, k) {
+```
+
+The first line doesn't need indentation, since it's on the same line as the previous elements of the path. However, we do need to account for the opening quote in our indent count.
+
+```js
+            if (k === 0) {
+               indentCount++;
+               return line;
+            }
+```
+
+For subsequent lines (lines after the first), we need to indent them to align with the opening quote.
+
+```js
+            var indent = spaces (indentCount);
+```
+
+If this is the last line of the multiline text, we need to update `indentCount` to account for this line's length plus one (for the space after the closing quote). The closing quote is aligned with the opening quote, so we don't add it to the indent count.
+
+```js
+            if (k === step.split (/\n/).length - 1) {
+               indentCount += line.length + 1;
+            }
+```
+
+We return the indented line. If there's a `prefixIndent` (because this path is abridged), we prepend it to the line so that all continuation lines of multiline text are properly indented to account for the omitted common prefix.
+
+```js
+            return (prefixIndent || '') + indent + line;
+```
+
+We join all the lines of this multiline step with newlines.
+
+```js
+         }).join ('\n');
+```
+
+We join all the steps of the path with spaces. This concludes `pathToText`.
+
+```js
+      }).join (' ');
+   }
+```
+
+Now we iterate through all the paths.
+
+```js
+   dale.go (paths, function (path, k) {
+```
+
+We find the common prefix between this path and the previous one. This allows us to use fourdata's abridgement feature, where we don't repeat the common prefix.
+
+```js
+      var commonPrefix = [];
+```
+
+If this is not the first path, we compare it with the previous path to find the common prefix.
+
+```js
+      if (k > 0) dale.stop (paths [k - 1], false, function (v, k) {
+```
+
+If the elements match, we add them to the common prefix and continue.
+
+```js
+         if (v === path [k]) commonPrefix.push (v);
+```
+
+If they don't match, we stop the iteration.
+
+```js
+         else return false;
+      });
+```
+
+If there's no common prefix, we just add the path to the output as is and move on to the next path. We don't pass a second argument to `pathToText` since there's no prefix indentation needed.
+
+```js
+      if (commonPrefix.length === 0) return output.push (pathToText (path));
+```
+
+We convert the common prefix to text and create an indentation string of that length, plus one for the space that separates the common prefix from the rest of the path. We call `pathToText` here just to calculate the length of the prefix.
+
+```js
+      var prefixIndent = spaces (pathToText (commonPrefix).length + 1);
+```
+
+We add the indented path to the output. We slice off the common prefix from the path before converting it to text, and we pass `prefixIndent` as the second argument to `pathToText` so that any multiline text continuation lines in this path will be properly indented.
+
+```js
+      output.push (prefixIndent + pathToText (path.slice (commonPrefix.length), prefixIndent));
+   });
+```
+
+We join all the lines with newlines and return the result. This finishes `cell.pathsToText`.
+
+```js
+   return output.join ('\n');
+}
+```
 
 #### `cell.JSToPaths`
 

@@ -1,0 +1,75 @@
+Twenty-sixth episode of season 3! I'm building a programming environment from scratch while recording myself. Losing some steam with the multiline text, but it feels like it's mostly done. I need fresh eyes and rewriting those tests.
+
+Hello Earth! We start quiet today, then proceed with sound.
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+Let's go back to those improved multiline texts!
+
+Also, randomly, I came across an article about yaml having 63 different possible multiline texts. It's encouraging to just do one, and get it right.
+
+
+"multiline
+ trickery" some 2 "calm
+                   animal"
+
+This should be 19 spaces. The calculation is correct!!
+
+We're not slicing the spaces correctly.
+
+Ah, I get it. It's that we need to reverse it properly when we go back to text! So the first half is correct.
+
+I need to do the mirror image of the part that counts things. This, here:
+
+   var pathToText = function (path) {
+      return dale.go (path, cell.unparseElement).join (' ');
+   }
+
+
+1 "multiline
+   trickery"
+2 some
+3 2
+4 "calm
+   animal"
+
+"multiline
+ trickery" some 2 "calm
+                   animal"
+
+If it's not multilnie, just append with a space before. If it is multiline, this affects every line inside the multiline. Take the offset of where you started the thing.
+
+What happens when you ahve multiple in one path? Doesn't matter. The starting position will already be more to the right, just use that. So, we can store lines.
+
+
+"multiline
+ trickery" some 2 "calm
+                   animal"',
+"multiline
+ trickery" some 2 "calm
+ animal"'
+
+ Why is this not working? It won't even parse the test suite.
+
+
+                 3 ct "
+                       foo jip
+                       bar 1
+                      "
+                   r error "The path `foo jip` is setting a text but there is already a hash at path `foo`"
+                   tag "validator 1"
+
+OK, I had to escape the literal quotes.
+
+
+And now?
+                  5 cl 1 "/"multiline"
+                       2 " trickery/" some 2 /"calm"
+                       3 "                   animal/""
+                    r ok
+                    tag "validator 5"
+
+TODO:
+- Keep on rewriting tests. Add new ones for the new functionality.
+- Get a feel for the new multiline logic: is it correct?
+- Annotate source code changes.
