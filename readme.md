@@ -446,6 +446,160 @@ views
 
 ## Development notes
 
+## 2025-10-21
+
+I'm thinking on how cell should be modified so that we could just use the DB, rather than the file persistence. Because things would change.
+
+put would be different: it wouldn't iterate through all values, but rather check whatever it gets.
+
+I'm really excited to be able to query a significant amount of data from the editor and have quick queries that return stuff back.
+
+Combining that with the idea of the "two numbers" which control automatic folding, we could be onto something.
+
+Rehashing the idea here: one number to control, at the outermost level, how much you show on the y axis. Then another one to say how much you show given what you already expanded.
+
+But I realize that's wrong: I will show all the first level keys; you can simply scroll down. Unfold is for things that are there. So I could perhaps just do with ONE number, which is: for the first level steps, how many paths you show for them? If N is 20, any first level path that expands to less than 20, you show everything. Maybe N should be 10, but the point is clear. Whatever you choose to unfold, it stays unfolded until you fold it again.
+
+What about scrolling to the right? You can just move. Let's keep the folds on number of paths. Perhaps it could work and it'd be more than enough.
+
+What about the implementation? Let's see it from zero:
+
+cell.call:
+   - parses; if invalid input, responds with error.
+   - calls either get or put. Soon, after the rewrite, it will just call put in context, wait until it is done, then add an entry to the dialog. Maybe it should be put that adds things on the dialog? No, because recursive calls shouldn't add things on the dialog. Unless we tell put that "this is a top level entry". Then put can handle that inside the DB. That could work!
+   - We can send the data to the DB as paths where each element is already unparsed. That saves work for Lua. At least I did that on the POC of last episode. But honestly, it'd be cleaner to just send fourtext. But do we want to reparse the whole thing? We could just send paths, regular paths, as stringified JSON.
+
+cell.put:
+   - Must squarely be inside the DB.
+   - It should do its own validation. If that requires porting some of cell to Lua, it's OK. At least the data will come parsed.
+   - Yeah, we need to rewrite it so that instead of going through the entire dataspace to find paths "of interest", it queries for prefixes. This is the currently filtering out line: `if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;`. This call should be done through cell.get. cell.get should efficiently get a prefix. I'm already thinking of making it a powerful query function, but what put needs really is to be able to get paths by prefix quickly.
+
+cell.get:
+   - Must squarely be inside the DB.
+   - Needs to do the tricky bit of walking up too.
+   - Doesn't need cell.put, so we're good there.
+   - It should have a lower-level call that gets a prefix from the DB. The walking up logic can be done on the outermost part of the function.
+
+cell.respond:
+   - This is the one that worries me. It is quite big and complex. But it has to be in the DB! It has to run close to the data.
+   - What we need for it to work efficiently is to track dependencies between parts of the cell. So that when X gets modified, we know to go to Y and Z. cell.respond needs to build and maintain a dependency graph. Let's bite the bullet and design it right now.
+   - If a path with prefix X depends on a path Y, we store Y in a key with the dependencies of X. It could be a set of stringified paths. And we need it two ways: we also need to know that X is a dependent of Y. Do we go with the gotoB algorithm, where if a prefix of a prefix (say, the left part of Y) is changed, we consider Y to be changed? I think so, yes. Otherwise, you'd have to do it by value changed. Well, we could just do that. But you need to *check* if the value is changed if the prefix of the prefix is changed, so yes. The gotoB approach is the one that's proper here.
+   - The only thing giving me pause is the memory footprint of the dependency keys. But let's see it in practice how much it'd be. It's either that or go full immediate mode and recompute the whole thing every time.
+
+This is still parallel to the redesign of sequences, and actually getting loops done, and all of that. This would be just the engine. Putting the language on top of an engine that has persistence and performance (well, fourtext files have persistence too).
+
+note: no more "until it stabilizes". Things update synchronously and one at a time. Once it's done, we do what we need to do. We do not lose sequence. We can't and shouldn't lose sequence.
+
+I think it would be sound to do the rewrite in JS first, and always keep a pure JS implementation against fourtext. We can then perfect the tests (now, or later) and write the Lua/Redis implementation and (gasp) the postgres one too, as a port of the JS implementation. But the JS implementation needs to think about efficiency now, including dependencies, so that the port can be 1:1. And we can work with the existing tests to make sure things still work.
+
+## 2025-10-20
+
+More fun with engines. At some point I'll get back to those tests.
+
+OK, so a proper put would:
+- Overwrite things properly.
+- Validate against what's in there already.
+- The dedashing and sorting and even duplicates can be filtered out in JS. Actually, not the filtering out, because those could be there. The one thing we could do in JS to validate is to make sure there are no floats as keys.
+
+Testing the put in redis:
+
+with the data in:
+used_memory:25810144
+used_memory:25566336
+
+250k?
+
+used_memory:25835664
+used_memory:25566864
+
+Yeah, 250k. The raw JSON is about 12k. So we're looking at 20x. Steep. Does it go down if we keep on adding data that has similar values?
+
+Beautiful. This has been my idea of a DB for a long time. Every value is indexed, always. If it costs 20x the memory, could it still be acceptable?
+
+Numbers are so cheap in redis! It's crazy.
+
+Memory analysis for cell "server":
+Total bytes: 222627
+Total keys: 2099
+By prefix:
+  server:children: 37712 bytes, 575 keys
+  server:idCount: 48 bytes, 1 keys
+  server:numbers: 688 bytes, 1 keys
+  server:position: 30264 bytes, 5 keys
+  server:step: 85792 bytes, 1089 keys
+  server:texts: 37211 bytes, 1 keys
+  server:value: 30912 bytes, 427 keys
+
+With a 5mb JSON with a lot of non-repeated text, the factor is 8x. Promising.
+
+This may work.
+
+If you don't want something indexed, put it as a file! no speed bump to bring content of a file, jump over it, perhaps with `data` key.
+
+Idea: editor accesses data piecemeal; think of a lot of data. To control folding. two numbers only: how many at first level you see all the way down (y axis) ); and how many depth in paths for each of them (less than 20 if unfolded, for example). If you unfold something that was folded, use the same constants to fold/unfold further. That's just two numbers and it allows you to have good defaults on the whole thing. You can then unfold wherever you want and the cell can remember that.
+
+The editor shows only a little bit! Scans go all the way to redis/postgres.
+
+## 2025-10-18
+
+Thinking again about having "fun with engines" and working on the redis engine for cell. To store and query data really really quickly.
+
+```
+step:<id> - <value>
+(list)    - <position in the path>
+          - <parent id>
+
+children:<id> - <id>
+(set)         - ...
+
+value:<value> - <id>
+(set)         - ...
+
+position:<id> - <id>
+(set)         - ...
+
+numbers - member <value>
+(zset)    score <value>
+        - ...
+
+texts - member <value>
+(zset)  score 0
+      - ...
+
+idCount <n>
+(string)
+```
+
+The above is for just one cell. We can prepend every key with the cell name.
+
+I like that the children are stored in sets. The entire idea is to use intersection of sets to quickly arrive to the data.
+
+When using the query language, make `status` just stand for `status`. If you do `status*`, it will be texts that starts with `status`.
+
+zsets give us quick ranges of numbers and texts that then can be resolved by looking up by value. These are the fast query ops.
+
+Once we get all the steps that match, we reconstruct the entire set of paths.
+
+Operations:
+- Query
+   - Get all
+   - With parameters
+- Delete
+- Put
+   - Straight addition
+   - Addition and delete
+
+## 2025-10-17
+
+The three problems I see in type systems:
+- Types use a different syntax than the rest of the language. Separateness.
+- Types are less powerful than the programming language. No sequences; conditionals are only supported indirectly. You basically just have reference.
+- The type system disappears at runtime.
+
+Unexpectedly, I just realized that these are the same problems I experience with template systems. And these are the reasons I prefer to use neither types nor templates.
+
+Unrelated: the dialog is the third part that makes dataspace changes possible. Think of it like action vs reaction: if you're trying to pull a weight in a vacuum, you can't because you have nothing to pull against. But if you have a floor, you push on the floor and the pushback from the floor allows you to pull on the weight. The dialog is the floor: you interact with it and through those interactions, the dataspace (outside of the dialog) changes.
+
 ## 2025-10-16
 
 The tests can be the negative of an executable specification.
@@ -2613,7 +2767,111 @@ TODO
 
 #### `cell.validator`
 
-TODO
+This function validates a set of paths. It takes `paths` as its sole argument. These paths must already be dedashed (by cell.dedasher) and sorted (by cell.sorter).
+
+This function checks that:
+1. Floats are only used as terminal values (not as keys)
+2. No type mixing occurs (e.g., can't have both a list and hash at the same path)
+3. No duplicate final values exist
+
+```js
+cell.validator = function (paths) {
+```
+
+We initialize a hash to track what type each path prefix has been assigned. The key will be the JSON stringification of the path prefix, and the value will be one of four types: `'hash'`, `'list'`, `'text'`, or `'number'`.
+
+```js
+   var seen = {};
+```
+
+We iterate through all paths, stopping at the first error. `dale.stopNot` will return `undefined` if no error is found, or the error message if one is found.
+
+```js
+   var error = dale.stopNot (paths, undefined, function (path) {
+```
+
+For each path, we check each step within it.
+
+```js
+      return dale.stopNot (path, undefined, function (v, k) {
+```
+
+**Rule 1: Floats can only be terminal values, never keys.**
+
+If we find a float that's not at the end of the path (meaning it's being used as a key), we return an error. This is because floats should only represent final scalar values, not structural positions in the data hierarchy.
+
+```js
+         if (type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + cell.pathsToText ([path]) + '` uses it as a key.';
+```
+
+We now determine the type category of this step:
+- `'hash'` if it's a string key (not final position)
+- `'text'` if it's a string value (final position)
+- `'list'` if it's a number key (not final position)
+- `'number'` if it's a number value (final position)
+
+The distinction between "key" and "value" is whether this step has more steps after it in the path.
+
+```js
+         var Type = type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
+```
+
+We create a unique key for this path prefix by stringifying everything before the current step. For example, if our path is `['foo', 'bar', 1]` and we're at step `'bar'`, the `seenKey` would be `'["foo"]'`.
+
+```js
+         var seenKey = JSON.stringify (path.slice (0, k));
+```
+
+Is this the first time we've encountered this path prefix?
+
+```js
+         if (! seen [seenKey]) seen [seenKey] = Type;
+```
+
+If we've seen this path prefix before, we need to check for conflicts.
+
+```js
+         else {
+```
+
+**Rule 2: Type must match what we've seen before at this prefix.**
+
+For example, if we have `['foo', 'bar']`, we can't later have `['foo', 1]` because `'foo'` would be both a hash (keyed by `'bar'`) and a list (keyed by `1`). This ensures structural consistency.
+
+```js
+            if (seen [seenKey] !== Type) return 'The path `' + cell.pathsToText ([path]) + '` is setting a ' + Type + ' but there is already a ' + seen [seenKey] + ' at path `' + cell.pathsToText ([path.slice (0, k)]) + '`';
+```
+
+**Rule 3: No duplicate terminal values.**
+
+If this is a terminal value (either text or number), we cannot have it twice. For example, we can't have both `['foo', 'bar']` and `['foo', 'bar']` again. However, we *can* have `['foo', 'bar', 1]` and `['foo', 'bar', 2]` because these are list items, not terminal values.
+
+```js
+            if (Type === 'number' || Type === 'text') return 'The path `' + cell.pathsToText ([path]) + '` is repeated.';
+         }
+      });
+   });
+```
+
+If an error was found, we return it as a path with `'error'` as the first element. Otherwise, we return an empty array to indicate the paths are valid.
+
+```js
+   return error ? [['error', error]] : [];
+}
+```
+
+**Examples:**
+
+Valid:
+- `[['foo', 'bar']]` - Simple hash
+- `[['foo', 'bar', 1]]` - Hash with numeric value
+- `[['foo', 1, 'a'], ['foo', 2, 'b']]` - List with two items
+
+Invalid:
+- `[['foo', 'jip'], ['foo', 'bar', 1]]` - Error: `'foo'` can't be both a text value and a hash
+- `[['foo', 'jip', 1], ['foo', 2, 2]]` - Error: `'foo'` can't be both a hash and a list
+- `[['foo', 'bar'], ['foo', 'bar']]` - Error: Duplicate terminal value
+- `[['foo', 3.14, 'bar']]` - Error: Float used as a key
 
 #### `cell.call`
 
@@ -3273,7 +3531,7 @@ We return the matches or an empty array (in case there were none). This closes t
 cell.put = function (paths, contextPath, get, put, updateDialog) {
 ```
 
-We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` (optional) and `v` (mandaatory), we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
+We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` (optional) and `v` (mandatory), we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
 
 `p` can be absent, in which case we'll default to an empty path. This allows you to write multiple values at the top level.
 
