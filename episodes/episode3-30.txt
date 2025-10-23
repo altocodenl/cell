@@ -1,0 +1,13 @@
+Thirtieth episode of season 3! I'm building a programming environment from scratch while recording myself. No more fun with engines for a while. Back to rewriting the tests and cell.call. It could have been a slog, but it wasn't!
+
+Hello Earth!
+
+If you're just tuning in for the first time: https://github.com/altocodenl/cell
+
+Actually, let me talk on this one.
+
+As much as I want to have fun with engines, it feels like too much at this stage. I want to be able to run cell. And the current engine, although slow and based on text files, already works. Let's redo the tests, redo cell.call, allow for upload, implement loop, and then we can come back to having fun with engines.
+
+We WILL run cell in IE6.
+
+Figuring out how to put puts in the dataspace, we'd never done that before.

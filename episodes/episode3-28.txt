@@ -1,0 +1,62 @@
+Twenty-eight episode of season 3! I'm building a programming environment from scratch while recording myself. Putting data into redis. This is fun!
+
+https://github.com/altocodenl/cell
+
+Back, but no mic! So, we were putting some stuff into redis. Well, some data.
+
+OK, let's review the code that Claude wrote for the put.
+
+Not bad. It looks correct. The shape is a bit off, with the parent id, but it makes sense.
+
+Now, a proper put would have to remove some paths if there is an overlap. How does the js put do it?
+
+Ah, I see, we don't do it! We complain that you're trying to change the type of things. So there's no need to forbid it, if you already validated. But if we do this in redis/lua, well, we'd have to do the type validation there.
+
+Yes, eventually the entire engine of cell should be ported to redis/lua, if it's going to run there. Only the outermost part, perhaps the parsing, should be done in JS, and perhaps not even; actually yes, probably. But the validation should be done in lua/redis. So, the parsing outside, in JS.
+
+OK, let's be a bit lazy. Should I just ask Claude to do this? OK, let's start by annotating cell.validator.
+
+Now I remember. We do not overwrite things in our put. We must wipe first.
+
+I think I'm too tired to understand cell.put (which is quite tricky anyway, for my standards).
+
+OK, so a proper put would:
+- Overwrite things properly.
+- Validate against what's in there already.
+- The dedashing and sorting and even duplicates can be filtered out in JS. Actually, not the filtering out, because those could be there. The one thing we could do in JS to validate is to make sure there are no floats as keys.
+
+Yeah, this filtering out is done at the end, on leftSide. But I don't have leftSide/rightSide if I'm just passing a bunch of paths. So the structure would have to change. I'd have to pass put itself, semi-validated, to redis/lua.
+
+with the data in:
+used_memory:25810144
+used_memory:25566336
+
+250k?
+
+used_memory:25835664
+used_memory:25566864
+
+Yeah, 250k. The raw JSON is about 12k. So we're looking at 20x. Steep. Does it go down if we keep on adding data that has similar values?
+
+There's also a bunch of stuff that's wrong. Like, for example, numbers.
+
+Beautiful. This has been my idea of a DB for a long time. Every value is indexed, always. If it costs 20x the memory, could it still be acceptable?
+
+Numbers are so cheap in redis! It's crazy.
+Memory analysis for cell "server":
+Total bytes: 222627
+Total keys: 2099
+By prefix:
+  server:children: 37712 bytes, 575 keys
+  server:idCount: 48 bytes, 1 keys
+  server:numbers: 688 bytes, 1 keys
+  server:position: 30264 bytes, 5 keys
+  server:step: 85792 bytes, 1089 keys
+  server:texts: 37211 bytes, 1 keys
+  server:value: 30912 bytes, 427 keys
+
+With a 5mb JSON with a lot of non-repeated text, the factor is 8x. Promising.
+
+Yeah, this may work.
+
+See you next time!

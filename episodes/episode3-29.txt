@@ -1,0 +1,14 @@
+Twenty-ninth episode of season 3! I'm building a programming environment from scratch while recording myself. Redesigning the calls so that we can work close to the database.
+
+https://github.com/altocodenl/cell
+
+Hello! Another non-talkie one today.
+
+If you're just tuning in: https://github.com/altocodenl/cell
+
+Let's keep on having fun with engines. I was actually dreaming with cell and redis yesterday. It's a good feeling. Yesterday's ideas still feel sound today.
+
+I made some dev notes yesterday. I'm thinking on how cell should be modified so that we could just use the DB, rather than the file persistence. Because things would change.
+
+This is taking us deep.
+

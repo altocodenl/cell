@@ -446,6 +446,28 @@ views
 
 ## Development notes
 
+## 2025-10-23
+
+As much as I want to have fun with engines, it feels like too much at this stage. I want to be able to run cell. And the current engine, although slow and based on text files, already works. Let's redo the tests, redo cell.call, allow for upload, implement loop, and then we can come back to having fun with engines.
+
+We WILL run cell in IE6.
+
+I never put a `put` in the dataspace yet!
+
+> - The **context path** is everything to the left of `leftmostAt`. That is, everything that's not a reference, is our context.
+
+Interesting that you could still have a reference on the left, but then, there'd be a line on top of that reference that'd be an =. And then, to the right of that line/path, you could have another reference. So you can have references on the left, but we only work on them on the paths/lines where they are resolved.
+
+Interesting that when we put @ and = in the same dataspace, moving up in space is like moving forward in time, because you see what comes afterwards.
+
+Do we want things to be frozen on the put, or not? On @ do, they are frozen. But on @ put, would we want to put references in the values, or even on the paths? Why not? Security shouldn't be an issue, because it should be properly handled. So, that only leaves practicality. If you put an @ put with an @ do, the @ do will be frozen, so you can create calls from it. But if @ do does not freeze them, why freeze them arbitrarily in @ put? Just treat it like something normal. So we can just treat @ put like any other not @ do call.
+
+This hints at @ do being the only "freezing call". Ironic that the call to keep on going is the one that freezes references on the dataspace.
+
+## 2025-10-22
+
+Index everything! I thought I was the only nut to even propose this, but I got this from Claude: "Datomic is the big one. Rich Hickey's whole design philosophy was "storage is cheap, indexes are fast" - it maintains 4+ sort orders of the same datoms (EAVT, AEVT, AVET, VAET) to make different query patterns efficient. Very much "index everything.""
+
 ## 2025-10-21
 
 I'm thinking on how cell should be modified so that we could just use the DB, rather than the file persistence. Because things would change.
