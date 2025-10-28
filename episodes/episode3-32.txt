@@ -1,0 +1,3 @@
+Thirty-second episode of season 3! I'm building a programming environment from scratch while recording myself. This was a tough one. Figuring out what cell.respond is doing, and going deeper into what it should really do and how. This is not getting easier, but we're getting farther.
+
+https://github.com/altocodenl/cell

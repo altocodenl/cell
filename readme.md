@@ -203,14 +203,19 @@ TODO
 
 ### Language
 
-- Change dot to dash for placeholders of list
+- Rework entrypoint of native calls (if/do/put).
 - Refactor cell.call
    - Have an unified interface through cell.call.
    - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
 - Upload
    - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
    - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
-- Add multi put
+- Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
+- Rewrite all the existing tests and add new ones for anything untested.
+- Include test for multiline texts in the middle of paths that then have one path below that's indented up (or further) than the position of the multiline text in the previous path.
+- Literal dashes.
+- Upload.
+- Allow single paths with multiple values for native calls for shorter notation.
 - Loop (without macro?)
 - More calls: edit, wipe, push, lepush (left add), pop, lepop
 - do
@@ -241,9 +246,6 @@ TODO
 - diff: takes one or two points of the dialog and gives you a diff.
 - access masks
 - Recursive lambdas by referencing itself?
-- Parsing issues:
-   - Distinguishing literal dashes in hashes.
-   - Multiline texts in the middle of paths that then have one path below that's indented up (or further) than the position of the multiline text in the previous path.
 - Efficient recalculation in cell.respond
 - @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
 
@@ -445,6 +447,159 @@ views
 ```
 
 ## Development notes
+
+## 2025-10-28
+
+No self reference! @, or any prefix of where you are, because otherwise it expands fractally and forever! Error: "No self-reference! cell is not an aleph".
+I only realize it now. Very interesting.
+
+This means that the call to get everything (`@`) has to go outside of the dataspace, a straight line to cell.get.
+
+Also, an @ as the last step of a path is a literal, not a call. So it doesn't expand to the whole thing, and it also lets us have literal `@`s as last steps.
+
+From Knuth's implementation of Adventure: "By the way, if you don't like |goto| statements, don't read this. (And don't read any other programs that simulate multistate systems.)"
+
+Context path is just on the left; the intermediate value is the left hand, it is just what you overwrite. but what is the prefix for? the value path is what gives you the value itself. I need to fully internalize this.
+
+- Context path: where you go get values. The frame of reference.
+- Value path: where you're getting the result from. This is where the response is.
+- Target path: the middle part of the path. Goes all the way from the left up to the rightmost at. Also with an = at the end. This is where we put the value we obtain.
+- Prefix (path): the target path plus the rightmost at and the first step of the value path. What is this, really?
+
+Interesting symmetry here:
+```
+   var previousValue = cell.get (targetPath, contextPath, get);
+
+   var currentValue = cell.get (valuePath, contextPath, get);
+```
+
+What I don't get is that valuePath is supposed to be on the "right" and targetPath on the left. So how could those different places be later compared to see if the value changes?
+Ah, I see: the target path should point to the previous value, it will be there at =. And the new value comes from @. So this is how things get updated. It makes sense.
+
+I'm rewriting the entire logic of resolving calls. Three calls to resolve: reference, sequence, conditional.
+
+An example to illustrate this part:
+
+```
+bar @ do ...
+foo @ bar hello 1
+```
+
+In this case, when responding to the reference at `foo`, we'll first try to get `bar hello 1`. This will respond with nothing because there is nothing there.
+
+So, we try to get `bar @ do`. In this case, we succeed. We found a call. The message will be `hello 1`.
+
+If instead we had:
+
+```
+bar hello @ do ...
+foo @ bar hello 1
+```
+
+We'd first try `@ bar hello 1`. Nothing; then, `bar @ do`: nothing. Then, `bar hello @ do`. That will work! The message will be `1`.
+
+The problem with finding a call like this is that it could be a reference or a conditional. A reference, however, would be solved (I think) by the "jumping over equals" that we already do. Where is that? Here:
+
+> The **value path** is everything to the right of `rightmostAt`. This is the right part of our assignment, where we're getting the value from. Note we actually remove any `=` from it; this allows us to "go get" the values of calls that have been responded already. Another way to call this "go get" is as "jumping over equals".
+
+So we were just not implementing @ ifs that were elsewhere. This is significant evidence that the approach of cell.respond is flawed and has to be simpler.
+
+Why am I walking at all? By walking, I mean `@ bar hello 1`, then `@ bar ...`, then `@ bar hello ...`. BTW, the last step should be unnecessary, because the last step was the first where we just got the whole thing!
+
+So, why is walking necessary? To distinguish, within the value path, what's the path to the call and what's the message. That's why. The essential part here is the walking, trying with growing paths that go from left to right (and stop at the whole value path - 1, which is the original one we tried). The logic should be that if whatever comes starts with an @, we bring it? No. No? I'm not sure.
+
+Let's try to invalidate that thought:
+
+```
+a 1
+bar hello = 1
+          @ a
+foo @ bar hello 1
+```
+
+The question is, what is `foo =`? If we go with just straight comparison, we'll get "". There's no `bar hello 1`. If we try just bar, we'll get stuff! But this is not what we're getting, unless what came after bar was @. So we move on to `bar hello` and we find that it has an @ behind it. It points to a straight reference.
+
+A reference, really, is a call without message. Yep, that is what I defined almost a year ago.
+
+Because that reference doesn't take a message, the call cannot really resolve to a value, because we'd be ignoring the right part of the value path in `bar hello 1`. But what if we had this?
+
+```
+a @ do ...
+bar hello = 1
+          @ a
+foo @ bar hello 1
+```
+
+In this case, it'd be meaningful to resolve this as a call to `a` with `1` as the message. Not just meaningful, but actually correct. So we cannot (also) just look for `bar hello @ do`. We need to see if that eventually leads to a result that yields a call to @ do or @ if.
+
+How do you go deep and find the @ do or @ if that's the "rock bottom" of the call (or its absence?). You can just jump over equals. You jump over equals and if you find an @ do or @ if, you have your call. And the split you used on the value path determines what's the call and what's the message.
+
+Wait, let's rewind a bit. The easy version was:
+- Just a call to @ if. This is an execution of a conditional. (Interesting that a conditional has no definition).
+- Or a call to @ do. This is just a definition, not an execution.
+- Or a reference, take the whole thing. All good!
+
+But if you have indirection, this won't work. You want to define calls that you will use elsewhere. That's where all of this machinery comes in. Not just indirection, but actually calling your definitions.
+
+Let's go to the hairy part:
+- No immediate if or do.
+- No immediate reference.
+- Then, walk the splits on the value path to find something. If that something, jumping over equals, leads you to an @ do or an @ if, you have a call.
+- If you find nothing, try a native call. Native calls we don't walk because we just use the first step of the value path to identify the native call.
+
+NB: confusingly enough, I also use the term "walking" in the definition of cell.get, when the function walks up the context path to find a value at its query path. The mechanisms are related, but the one of cell.get works with smaller context paths, whereas the walking in cell.respond works with growing segments of the value path.
+
+Wait, why @ if? It doesn't make much sense to send a message to @ if, right? @ if has its cond, do, else. What'd be the purpose of having some part of the dataspace referencing @ if and then you passing cond/do/else? That makes no sense. Just write @ if directly. @ do is the only one that makes sense to refer to indirectly, because it's actual logic, including @ ifs inside of it. The only thing that makes sense to store elsewhere are sequences! Well, references too. The conditional, you just write. So, no need to handle indirects @ if.
+
+Well, I almost seem to know what should happen. But what about overwriting do? You could have a definition of `do` outside everything, at the outermost. We should hit that before we hit the native one.
+
+I think that rather than implementing this cell.call, we should go even deeper and really see what @ do is doing, both in definition and execution. Because that's the crux. If we figure out an elegant way to expand the paths (respond to calls), it's all there. We are not far.
+
+## 2025-10-27
+
+No separate endpoint for if and do, do it as a call that goes through cell.native! This allows also to overwrite if and do, if you want. It removes a lot of code I have in cell.do. Definitely the one for gathering the definition; and perhaps even the one for updating the sequence! That code would not exist. But wait: that assumes we don't stop. If we do stop, then yes, we cannot continue. So that code would have to "open" a step to make sure it runs after the previous one stabilizes. I need to think about this one.
+
+Allow hashes and lists to native operators. the one you cannot do is two references, just one, and the reference has to be on your right. maybe it has to jump over =.
+
+It is useful for me to memorize parts of the code that are crucial, so I have the flow in my head. Mental play.
+
+It's so natural that the expansion of a sequence is not separate, but as part of the sequence!
+
+Wipe can delete even the dialog. If you want to do everything but the dialog, we need to send an "except" value.
+
+Write examples (with diagrams?) of how expansions work in cell.respond, makes it so much easier to understand. I could use the LLM for this.
+
+Upcoming sequence of work:
+- Rework entrypoint of native calls (if/do/put).
+- Make all existing tests work.
+- Test that the new cell.call works fine.
+- Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
+- Rewrite all the existing tests.
+- Literal dashes.
+- Upload.
+- Continue working on the demo flow.
+
+Unrelated: perhaps because cell is not built with a context-free grammar (Backus/Naur), that's an implementation/material reason that makes the syntax look so different. Not that it would be impossible to do it with a traditional grammar, but perhaps not using one and just implementing the parsing in a high level language makes certain things more direct and others quite less so.
+(I just learned that Python has a hand-written parser, which allows it to handle indentation).
+
+OK, what should be the mechanism of cell.respond? Because put and get will just work in the dataspace, fully self-similar. So there's a walking up: try first reference, then do, then if. For each of these you walk up (cell.get does the walk up).
+
+```
+cell.call -> cell.put -> cell.respond -> cell.get
+                                      -> cell.native -> cell.do
+                                                     -> cell.if
+                                                     -> other native calls
+```
+
+- Resolve references right to left.
+- If you find a value (paths > 0) stop.
+- If not, go to native.
+- Native: detect an if, dispatch to it. detect a do definition; detect a do execution. Detect another native call. If nothing yields something, give up.
+- If native gave nothing, there's nothing.
+
+A reference is a call. What I mean is a reference to a sequence, which is a special type of call.
+
+Three types of call: reference, sequence and conditional. A reference can point to a sequence or a conditional.
 
 ## 2025-10-23
 
@@ -2943,7 +3098,7 @@ Three very important variables, all of them paths:
 
 - The **context path** is everything to the left of `leftmostAt`. That is, everything that's not a reference, is our context.
 - The **target path** is everything to the left of `rightmostAt`, plus an `=`. This is the common prefix of all the paths we are going to create or update. Think of it as the left part of our assignment. If the path we are looking at is `foo @ ...`, then we know that all the paths we will set are going to be of the shape `foo = ...`.
-- The **value path** is everything to the right of `rightmostAt`. This is the right part of our assignment, where we're getting the value from. Note we actually remove any `=` from it; this allows us to "go get" the values of calls that have been responded already.
+- The **value path** is everything to the right of `rightmostAt`. This is the right part of our assignment, where we're getting the value from. Note we actually remove any `=` from it; this allows us to "go get" the values of calls that have been responded already. Another way to call this "go get" is as "jumping over equals".
 
 
 ```js
@@ -2971,7 +3126,7 @@ We then get all the paths and see what's the position of this path in all of the
    });
 ```
 
-We only need to check if the previous path also matches this prefix. If there's no previous path, or if the previous path has a length than prefix, or if its prefix doesn't match the prefix we have here, then this is the first path for this call.
+We only need to check if the previous path also matches this prefix. If there's no previous path, or if the previous path has a length smaller than that of the prefix, or if its prefix doesn't match the prefix we have here, then this is the first path for this call.
 
 ```js
    var firstPath = index === 0 || paths [index - 1].length < prefix.length || ! teishi.eq (paths [index - 1].slice (0, prefix.length), prefix);
@@ -3040,8 +3195,6 @@ If we did get something, that means that we found a prefix of `valuePath` where 
             if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
          });
 ```
-
-
 
 If there is indeed a call to a sequence in our `valuePath`, we invoke `cell.do`, passing the `definitionPath`, the `contextPath`, and the message (whatever is to the right of `definitionPath` inside `valuePath`.
 

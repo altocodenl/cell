@@ -1,25 +1,24 @@
 1 "TEXT TO PATHS" 1 ct ""
                     r ""
-                    tag "validator 1"
+                    tag "Empty text"
 
                   2 ct " "
                     r error "The first line of the message cannot be indented"
-                    tag "validator 1"
+                    tag "Indent out of place"
 
                   3 ct "
                          "
                     r error "The first line of the message cannot be indented"
-                    tag "validator 1"
+                    tag "Indent out of place on the second line"
 
                   4 ct "holding/"out"
                     r error "The line `holding/"out` has an unescaped quote."
-                    tag "validator 1"
-
-                  5 cl 1 "/"multiline"
-                       2 " trickery/" some 2 /"calm"
-                       3 "                   animal/""
-                    r ok
-                    tag "validator 5"
+                    tag "Unescaped literal quote"
+                    ignore 5 cl 1 "/"multiline"
+                                2 " trickery/" some 2 /"calm"
+                                3 "                   animal/""
+                             r ok
+                             tag "validator 5"
 
 2 "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2
@@ -51,6 +50,13 @@
 3 "GET & PUT" 1 c @
                 r ""
                 tag "Get everything when the dataspace is empty"
+                comments leftmostAt 0
+                         rightmostAt 0
+                         contextPath <empty>
+                         targetPath <empty>
+                         valuePath <empty>
+                         prefix ??
+
 
               2 c @ x
                 r ""
@@ -240,10 +246,3 @@
                      @ . price
 
                    tag "Get all dot references"
-
-                 3 ct "/"
-                       foo jip
-                       bar 1
-                       /""
-                   r error "The path `foo jip` is setting a text but there is already a hash at path `foo`"
-                   tag "validator 1"

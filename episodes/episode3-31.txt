@@ -1,0 +1,3 @@
+Thirty-first episode of season 3! I'm building a programming environment from scratch while recording myself. Taking the bull by the horns: rewriting cell.respond to have a truly self-similar way for all calls that come in. This will bear great fruit.
+
+https://github.com/altocodenl/cell
