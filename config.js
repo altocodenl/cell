@@ -1,3 +1,4 @@
 module.exports = {
-   port: 2315
+   port: 2315,
+   redisDB: 9,
 };

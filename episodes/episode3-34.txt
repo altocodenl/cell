@@ -1,0 +1,3 @@
+Thirty-fourth episode of season 3! I'm building a programming environment from scratch while recording myself. Today, not even a slog. Just rough. But we keep on going.
+
+https://github.com/altocodenl/cell

@@ -1,0 +1,3 @@
+Thirty-fifth episode of season 3! I'm building a programming environment from scratch while recording myself. Recovering some momentum and morale. Rewriting tests, finding interesting corner cases, making progress.
+
+https://github.com/altocodenl/cell

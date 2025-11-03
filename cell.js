@@ -11,6 +11,7 @@ var teishi = isNode ? require ('teishi') : window.teishi;
 var clog = console.log, type = teishi.type;
 
 var pretty = function (label, ftx) {
+   if (type (ftx) === 'array') ftx = cell.pathsToText (ftx);
    teishi.clog (label, '\n' + ftx);
 }
 
@@ -418,15 +419,27 @@ cell.call = function (message, from, to, hide, get, put) {
 
    if (paths.length === 0) return respond ([]);
 
-   /* TODO: new logic
+   /*
    cell.put ([
-      ['p', 'tmp', callId],
-      ['v', paths]
-   ], [], get, put, true);
+      ['p', 'tmp'],
+      ...dale.go (paths, function (path) {
+         return ['v'].concat (path);
+      }),
+   ], [], get, put);
 
-   var response = cell.get (['tmp', callId], [], get);
+   pretty ('debug everything after put', cell.get ([], [], get));
+
+   // Filter out paths starting with @ since that's what came on the original call
+   var response = dale.fil (cell.get (['tmp'], [], get), undefined, function (path) {
+      if (path [0] !== '@') return path;
+   });
+
+   pretty ('debug response', response);
+
+   return respond (response);
    */
 
+   ///*
    if (paths [0] [0] !== '@') return respond ([['error', 'A single call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
 
    var extraKey = dale.stopNot (paths, undefined, function (path) {
@@ -455,6 +468,7 @@ cell.call = function (message, from, to, hide, get, put) {
 
       return respond (cell.get (paths [0].slice (1), [], get));
    }
+   //*/
 }
 
 cell.respond = function (path, get, put) {
@@ -483,13 +497,16 @@ cell.respond = function (path, get, put) {
    var previousValue = cell.get (targetPath, contextPath, get);
 
    if (valuePath [0] === 'if') {
-      var currentValue = cell.if (targetPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+      var currentValue = cell.if (prefix, contextPath, get);
    }
    else if (valuePath [0] === 'do') {
-      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), contextPath, null, get);
+      var currentValue = cell.do ('define', prefix, contextPath, null, get);
    }
    else {
       var currentValue = cell.get (valuePath, contextPath, get);
+
+      if (currentValue [0] && currentValue [0] [0] === '@') return;
+
       if (currentValue.length === 0) {
          var call = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
             var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
@@ -532,8 +549,9 @@ cell.respond = function (path, get, put) {
    return true;
 }
 
-cell.native = function (call, message) {
+cell.native = function (call, message, contextPath, get) {
    var nativeCalls = [
+      'if', 'do', // Conditional & sequence
       '+', '-', '*', '/', '%', // Math
       'eq', '>', '<', '>=', '<=', // Comparison
       'and', 'or', 'not', // Logical
@@ -541,6 +559,13 @@ cell.native = function (call, message) {
    ];
 
    if (nativeCalls.indexOf (call) === -1) return false;
+
+   /*
+   if (call === 'do') return cell.do ('define', messagePath, contextPath, null, get);
+   if (call === 'if') return cell.if (messagePath, contextPath, get);
+
+   message = cell.pathsToJS (stripper (cell.get (messagePath, contextPath, get)))
+   */
 
    // Ignore definitions, jump to values
    var stripper = function (paths) {
@@ -683,6 +708,8 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
       if (path [0] !== 'seq') return path;
    });
 
+   //var message = cell.get (messagePath, contextPath, get);
+
    if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
@@ -791,10 +818,11 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
       if (contextPathMatch !== undefined) leftSide = contextPathMatch.concat (leftSide);
    }
 
-   dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
+   if (leftSide.length) dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (leftSide.length && teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
       return path;
-   }).concat (dale.go (rightSide, function (path) {
+   });
+   dataspace = dataspace.concat (dale.go (rightSide, function (path) {
       return leftSide.concat (path);
    }));
 
@@ -1133,8 +1161,9 @@ var test = function () {
       {f: cell.put, input: [['p', '.', 'foo'], ['v', 30]], context: ['inner'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 30], ['something', 'else', 'foo', 20]]},
 
-      // *** RESPOND ***
+      // *** RESPOND (CALLS TO CELL.RESPOND START HERE) ***
 
+      /*
       {reset: [
          ['foo', 10],
       ]},
@@ -1174,6 +1203,7 @@ var test = function () {
       {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['joo', '=', ''], ['joo', '@', 'jip' ]]},
       {f: cell.call, input: ['@ put p jip', '@ put v @ foo'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['jip', '=', 'bar'], ['jip', '@', 'foo'], ['joo', '=', '=', 'bar'], ['joo', '=', '@', 'foo'], ['joo', '@', 'jip' ]]},
+      */
 
       {reset: [
          ['location', 'trompe', 1],
@@ -1471,12 +1501,21 @@ var test = function () {
          dataspace = v;
       }
 
-      //var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      if (newTests.error) return clog (newTests.error);
       var newTests = [];
       dale.stop (newTests, false, function (suite) {
+         if (type (suite) === 'string') return;
          clog ('\n' + dale.keys (suite) [0]);
          return dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
-            clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
+            if (test.tag) clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
+
+            // test.c has a properly formatted call
+            // text ct has text that might or might not be proper fourtext.
+            // text.cl is a number of text lines that together might or might not be proper fourtext
+
+            if (test.cl) test.ct = test.cl.join (' ');
+
             if (test.c !== undefined) var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
             else var result = cell.call (test.ct, 'user', 'cell', false, get, put);
 

@@ -1,0 +1,3 @@
+Thirty-third episode of season 3! I'm building a programming environment from scratch while recording myself. Somewhat less of a slog than the previous one. Finally saw why the prefix logic inside cell.respond was silly. Next episode things might even work again!
+
+https://github.com/altocodenl/cell

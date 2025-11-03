@@ -7,6 +7,7 @@
       "hitit":   "1.2.8",
       "lith":    "6.0.7",
       "teishi":  "5.1.0",
+      "redis":   "3.1.2",
       "csv-parse": "5.6.0"
    },
    "main": "server.js",

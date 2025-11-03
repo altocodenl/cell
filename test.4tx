@@ -1,4 +1,4 @@
-1 "TEXT TO PATHS" 1 ct ""
+- "TEXT TO PATHS" 1 ct ""
                     r ""
                     tag "Empty text"
 
@@ -20,7 +20,7 @@
                              r ok
                              tag "validator 5"
 
-2 "PUT VALIDATION" 1 c @ put foo bar 1
+- "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with direct values"
@@ -47,7 +47,7 @@
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with extra key x (duplicate)"
 
-3 "GET & PUT" 1 c @
+- "GET & PUT" 1 c @
                 r ""
                 tag "Get everything when the dataspace is empty"
                 comments leftmostAt 0
@@ -56,7 +56,6 @@
                          targetPath <empty>
                          valuePath <empty>
                          prefix ??
-
 
               2 c @ x
                 r ""
@@ -131,7 +130,7 @@
                            open 1
                  tag "Restore party"
 
-4 WIPE 1 c @ wipe serious
+- WIPE 1 c @ wipe serious
          r ok
          tag "Wipe serious"
 
@@ -183,7 +182,7 @@
        12 c @ wipe
           tag "Wipe everything"
 
-5 "GET WITH CONTEXT" 1 c @ put v employee price 15
+- "GET WITH CONTEXT" 1 c @ put v employee price 15
                                  friend price 20
                                  price 30
                        tag "Initialize the three prices"
@@ -226,9 +225,8 @@
                        tag "Get outside price"
 
                      10 c @ wipe
-                        tag "Wipe everything"
 
-6 "GET WITH DOT" 1 c @ put v employee @ . price
+- "GET WITH DOT" 1 c @ put v employee @ . price
                                       price 15
                              @ . price
                              price 30
@@ -246,3 +244,112 @@
                      @ . price
 
                    tag "Get all dot references"
+
+- PUT
+
+- "PUT WITH CONTEXT PATH"
+
+- "PUT WITH DOT"
+
+- RESPOND - c @ wipe
+
+          - c @ put v foo 10
+                      reffoo @ foo
+            r ok
+            tag "Set a reference to foo"
+
+          - c @
+            r foo 10
+              reffoo = 10
+                     @ foo
+            tag "Get the reference to foo"
+
+          - c @ put p foo
+                    v 20
+            tag "Update foo"
+
+          - c @
+            r foo 20
+              reffoo = 20
+                     @ foo
+            tag "Check that the reference to foo has an updated value"
+
+          - c @ put p reffoo =
+                    v 30
+            tag "Overwrite the = key of the reference"
+
+          - c @
+            r foo 20
+              reffoo = 20
+                     @ foo
+            tag "Check that overwriting the result made no difference"
+
+          - c @ put p a
+                    v @ nonesuch
+
+          - c @ a
+            r = ""
+              @ nonesuch
+            tag "Check that a reference to nothing yields an empty text but the reference is still there"
+
+          - c @ wipe
+
+          - c @ put v counter 1
+                      indirect @ users @ counter
+                      users 1 jip
+
+          - c @
+            r counter 1
+              indirect = jip
+                       @ users = 1
+                               @ counter
+              users 1 jip
+            tag "Use a reference to reference a certain element of a list (two references side by side)"
+
+          - c @ wipe
+          - c @ put v aqualung great
+                      indirect @ score @ aqualung
+                      score great 100
+
+          - c @
+            r aqualung great
+              indirect = 100
+                       @ score = great
+                               @ aqualung
+              score great 100
+            tag "Use a reference to reference a certain element of a hash (two references side by side)"
+
+          - c @ wipe
+          - c @ put v closet sock
+                      house @ room
+                      room @ closet
+
+          - c @
+            r closet sock
+              house = = sock
+                      @ closet
+                    @ room
+              room = sock
+                   @ closet
+            tag "Make a reference to a reference in order ba//dc//cb"
+
+          - c @ wipe
+          - c @ put v foo bar
+                      joo @ jip
+
+          - c @
+            r foo bar
+              joo = ""
+                  @ jip
+            tag "Make a reference to a reference in order ba//cb//dc, step one"
+
+          - c @ put v jip @ foo
+
+          - c @
+            r foo bar
+              jip = bar
+                  @ foo
+              joo = = bar
+                    @ foo
+                  @ jip
+            tag "Make a reference to a reference in order ba//cb//dc, step two"

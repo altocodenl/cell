@@ -203,6 +203,7 @@ TODO
 
 ### Language
 
+- Fix bug where quoting texts that do not need to be quoted generates weird results.
 - Rework entrypoint of native calls (if/do/put).
 - Refactor cell.call
    - Have an unified interface through cell.call.
@@ -292,6 +293,7 @@ Vague but compelling: every change generates a new id. This can recompute the en
 - domain
 - Encrypted (password/passkey protected) export/import
 - PWAs out of the box.
+- Dashboard with 10^... values (exponent with two decimal points) for requests per second, weekly active users and and GBs in memory.
 
 ## Concepts
 
@@ -448,7 +450,268 @@ views
 
 ## Development notes
 
-## 2025-10-28
+### 2025-11-03
+
+When we make http requests, we can have a section of the dataspace dedicated to calls that are in flight. So, your variable references that part of the dataspace that is in flight. When the request ends, the result is put there and then it propagates to your variable.
+
+Implementation note: the jumping over equals requires a value path, you cannot just pass a straight path to cell.do or cell.if. I'm not so sure about this though.
+
+This sends cell onto a crash:
+
+```
+          - c @ put v closet sock
+                      house @ room
+                      room @ closet
+```
+
+But this doesn't, despite looking the same to me:
+
+```
+          - c @ put v foo bar
+                      joo @ jip
+                      jip @ foo
+```
+
+Why?
+
+bar is sock
+foo is closet
+jip is room
+joo is house
+
+The first one is
+
+```
+b a
+d c
+c b
+```
+
+But the second one is sorted automatically to this
+
+foo bar
+jip @ foo
+joo @ jip
+
+So it really is
+
+```
+b a
+c b
+d c
+```
+
+The order matters.
+
+This is how it get stuck. These are the put calls that come from cell.respond.
+
+```
+(2025-11-03T20:18:23.629Z) debug:
+p house =
+v @ closet
+(2025-11-03T20:18:23.629Z) debug:
+p house = =
+v sock
+(2025-11-03T20:18:23.630Z) debug:
+p house =
+v @ closet
+(2025-11-03T20:18:23.630Z) debug:
+p house = =
+v sock
+(2025-11-03T20:18:23.630Z) debug:
+p house =
+v @ closet
+(2025-11-03T20:18:23.630Z) debug:
+p house = =
+v sock
+(2025-11-03T20:18:23.630Z) debug:
+p house =
+v @ closet
+(2025-11-03T20:18:23.630Z) debug:
+p house = =
+v sock
+```
+
+We start by setting house to @ closet. Why? Ah, because house = takes you to @ closet.
+
+Then we set house = = to sock, because that's what closet references.
+
+Then we set again house = to @ closet. So we are undoing what we just did.
+
+How is this not the case in the other example? In any case, better to fix it here. Perhaps it is a matter of order of execution because of how things are spelled. Let's count by position.
+
+bar (1) is sock (4)
+foo (2) is closet (1)
+jip (3) is room (3)
+joo (4) is house (2)
+
+More detail:
+
+```
+(2025-11-03T20:24:33.733Z) i have:
+closet sock
+house = @ closet
+      @ room
+room @ closet
+(2025-11-03T20:24:33.734Z) to put:
+p house = =
+v sock
+
+(2025-11-03T20:24:33.734Z) i have:
+closet sock
+house = = sock
+        @ closet
+      @ room
+room @ closet
+(2025-11-03T20:24:33.734Z) to put:
+p house =
+v @ closet
+
+```
+
+Interesting that we cannot even respond to room @ closet! We haven't even made it there and we are stuck. If this had a value, would it be different?
+
+This does work
+
+```
+(2025-11-03T20:28:53.592Z) i have:
+foo bar
+jip @ foo
+joo @ jip
+(2025-11-03T20:28:53.592Z) to put:
+p jip =
+v bar
+(2025-11-03T20:28:53.592Z) i have:
+foo bar
+jip = bar
+    @ foo
+joo @ jip
+(2025-11-03T20:28:53.592Z) to put:
+p joo =
+v = bar
+  @ foo
+(2025-11-03T20:28:53.592Z) after:
+foo bar
+jip = bar
+    @ foo
+joo = = bar
+      @ foo
+    @ jip
+(2025-11-03T20:28:53.592Z) after:
+foo bar
+jip = bar
+    @ foo
+joo = = bar
+      @ foo
+    @ jip
+```
+
+Note the double equals are on the bottom one, it is the one that is executed later.
+
+OK, respond manually.
+
+step 1 (already sorted):
+closet sock
+house @ room
+room @ closet
+
+step 2: expand second path
+closet sock
+house = @ closet
+      @ room
+room @ closet
+
+step 3: expand new second path
+closet sock
+house = = sock
+        @ closet
+      @ room
+room @ closet
+
+We actually get here. We should now move to expanding the fifth and last path. So what's going on? Here's the crucial bit. We SHOULD do this now:
+
+- Consider that house = @ closet has the correct value: = sock.
+
+However, we instead determine that the correct value for house = should be (and here's the error): @ closet. Why we consider that it should be @ closet and not = sock?
+
+Because room still didn't have its value expanded because we didn't get there yet. We assume that the value should be there already. How do we know that we are in the right and that value is still not expanded?
+
+The telltale is that @ closet has nothing on top of it! It has no =. It should always have an =. So, we can make it so that if there's no equal on top of a call, we do not consider that value.
+
+OK, it seems to work quite well. Let's cleanup. This is the draft that I'm throwing away:
+
+```
+   var currentValue  = cell.get (valuePath, contextPath, get);
+   if (currentValue.length === 0) {
+
+      var call = dale.stopNot (dale.times (valuePath.length - 1, valuePath.length - 2), undefined, function (k) {
+         var value = cell.get (valuePath.slice (0, k).concat (['@', 'do']), contextPath, get);
+         if (value.length) return {definitionPath: valuePath.slice (0, k).concat (['@', 'do']), message: valuePath.slice (-k)};
+      });
+
+      if (call) {
+         currentValue = cell.do ('execute', call.definitionPath, contextPath, path.slice (0, - call.length), get, put);
+      }
+      else {
+         var nativeResponse = cell.native (valuePath [0], path.slice (0, path.length - 3), contextPath, get);
+         if (nativeResponse !== false) currentValue = nativeResponse;
+      }
+   }
+```
+
+### 2025-10-31
+
+Why is cell.do special and cannot go with the normal flow of execution?
+- Putting the message in :.
+- Making that calls to put are done on :. But wait: we could do this from our own code, and point to : instead of .? This is an open question.
+- Stopping responses (either early returns or errors).
+- Once we get the response of the entire sequence, we put it at the top.
+
+The updating of the sequence, rather than wholesale replacing, is to avoid infinite recurse. And even if it wasn't for infinite recurse, some calls could be expensive or rate-limited (http, email), so it makes sense to check before doing them again.
+
+A sequence is made of steps, just like a path. And because it is a list, its steps are literally the steps of a path. But the sequence goes "down", whereas paths go "right".
+
+Cell is an integrated dataspace for knowledge working.
+
+### 2025-10-30
+
+Do I need to "jump over equals" for the message to a call? I don't think so.
+
+Why am I jumping over equals at all?
+
+```
+foo 10
+reffoo = 10
+       @ foo
+```
+
+### 2025-10-29
+
+- First, use the entire value path to get a value. If you got one, great. If not, go to the next step and walk the split.
+- Walk the split: split the entire value path into two, starting with most of the first step on its left, minus the last step. Append @ do to it and see if that points somewhere. If it does, you found a call. This is an execution.
+- When you find a call, take all the paths that make it up and remove the left part of the value path from all of them so that you have a clean message.
+- Until you find something, keep on walking the value up until n - 1, because it makes no sense to get an empty path - it'd bring everything.
+(Honestly, we could also walk right to left and it'd be OK too). Yeah, let's do this.
+- If you didn't get anything, make a call to cell.native.
+- Inside cell.native
+   - If you got a value, and it starts with do, this is a definition. Complete the definition by calling cell.call.
+   - If you got a value, and it starts with if, this is a conditional. Complete the conditional by calling cell.if.
+
+I'm trying to understand this pesky `prefix`. It is a modified `targetPath`, that has no = at the end, and suffixed with `@ <first step after the rightmost @>`.
+
+I just (re)got something: because valuePath has no =s in it, we are always skipping to the results. That's why it also works for indirect definitions.
+
+```
+   var currentValue = cell.get (valuePath, contextPath, get);
+```
+
+By starting with the above, we let you redefine if or do at any level. That's all the forth you've got here.
+
+(Side note: if function application wasn't written right to left, we'd do it the forth way: argument, function, function; instead, we do f (g (x)))
+
+Silly! Just pass a path to the message when you're calling cell.call, or cell.if. BUT WAIT! This implies that it is all there in the dataspace. It wasn't like this before! But it can be like this now. Or is it? cell.do could not be called from the "outside", it was only through putting stuff. So this was always silly.
+
+### 2025-10-28
 
 No self reference! @, or any prefix of where you are, because otherwise it expands fractally and forever! Error: "No self-reference! cell is not an aleph".
 I only realize it now. Very interesting.
@@ -555,7 +818,7 @@ Well, I almost seem to know what should happen. But what about overwriting do? Y
 
 I think that rather than implementing this cell.call, we should go even deeper and really see what @ do is doing, both in definition and execution. Because that's the crux. If we figure out an elegant way to expand the paths (respond to calls), it's all there. We are not far.
 
-## 2025-10-27
+### 2025-10-27
 
 No separate endpoint for if and do, do it as a call that goes through cell.native! This allows also to overwrite if and do, if you want. It removes a lot of code I have in cell.do. Definitely the one for gathering the definition; and perhaps even the one for updating the sequence! That code would not exist. But wait: that assumes we don't stop. If we do stop, then yes, we cannot continue. So that code would have to "open" a step to make sure it runs after the previous one stabilizes. I need to think about this one.
 
@@ -601,7 +864,7 @@ A reference is a call. What I mean is a reference to a sequence, which is a spec
 
 Three types of call: reference, sequence and conditional. A reference can point to a sequence or a conditional.
 
-## 2025-10-23
+### 2025-10-23
 
 As much as I want to have fun with engines, it feels like too much at this stage. I want to be able to run cell. And the current engine, although slow and based on text files, already works. Let's redo the tests, redo cell.call, allow for upload, implement loop, and then we can come back to having fun with engines.
 
@@ -619,11 +882,11 @@ Do we want things to be frozen on the put, or not? On @ do, they are frozen. But
 
 This hints at @ do being the only "freezing call". Ironic that the call to keep on going is the one that freezes references on the dataspace.
 
-## 2025-10-22
+### 2025-10-22
 
 Index everything! I thought I was the only nut to even propose this, but I got this from Claude: "Datomic is the big one. Rich Hickey's whole design philosophy was "storage is cheap, indexes are fast" - it maintains 4+ sort orders of the same datoms (EAVT, AEVT, AVET, VAET) to make different query patterns efficient. Very much "index everything.""
 
-## 2025-10-21
+### 2025-10-21
 
 I'm thinking on how cell should be modified so that we could just use the DB, rather than the file persistence. Because things would change.
 
@@ -669,7 +932,7 @@ note: no more "until it stabilizes". Things update synchronously and one at a ti
 
 I think it would be sound to do the rewrite in JS first, and always keep a pure JS implementation against fourtext. We can then perfect the tests (now, or later) and write the Lua/Redis implementation and (gasp) the postgres one too, as a port of the JS implementation. But the JS implementation needs to think about efficiency now, including dependencies, so that the port can be 1:1. And we can work with the existing tests to make sure things still work.
 
-## 2025-10-20
+### 2025-10-20
 
 More fun with engines. At some point I'll get back to those tests.
 
@@ -717,7 +980,7 @@ Idea: editor accesses data piecemeal; think of a lot of data. To control folding
 
 The editor shows only a little bit! Scans go all the way to redis/postgres.
 
-## 2025-10-18
+### 2025-10-18
 
 Thinking again about having "fun with engines" and working on the redis engine for cell. To store and query data really really quickly.
 
@@ -766,7 +1029,7 @@ Operations:
    - Straight addition
    - Addition and delete
 
-## 2025-10-17
+### 2025-10-17
 
 The three problems I see in type systems:
 - Types use a different syntax than the rest of the language. Separateness.
@@ -777,11 +1040,11 @@ Unexpectedly, I just realized that these are the same problems I experience with
 
 Unrelated: the dialog is the third part that makes dataspace changes possible. Think of it like action vs reaction: if you're trying to pull a weight in a vacuum, you can't because you have nothing to pull against. But if you have a floor, you push on the floor and the pushback from the floor allows you to pull on the weight. The dialog is the floor: you interact with it and through those interactions, the dataspace (outside of the dialog) changes.
 
-## 2025-10-16
+### 2025-10-16
 
 The tests can be the negative of an executable specification.
 
-## 2025-10-15
+### 2025-10-15
 
 https://ruudvanasseldonk.com/2023/01/11/the-yaml-document-from-hell
 "I think the main reason that yaml is so prevalent despite its pitfalls, is that for a long time it was the only viable configuration format. Often we need lists and nested data, which rules out flat formats like ini. Xml is noisy and annoying to write by hand. But most of all, we need comments, which rules out json."
@@ -789,7 +1052,7 @@ Why can't the comments be inside the data and just be ignored by what processes 
 
 "Many of the problems with yaml are caused by unquoted things that look like strings but behave differently. This is easy to avoid: always quote all strings. (Indeed, you can tell that somebody is an experienced yaml engineer when they defensively quote all the strings.)"
 
-## 2025-10-14
+### 2025-10-14
 
 Expansions for @ do should go in each of the steps!! Rather than outside. We only need to put variables in :, including the message. But not seq. seq can go right there!
 
@@ -873,7 +1136,7 @@ The only semantic whitespace of fourtext is space.
 
 Idea for tomorrow: how to use literal dashes: when the dash is in a hash, it's a literal, otherwise it's a placeholder for a number. Although I wonder if we need to make many lists of one, honestly.
 
-## 2025-10-13
+### 2025-10-13
 
 cell.call must return the whole thing: call, expansion and response. Later this can be modified if we're sending large amounts of data, perhaps through a variant of cell.call that omits things. This change also should be reflected in the tests.
 
@@ -928,7 +1191,7 @@ Then we go back to the original idea: if you send just one call, you get back = 
 
 We can just send literal calls to validate the parsing calls, everything coming before the parsed calls. Also, start with a newline because those are ignored and then the whole example can be aligned to the left.
 
-## 2025-10-12
+### 2025-10-12
 
 Perhaps the driver for adoption for a language is more libraries than the language itself. Then that begets the question: what makes library makers pick up a language and build libraries in it? I am particularly struck by the amount of useful libraries in Python.
 
@@ -944,7 +1207,7 @@ Even if you are able (as we will be soon) to send a program over the wire so tha
 
 If we ever allow context as part of the message, then write the temp key where we run the call right there in the context. No second channels.
 
-## 2025-10-09
+### 2025-10-09
 
 The pattern for multi put: if you get a hash, wrap it in an array. If it's an array, iterate it. If the inner things are not objects with the required shape, respond with an error.
 
@@ -1007,7 +1270,7 @@ This was the implementation, straight on the top of the function:
 
 Cell is not meta, it is self-similar (reaction to what claude said yesterday about tests being written in fourdata). This is the main property.
 
-## 2025-10-07
+### 2025-10-07
 
 A cell is a unit of consistency. You could have a monolith inside one cell, or one microservice per cell. If you wanted to split a monolith and keep it consistent, you could implement synchronization/blocking across cells.
 
@@ -1032,7 +1295,7 @@ No, decided against it. Because then, when reading 4tx into cell and then writin
 
 Rather than saying "context path", I should just refer to a "prefix". A path is the whole thing, from left to right. A prefix is the left part of a path, where the left is either the first element, the whole thing minus the rightmost one, or something in the middle.
 
-## 2025-10-06
+### 2025-10-06
 
 Multi put should be just pairs of things, where the odds are paths and the evens are values.
 
@@ -1060,7 +1323,7 @@ But just putting it won't do it. We have to wrap it into @ do, right? With no ar
 Cases:
 - @ do with just a single reference. It has a single =, you can just return that.
 
-## 2025-10-05
+### 2025-10-05
 
 there has to be a linear flow in the app, a way we do things. but how does it work in a spreadsheet? we bring data and then we work on it gradually. there are flows for searching for data, flows for creating new data. these flows/unfoldances are the core of what we do with the tool, and how we make it useful. I still don't understand them in cell.
 if you put the intermediate steps in the dataspace, if the process goes into error, you can resume them. it's like programming in disk rather than ram, nonvolatile state. echoes of garbage collection, simply that you have rules for when you get rid of things. only that it's the other way around, you have to be explicit about it, like going more low level. but the benefit is huge for such a small price. nonvolatile programming.
@@ -1133,7 +1396,7 @@ Why this works:
 
 As for no initialization of pushing, we need to initialize the state in a way that will be exactly at the toplevel of the loop. There's no going around this. We need to not overshoot, and we need to set it to some value. We could make it to create the list if it's set to "", because we need to set it to something and we do not have empty lists. Maybe "" really represents an empty "everything".
 
-## 2025-10-02
+### 2025-10-02
 
 How would the loop be? The idea of the last few days is that, rather than taking a list and generating a sequence for it, then executing it (the macro approach), we have a recursive piece of code that unfolds the loop as far as needed.
 
@@ -1172,7 +1435,7 @@ Things always get expanded so you need to use the special operators.
 
 Could the loop just push to its own expansion? but you can't control the expansion, you have just one step. Wouldn't this require multiple evaluation? Or put your own call again on the sequence with the next one! Just copy it? but that's not pretty.
 
-## 2025-10-01
+### 2025-10-01
 
 You start by writing to the dataspace. How can you compute if the data is not there? That's why writing is first. And the response is also something written in the dataspace. To me, this is only natural in retrospective, but surprising.
 
@@ -1182,7 +1445,7 @@ Recursion as idempotence: you call the same piece of code but with different arg
 
 Macros with ,@ and sharp quote: they are positional, essentially the these macro operators are parenthesis that control replacement. This is positional, because you're counting jumps over parenthesis. What would be a hash equivalent of this (based on text, rather than on implicit numbers?). A bit like a label, unfreeze here.
 
-## 2025-09-29
+### 2025-09-29
 
 A tangent: instead of calling it a *reference*, we could just call it a *link*.
 
@@ -1259,7 +1522,7 @@ TODO:
 - Have an unified interface through cell.call.
 - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
 
-## 2025-09-24
+### 2025-09-24
 
 What is in an expansion (the :) can also be a call! It could be a call, with its own expansion, and then a response (=) that is then the expansion of the outer call.
 
@@ -1273,7 +1536,7 @@ The clear place to see this is a loop.
 
 It might even possible to do it in a sequence too. The part of cell outside cell (in js) would be to jump to the generator of steps one at a time, and then let that one build the next one. Conditionals would have to be built in, but that's fine, because results of conditions are so obvious ("" and 0 are falsy, the rest is truthy) that there should be no doubt.
 
-## 2025-09-22
+### 2025-09-22
 
 Thinking of loops.
 
@@ -1640,7 +1903,7 @@ Continuation is one at a time, very turing like. Expand one at a time.
 Would this even work for the normal @ do? Just the keep on going?
 I imagine a stack of continuations (because you can't just have one), one returning something that the next one picks up. Then you see exactly why the loop that stops actually stopped, by looking at the conditional that made it stop.
 You can still respond with many steps on a sequence. My main concern is the sheer nestedness of the expansions. But this approach would truly show you the expansion all the way down, and the only things outside of it would be the basic logic of reference, keeping on going to the next step and conditionals.
-## 2025-09-18
+### 2025-09-18
 
 The toplevel in cell has a more literal meaning: it means that you are making calls at the outermost level of the cell, in terms of context path. That means that, from the toplevel, the context path is empty.
 
@@ -1675,7 +1938,7 @@ Fun stuff: this list can even refer itself, without you knowing where it is in /
 
 Unrelated: when overwriting an object in a loop, you see the expansion. but if the object is now changed, where would that be held? don't you lose it once it updates? Ah, no, it would only be "erased" if you set the output back to the input! this is an interesting way of removing your traces. if you program functionally in that you don't update things, then you will have the expansions. if you overwrite things, then on the circular loop, the expansion will be gone, assuming your modification is idempotent. and if it's not idempotent, it will either crash or runaway forever. So, overwriting means forgetting. If you keep references to the old things, then you will have the expansions that brought you there.
 
-## 2025-09-16
+### 2025-09-16
 
 Files can be stored at <cell name>-<file name without double dots (remove the first) or slashes/backslashes (outright remove them)>
 
@@ -1691,7 +1954,7 @@ There are echoes of B.log in the dialog: every event (call) goes in there. The s
 
 Access levels: read, append, write. Can be masked by prefix.
 
-## 2025-09-15
+### 2025-09-15
 
 Interesting that deleting the history is just deleting the dialog. But you keep the rest of the state. You just lose the history of how you got there.
 
@@ -1706,7 +1969,7 @@ Those are native mappings, so to speak.
 
 Do we generate an id for the file if we save it somewhere else? Or do we just keep in in the dialog? No, it has to go to filespace! We'll use the name of the actual file to reference it from dataspace. There can still be an underlying id.
 
-## 2025-09-14
+### 2025-09-14
 
 Automatic trace id per call? Or just see the expansions? The expansions should do it.
 
@@ -1765,7 +2028,7 @@ You can then send three things through the dialog:
 
 The language is like a service. For every call, there's a notion of time, a notion of who/identity.
 
-## 2025-09-11
+### 2025-09-11
 
 Let's make an assertion notation (executable) for expressing the structure.
 
@@ -1777,7 +2040,7 @@ Maybe this is even better than showing a diff. You see the expansion of each cal
 
 why file is a call? because it is stored as binary. you could infer it on the client.
 
-## 2025-09-03
+### 2025-09-03
 
 With cell functioning in a live system that performs chains of calls to outside systems, the finish of one call would trigger the next one (through recalculation, plus a conditional fence that doesn't activate until the previous is done).
 And what's a bit mindblowing to me is that you can have diffs on the internal state of the system. You have perfect visibility with no added tooling, simply because all state is first class already.
@@ -1788,7 +2051,7 @@ When refreshing the cell, just ask for the diffs between the version you have an
 
 puts don't have expansion. They just add stuff. If our calls are puts, the expansion should be the diff.
 
-## 2025-09-02
+### 2025-09-02
 
 The approach of cell inside a JS/gotoB view function is absolutely tenable. The view only has to return html, and we can do that by returning something that maps to lith (a way that gotoB uses to represent HTML).
 
@@ -1860,7 +2123,7 @@ Next:
 - The upload is like that too: select the file, and as soon as you come back, it's uploading and then done.
 - Then we can remove the upload from clipboard, since it's confusing to have two things. Also, we make it more about the textarea.
 
-## 2025-09-01
+### 2025-09-01
 
 When in the publishing tack, suggest making dashboard, or form, or table, just with the click of a button (UI inferred from DSL from the LLM, which comes from a hidden prompt).
 
@@ -1872,7 +2135,7 @@ Interesting angle: keep secrets in cell, but don't expose them in the frontend. 
 
 For search: list distinct paths abridging parts, that's a cool one. the llm fires deterministic shots to compact the data into patterns, just like us humans!
 
-## 2025-08-30
+### 2025-08-30
 
 Basically, this week has been tough because, although I am very happy about how the editor is coming along, and how useful it could be to me and perhaps a few others, I have to admit: it is absolutely killing me to feel that nobody around me, most of them well-meaning, encouraging, smart people, nobody gets really what I'm doing. The gap is just too large. And it's been like this for a long time, not just with cell, but with essentially every project fully of my own that I choose to do.
 
@@ -1991,7 +2254,7 @@ There has also to be a bundle of gotoB + tachyons + cell. We can load this up in
 - Forms: you can define rules on data.
 - Table widget (with sorting, pagination and filtering).
 
-## 2025-08-28
+### 2025-08-28
 
 How to create empty space? In a spreadsheet, the space is already there. That's usually not great, but it gets you started. Also, marginal note: in a spreadsheet, everything looks like an input. In cell, there's one place at a time that you are editing, the rest looks non-editable.
 
@@ -2009,7 +2272,7 @@ Lessons from visicalc:
 
 Fold/unfold should work at any level!
 
-## 2025-08-27
+### 2025-08-27
 
 Ideas for implementing jumping around with quite some data (>100kb):
    - When scrolling down or up to put the cursor back on screen, have two "doors": areas of the screen through which the cursor appears. These should be near the top and near the bottom for y scroll, but not at the bottom or top. So, if you scroll down, don't suddenly put the cursor at the bottom (just a little bit, like the spreadsheet) or at the top (like a paginated jump), but towards the bottom, like a little jump that shows you the context of the cursor. Same with going up, instead of putting it completely up or at the bottom of the previous "screen", put it close to the bottom but not fully. So, basically, like spreadsheet scroll but with a buffer. More "arcade".
@@ -2090,7 +2353,7 @@ There's the "jumping search" and the "compacting search" -- the latter only show
 
 By default, things should be expanded, the cursors will help you jump around, because going down at level 2 should take you to the next distinct value at level 2!
 
-### 2025-08-20
+#### 2025-08-20
 
 General UX use cases for cell, they are three:
 - Querying data:
@@ -3088,6 +3351,8 @@ We go through the entire path, finding the leftmost `@` step that has a `do` ste
 
 Why do we do this? In effect, what we are doing is considering the leftmost `@ do` as the *first* thing we want to expand. We want to avoid expanding a definition here -- that's going to be the job of `cell.do`, which we'll call in a few lines.
 
+An easier way to remember this is that if there is an `@ do` to the left of the rightmost `@`, we will instead consider that `@` before the `do` as the rightmost at. In effect, we're switching the rightmost at to the left. This only will affect the `targetPath` and the `valuePath` (see below).
+
 ```js
    dale.stopNot (path, undefined, function (v, k) {
       if (v === '@' && path [k + 1] === 'do') return rightmostAt = k;
@@ -3146,23 +3411,23 @@ We get the previous value (the value at `targetPath`). A subtle and important de
 
 We will now discover what the `currentValue` (that is, a list of paths that will have the prefix of `targetPath`), should be.
 
-We first deal with the case where there's an `if` at the beginning of `valuePath`. We do so by invoking `cell.if`. To this function, we pass the `targetPath`, minus the `=` at its end, plus a `@ if`. So, for example, if `targetPath` is `foo =`, we will pass `foo @ if`. We also pass `contextPath`.
+We first deal with the case where there's an `if` at the beginning of `valuePath`. We do so by invoking `cell.if`. To this function, we pass the `prefix` (that is, the `targetPath`, minus the `=` at its end, plus a `@ if`). We also pass `contextPath`.
 
 `cell.if` will return a list of paths that we store in `currentValue`.
 
 ```js
    if (valuePath [0] === 'if') {
-      var currentValue = cell.if (targetPath.slice (0, -1).concat (['@', 'if']), contextPath, get);
+      var currentValue = cell.if (prefix, contextPath, get);
    }
 ```
 
 If there's a `do` at the beginning of `valuePath`, this is a sequence definition. We then invoke `cell.do` and save the paths returned by it in `currentValue`.
 
-As for the arguments we pass to `cell.do`, we pass a `define` text to let it know this is a definition (not an execution). We also pass a modified `targetPath` (like we did to `cell.if`) except that it would be instead `foo @ do`. We also pass a `null` that is a placeholder for something we'll only need when `executing` a call.
+As for the arguments we pass to `cell.do`, we pass a `define` text to let it know this is a definition (not an execution). We also pass the `prefix` (like we did in the case of `cell.if`) except that it would be instead `foo @ do`. We also pass a `null` that is a placeholder for an argument we will only need when *executing* a call.
 
 ```js
    else if (valuePath [0] === 'do') {
-      var currentValue = cell.do ('define', targetPath.slice (0, -1).concat (['@', 'do']), contextPath, null, get);
+      var currentValue = cell.do ('define', prefix, contextPath, null, get);
    }
 ```
 
@@ -3171,6 +3436,12 @@ Otherwise, we just call `cell.get` directly.
 ```js
    else {
       var currentValue = cell.get (valuePath, contextPath, get);
+```
+
+If we find that the current value is a call that has not been responded to yet, we will ignore its current value. How would we know this? If it is a call (because it starts with `@`) and it doesn't have an `=` as the first step of the first path, we know it hasn't been responded to yet. This is necessary when we're trying to respond to a call to a call, and the inner call hasn't been responded to yet. We have a test for this with the tag "Make a reference to a reference in order ba//dc//cb".
+
+```js
+      if (currentValue [0] && currentValue [0] [0] === '@') return;
 ```
 
 Now for the interesting bit. If we get no paths from our call to `cell.get`, there could be a sequence call in the `valuePath`. So we are going to figure out if that's the case.
@@ -3811,16 +4082,19 @@ If we found a context path that gets matches, then we will prepend the `leftSide
 
 By now, `leftSide` has the absolute path where we want to set the value. To do this, we are going to re-create the dataspace by iterating through it. We first filter out any paths that start with `leftSide`.
 
+We make an exception if `leftSide` is empty. In that case, we leave the paths as they exist. If we generate any inconsistencies, we'll detect them later when validating.
+
 ```js
-   dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
+   if (leftSide.length) dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (leftSide.length && teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
       return path;
+   });
 ```
 
 We will then push all the paths in `rightSide` to dataspace. However, before doing this, we will prepend `leftSide` to each of these `rightSide` paths.
 
 ```js
-   }).concat (dale.go (rightSide, function (path) {
+   dataspace = dataspace.concat (dale.go (rightSide, function (path) {
       return leftSide.concat (path);
    }));
 ```
@@ -3839,7 +4113,6 @@ If we got an error, we will return that error. You might ask: what error could h
 ```
 
 If we're here, then we are ready to persist these changes. We call `put` with the new `dataspace`.
-
 
 ```js
    put (dataspace);
