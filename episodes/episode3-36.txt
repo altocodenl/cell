@@ -1,0 +1,5 @@
+Thirty-sixth episode of season 3! I'm building a programming environment from scratch while recording myself. What goes down has to go up at some point. A great work session. We tackle a long standing problem that scared me the last time I was working on it; the test suite advances and, with it, cell as a whole.
+
+https://github.com/altocodenl/cell
+
+A mystery for the next session: how did we just go 5-10x slower when running the test suite? Is it really those regexes?

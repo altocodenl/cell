@@ -1,24 +1,27 @@
-- "TEXT TO PATHS" 1 ct ""
+- "TEXT TO PATHS" - ct ""
                     r ""
                     tag "Empty text"
 
-                  2 ct " "
-                    r error "The first line of the message cannot be indented"
-                    tag "Indent out of place"
+                  - ct " "
+                    r ""
+                    tag "Line with a space"
 
-                  3 ct "
-                         "
-                    r error "The first line of the message cannot be indented"
-                    tag "Indent out of place on the second line"
+                  - ct " s"
+                    r error "The first line of the message cannot be indented: ` s`."
+                    tag "Indented first line"
 
-                  4 ct "holding/"out"
+                  - ct "a	b"
+                    r error "The line `a	b` contains a space that should be contained within quotes."
+                    tag "Unquoted tab"
+
+                  - ct "holding/"out"
                     r error "The line `holding/"out` has an unescaped quote."
                     tag "Unescaped literal quote"
-                    ignore 5 cl 1 "/"multiline"
-                                2 " trickery/" some 2 /"calm"
-                                3 "                   animal/""
-                             r ok
-                             tag "validator 5"
+
+                  - ct "/"multiline
+                         trickery/" some 2 /"calm
+                                             animal/""
+                    r ??
 
 - "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2
@@ -353,3 +356,75 @@
                     @ foo
                   @ jip
             tag "Make a reference to a reference in order ba//cb//dc, step two"
+
+          - c @ wipe
+          - c @ put v location trompe 1
+                      pixies trompe 1 "alec eiffel"
+                                    2 mons
+                      song @ pixies @ location
+
+          - c @ song
+            r = "alec eiffel"
+              @ pixies = trompe 1
+                       @ location
+            tag "Two references side by side, the right one resolving to a one-line hash"
+
+          - c @ wipe
+          - c @ put v list 1 place
+                           2 without
+                           3 a
+                           4 postcard
+                      ref @ list
+
+          - c @ ref
+            r = 1 place
+                2 without
+                3 a
+                4 postcard
+              @ list
+            tag "Reference a list"
+
+          - c @ put p list
+                    v REDACTED
+
+          - c @
+            r list REDACTED
+              ref = REDACTED
+                  @ list
+            tag "Overwrite referenced list by text"
+
+          - c @ wipe
+          - c @ put v main stores 2
+                           total @ widgets
+                      widgets 10
+
+          - c @
+            r main stores 2
+                   total = 10
+                         @ widgets
+              widgets 10
+            tag "Reference inside a hash"
+
+          - c @ wipe
+          - c @ put v ned 1 a A C
+                          2 b B D
+                      quinella 1 a
+                               2 b
+                      ref @ ned @ quinella
+
+          - c @ ref
+            r = A C
+              @ ned = 1 a
+                      2 b
+                    @ quinella
+            tag "Getting back two paths as part of a reference, using just the first one"
+            note "An alternative way to specify this would be to expect this:
+
+                  = A C
+                    B D
+                  @ ned = 1 a
+                          2 b
+                        @ quinella
+
+                  But, for now, we don't need this multireference. It even seems that it's better to just implement multireference as a loop. Time will tell. We go with the above for now.
+                  "

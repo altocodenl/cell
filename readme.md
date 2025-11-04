@@ -450,6 +450,33 @@ views
 
 ## Development notes
 
+### 2025-11-04
+
+          - c @ put v ned 1 a A C
+                          2 b B D
+                      quinella 1 a
+                               2 b
+                      ref @ ned @ quinella
+
+          - c @ ref
+            r = A C
+              @ ned = 1 a
+                      2 b
+                    @ quinella
+
+An alternative way to specify this would be to expect this:
+
+              @ ref
+              = A C
+                B D
+              @ ned = 1 a
+                      2 b
+                    @ quinella
+
+But, for now, we don't need this multireference. It even seems that it's better to just implement multireference as a loop. Time will tell. We go with the above for now.
+
+A mystery for the next session: how did we just go 5-10x slower when running the test suite? Is it really those regexes?
+
 ### 2025-11-03
 
 When we make http requests, we can have a section of the dataspace dedicated to calls that are in flight. So, your variable references that part of the dataspace that is in flight. When the request ends, the result is put there and then it propagates to your variable.
@@ -2517,10 +2544,10 @@ We set variables for storing a new path (that will go into `paths`), we copy the
       var path = [], originalLine = line, lastPath = teishi.last (paths);
 ```
 
-If we encounter an empty line, and we are not inside multiline text, we just ignore this line. This is useful in case we get a message that has empty lines in it, usually at the beginning or end.
+If we encounter an empty line, or a line that only contains whitespace, and we are **not inside multiline text**, we just ignore this line. This is useful in case we get a message that has empty lines in it, usually at the beginning or end. The allowance for spaces in the line is to be forgiving of trailing spaces.
 
 ```js
-      if (line.length === 0 && ! insideMultilineText) return;
+      if ((line.length === 0 || line.match (/^\s+$/)) && ! insideMultilineText) return;
 ```
 
 This is a good moment to remark that most of the complexity of this function is about dealing with multiline text.
@@ -2807,10 +2834,10 @@ What makes multiline text particularly interesting is that it *spans* lines. The
       if (insideMultilineText) {
 ```
 
-If we are inside multiline text, we'll validate that the line starts with at least n spaces (where n is `insideMultilineText`). The only exception is the when the line is empty, to avoid people the trouble of indenting empty lines inside multiline text.
+If we are inside multiline text, we'll validate that the line starts with at least n spaces (where n is `insideMultilineText`). The only exception is the when the line is empty (or when the line has just whipespace), to avoid people the trouble of indenting empty lines inside multiline text.
 
 ```js
-         if (line.length > 0 && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
+         if ((line.length > 0 && line.match (/[^\s]/)) && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
 ```
 
 Now that we validated this indent, we remove it from this line. Note that this will never happen on the *first* line of multiline text, because we only have this flag on for the second and any subsequent lines. And in the case where the line is empty, we can still slice it with no consequence.
@@ -2966,7 +2993,7 @@ If we are here, there are no non-literal double quotes in `line`. We proceed to 
 If there's a whitespace character that's not space, we return an error, because those should have been enclosed between non-literal double quotes.
 
 ```js
-         if (element.match (/\s/)) return 'The line `' + line + '` contains a space that is not contained within quotes.';
+         if (element.match (/\s/)) return 'The line `' + line + '` contains a whitespace that should be contained within quotes.';
 ```
 
 If there is a double quote in the element, we also return an error, because it was not properly escaped.

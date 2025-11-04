@@ -45,10 +45,10 @@ cell.textToPaths = function (message) {
 
       var path = [], originalLine = line, lastPath = teishi.last (paths);
 
-      if (line.length === 0 && ! insideMultilineText) return;
+      if ((line.length === 0 || line.match (/^\s+$/)) && ! insideMultilineText) return;
 
       if (line [0] === ' ' && ! insideMultilineText) {
-         if (! lastPath) return 'The first line of the message cannot be indented';
+         if (! lastPath) return 'The first line of the message cannot be indented: `' + line + '`.';
          var indentSize = line.match (/^ +/g) [0].length;
          var matchedSpaces = 0;
 
@@ -117,7 +117,7 @@ cell.textToPaths = function (message) {
 
       if (insideMultilineText) {
 
-         if (line.length > 0 && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
+         if ((line.length > 0 && line.match (/[^\s]/)) && ! line.match (new RegExp ('^ {' + insideMultilineText + '}'))) return 'Missing indentation in multiline text `' + originalLine + '`';
          line = line.slice (insideMultilineText);
 
          var dequoted = dequoter (line);
@@ -164,7 +164,7 @@ cell.textToPaths = function (message) {
          }
 
          var element = line.split (' ') [0];
-         if (element.match (/\s/)) return 'The line `' + line + '` contains a space that is not contained within quotes.';
+         if (element.match (/\s/)) return 'The line `' + line + '` contains a space that should be contained within quotes.';
          if (element.match (/"/)) return 'The line `' + line + '` has an unescaped quote.';
 
          path.push (cell.toNumberIfNumber (element));
@@ -876,14 +876,14 @@ var test = function () {
 
       ...dale.go ([
          ['', []],
-         [' ', [['error', 'The first line of the message cannot be indented']]],
-         ['\t ', [['error', 'The line `\t ` contains a space that is not contained within quotes.']]],
+         [' ', [], {nonreversible: true}],
+         [' s', [['error', 'The first line of the message cannot be indented: ` s`.']]],
+         ['a\tb', [['error', 'The line `a\tb` contains a space that should be contained within quotes.']]],
          ['holding"out', [['error', 'The line `holding"out` has an unescaped quote.']]],
          [['"multiline', ' trickery" some 2 "calm', '                   animal"'], [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]],
          [['a b', 'c d'], [['a', 'b'], ['c', 'd']]],
          [['foo bar 1', '   jip 2'], [['error', 'The indent of the line `   jip 2` does not match that of the previous line.']]],
          [['foo bar 1', '                        jip 2'], [['error', 'The indent of the line `                        jip 2` does not match that of the previous line.']]],
-         [['foo bar 1', '          '], [['error', 'The line `          ` has no data besides whitespace.']]],
          [['foo bar 1', '    jip  2'], [['error', 'The line `    jip  2` has at least two spaces separating two elements.']]],
          [['foo bar 1', '    jip 2'], [['foo', 'bar', 1], ['foo', 'jip', 2]]],
          [['foo bar 1', 'foo jip 2'], [['foo', 'bar', 1], ['foo', 'jip', 2]], {nonreversible: true}],
@@ -1203,7 +1203,6 @@ var test = function () {
       {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['joo', '=', ''], ['joo', '@', 'jip' ]]},
       {f: cell.call, input: ['@ put p jip', '@ put v @ foo'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['jip', '=', 'bar'], ['jip', '@', 'foo'], ['joo', '=', '=', 'bar'], ['joo', '=', '@', 'foo'], ['joo', '@', 'jip' ]]},
-      */
 
       {reset: [
          ['location', 'trompe', 1],
@@ -1238,6 +1237,7 @@ var test = function () {
       // TODO: implement or forbid this
       //{f: cell.call, input: ['@ put p jip', '@ put v @ bar @ foo'], expected: [['ok']]},
       //{f: cell.call, input: ['@'], expected: [['bar', 1, 'a', 'A', 'C'], ['bar', 2, 'b', 'B', 'D'], ['foo', 1, 'a'], ['foo', 2, 'b'], ['jip', '=', 'A', 'C'], ['jip', '=', 'B', 'D'], ['jip', '@', 'bar', '=', 1, 'a'], ['jip', '@', 'bar', '=', 2, 'b'], ['jip', '@', 'bar', '@', 'foo']]},
+      */
 
       // *** COND ***
 
@@ -1512,9 +1512,6 @@ var test = function () {
 
             // test.c has a properly formatted call
             // text ct has text that might or might not be proper fourtext.
-            // text.cl is a number of text lines that together might or might not be proper fourtext
-
-            if (test.cl) test.ct = test.cl.join (' ');
 
             if (test.c !== undefined) var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
             else var result = cell.call (test.ct, 'user', 'cell', false, get, put);
