@@ -20,8 +20,97 @@
 
                   - ct "/"multiline
                          trickery/" some 2 /"calm
-                                             animal/""
-                    r ??
+                                           animal/""
+                    tag "Multiline texts in a long path"
+
+                  - ct "a b
+                        c d"
+                    tag "Two paths of two steps"
+
+                  - ct "foo bar 1
+                           jip 2"
+                    r error "The indent of the line `   jip 2` does not match that of the previous line."
+                    tag "Indent too short"
+
+                  - ct "widget count 1
+                                                jip 2"
+                    r error "The indent of the line `                        jip 2` does not match that of the previous line."
+                    tag "Indent too long"
+
+                  - ct "widget count 1
+                               jip  2"
+                    r error "The line `       jip  2` has at least two spaces separating two elements."
+                    tag "Too many spaces between paths"
+
+                  - ct "widget count 1
+                               price 12"
+                    tag "Two paths with one prefix"
+
+                  - ct "widget count 1
+                        widget price 12"
+                    r "widget count 1
+                              price 12"
+                    tag "Two unabridged paths with one prefix come back abridged"
+
+                  - ct "product price 0.1
+                                quantity 2.75"
+                    tag "Two paths with float values"
+
+                  - ct "product 1 count
+                                2 price"
+                    tag "List"
+
+                  - ct "something/"foo/" 1"
+                    r error "The line `something/"foo/" 1` has an unescaped quote."
+                    tag "Unescaped quote in word"
+
+                  - ct "/"foo bar/" 1"
+                    tag "Quoted text as path"
+
+                  - ct "/"foo/" /"bar/" 1"
+                    r "foo bar 1"
+                    tag "Quoted texts that do not need to be quoted come back unquoted"
+
+                  - ct "/"///"foo///" ///"bar///" 1/""
+                    tag "Quoted text with quotes inside"
+
+                  - ct "/"foo bar/"x1"
+                    r error "No space after a quote in line `/"foo bar/"x1`"
+                    tag "No space after quote"
+
+                  - ct "foo /"bar
+                             i am on a new line but I am still the same text/" 1"
+                    tag "Quote spanning multiple lines"
+
+                  - ct "foo /"1/" bar"
+                    tag "Path with text that looks like a number"
+
+                  - ct "foo /"	/" bar"
+                    tag "Path with tab"
+
+                  - TODO "i am text
+
+                          right?
+                          "
+
+                  - ct "foo /"bar/""
+                    r "foo bar"
+                    tag "Unnecessary quotes on one step"
+
+                  - ct "foo /"bar yep/""
+                    tag "Quoted step in a path"
+
+                  - ct "date 2025-01-01"
+                    tag "A date can be a step"
+
+                  - ct "empty /"/" indeed"
+                    tag "An empty text can be a step of a path"
+
+                  - ct "/"another multiline
+
+                         /"foo"
+                    r error "No space after a quote in line ` /"foo`"
+                    tag "No space after multiline text"
 
 - "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2

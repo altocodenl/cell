@@ -417,7 +417,7 @@ cell.call = function (message, from, to, hide, get, put) {
    var paths = cell.textToPaths (message);
    if (paths [0] && paths [0] [0] === 'error') return respond (paths);
 
-   if (paths.length === 0) return respond ([]);
+   if (paths.length === 0) return respond (paths);
 
    /*
    cell.put ([
@@ -438,6 +438,9 @@ cell.call = function (message, from, to, hide, get, put) {
 
    return respond (response);
    */
+
+   // Temporary expedient: mirror back the data when there's no call
+   if (paths [0] [0] !== '@') return respond (paths);
 
    ///*
    if (paths [0] [0] !== '@') return respond ([['error', 'A single call must start with `@` but instead starts with `' + paths [0] [0] + '`']]);
@@ -1513,8 +1516,13 @@ var test = function () {
             // test.c has a properly formatted call
             // text ct has text that might or might not be proper fourtext.
 
-            if (test.c !== undefined) var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
-            else var result = cell.call (test.ct, 'user', 'cell', false, get, put);
+            if (test.c !== undefined) {
+               var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+            }
+            else {
+               var result = cell.call (test.ct, 'user', 'cell', false, get, put);
+               if (test.r === undefined) test.r = test.ct;
+            }
 
             // Remove the dialog or omit id and ms
             result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
