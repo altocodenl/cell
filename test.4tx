@@ -52,6 +52,24 @@
                               price 12"
                     tag "Two unabridged paths with one prefix come back abridged"
 
+                  - ct "deep widget count 1
+                                    price 12"
+                    tag "Two paths with one prefix two steps long"
+
+                  - ct "deep widget count 1
+                        deep widget price 12"
+
+                    r "deep widget count 1
+                                   price 12"
+                    tag "Two paths with one prefix two steps long come back abridged"
+
+                  - ct "deep widget count 1
+                             widget price 12"
+
+                    r "deep widget count 1
+                                   price 12"
+                    tag "Two paths with one prefix two steps long (semiabridged) come back abridged"
+
                   - ct "product price 0.1
                                 quantity 2.75"
                     tag "Two paths with float values"
@@ -88,10 +106,11 @@
                   - ct "foo /"	/" bar"
                     tag "Path with tab"
 
-                  - TODO "i am text
+                  - ct "/"i am text
 
-                          right?
-                          "
+                         right?
+                         /""
+                    tag "Quoted text with empty line"
 
                   - ct "foo /"bar/""
                     r "foo bar"
@@ -111,6 +130,24 @@
                          /"foo"
                     r error "No space after a quote in line ` /"foo`"
                     tag "No space after multiline text"
+
+                  - ct "/"just multiline
+                         ////
+                         ///"/""
+                    tag "Quoted text with slashes and literal quotes inside"
+
+                  - ct "/"///"/""
+                    tag "Single literal quote as step"
+
+                  - ct "/" /////""
+                    tag "Space and a slash"
+
+                  - ct "/"///////"/""
+                    tag "Slash and a quote"
+
+                  - ct "/" /////" /" /////////" //// /" ////a/""
+                    r 1
+                    tag "Space and slash, space and two slashes, space and three slashes, space and four slashes, space, slash and `a`."
 
 - "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2

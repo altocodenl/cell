@@ -260,7 +260,7 @@ cell.pathsToText = function (paths) {
                indentCount++;
                return line;
             }
-            var indent = spaces (indentCount);
+            var indent = line.length === 0 ? '' : spaces (indentCount);
             if (k === step.split (/\n/).length - 1) {
                indentCount += line.length + 1;
             }
@@ -900,12 +900,12 @@ var test = function () {
          [['foo "bar', '     i am on a new line but I am still the same text" 1'], [['foo', 'bar\ni am on a new line but I am still the same text', 1]]],
          ['foo "1" bar', [['foo', '1', 'bar']]],
          ['foo "\t" bar', [['foo', '\t', 'bar']]],
-         [['"i am text', ' ', ' ', ' yep"'], [['i am text\n\n\nyep']]],
+         [['"i am text', '', '', ' yep"'], [['i am text\n\n\nyep']]],
          ['foo "bar"', [['foo', 'bar']], {nonreversible: true}],
          ['foo "bar yep"', [['foo', 'bar yep']]],
          ['date 2025-01-01', [['date', '2025-01-01']]],
          ['empty "" indeed', [['empty', '', 'indeed']]],
-         [['"just multiline', ' ', ' "'], [['just multiline\n\n']]],
+         [['"just multiline', '', ' "'], [['just multiline\n\n']]],
          [['"just multiline', ' ', ' "foo'], [['error', 'No space after a quote in line ` "foo`']]],
          [['"just multiline', ' //', ' /""'], [['just multiline\n/\n"']]],
          [['foo bar 1 jip', '        2 yes'], [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]],
@@ -1504,9 +1504,13 @@ var test = function () {
          dataspace = v;
       }
 
-      var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
-      if (newTests.error) return clog (newTests.error);
-      var newTests = [];
+      try {
+         var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+         if (newTests.error) return clog (newTests.error);
+      }
+      catch (error) {
+         var newTests = [];
+      }
       dale.stop (newTests, false, function (suite) {
          if (type (suite) === 'string') return;
          clog ('\n' + dale.keys (suite) [0]);
@@ -1524,6 +1528,10 @@ var test = function () {
                if (test.r === undefined) test.r = test.ct;
             }
 
+            // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
+            // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
+            if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
+
             // Remove the dialog or omit id and ms
             result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
                if (path [0] !== 'dialog') return path;
@@ -1532,12 +1540,10 @@ var test = function () {
                return path;
             }));
 
-            // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
-            // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
-            if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
-            if (result !== (teishi.simple (test.r) ? (test.r + '') : cell.JSToText (test.r))) {
-               pretty ('expected', cell.JSToPaths (test.r));
-               pretty ('result', cell.textToPaths (result));
+            if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If it's not text (it could be number or a list of paths), make it into text.
+            if (result !== test.r) {
+               pretty ('expected', test.r);
+               pretty ('result', result);
                errorFound = true;
                return false
             }

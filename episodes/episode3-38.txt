@@ -1,0 +1,27 @@
+Thirty-eight episode of season 3! I'm building a programming environment from scratch while recording myself. Today I was naughty and didn't record half an hour of programming. Let's hope this doesn't become a habit. A few more tests, but hairy multiline ones. This is moving forward.
+
+github.com/altocodenl/cell
+
+Hello Earth! Silent and short episode today.
+
+I was working in the train and it was a bit weird to record, so I started (gasp) without recording.
+
+I figured out the bug with the multiline texts with empty lines: I was unnecessarily adding spaces to those empty lines.
+
+I also simplified the logic for comparing the expected and the obtained result.
+
+How come it can be an object?! Ah, of course, it can be a hash.
+
+OK, so I was trying to understand the last mystery I have now: in doubly quoted text, why things don't align as I expect them to align.
+
+This is starting to feel sharp.
+
+This is tougher than I thought. It's the double quoting that makes it tricky.
+
+OK, I succeeded, but this is unreadable!
+
+Getting a hand of manually double escaping.
+
+Yeah, that's it.
+
+Let's wrap up here. Thanks for watching!

@@ -450,6 +450,38 @@ views
 
 ## Development notes
 
+### 2025-11-06
+
+Clarifying this mystery:
+
+- ct "/"multiline
+       trickery/" some 2 /"calm
+                         animal/""
+
+But if I wrote it straight, it would be:
+
+"multiline
+ trickery" some 2 "calm
+                   animal"
+
+Let's see how the first one gets transformed step by step:
+
+"/"multiline
+  trickery/" some 2 /"calm
+                    animal/""
+
+Then
+
+"multiline
+ trickery" some 2 "calm
+                   animal"
+
+OK, that makes sense, but I still don't have a good rule for doing it, except putting as few indents as you can on each first line without triggering the error from the cell parser.
+
+This is good enough. I could see the path of how one transforms to the other. And because it's reversible, we know it comes back correctly.
+
+Moving on!
+
 ### 2025-11-04
 
           - c @ put v ned 1 a A C
@@ -3134,10 +3166,10 @@ The first line doesn't need indentation, since it's on the same line as the prev
             }
 ```
 
-For subsequent lines (lines after the first), we need to indent them to align with the opening quote.
+For subsequent lines (lines after the first), we need to indent them to align with the opening quote. We only make an exception for empty lines: for those, we don't bother adding enough spaces to align with the quote.
 
 ```js
-            var indent = spaces (indentCount);
+            var indent = line.length === 0 ? '' : spaces (indentCount);
 ```
 
 If this is the last line of the multiline text, we need to update `indentCount` to account for this line's length plus one (for the space after the closing quote). The closing quote is aligned with the opening quote, so we don't add it to the indent count.
