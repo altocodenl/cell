@@ -1,0 +1,3 @@
+Thirty-ninth episode of season 3! I'm building a programming environment from scratch while recording myself. I stopped with the tests for now and am going through cell by writing simple programs and making sure that the main mechanisms work well. Things are coming up.
+
+https://github.com/altocodenl/cell

@@ -203,7 +203,7 @@ TODO
 
 ### Language
 
-- Fix bug where quoting texts that do not need to be quoted generates weird results.
+- Experiment with put without v: just assume it is v. Also put without v, assume it is "". This is for initialization. And always return the old value and the new value. If the old value was nothing (not even an empty text), just return one value? No, because it could be ambiguous with some lists. Return a list with one item. So we have a diff. Or better: from and to.
 - Rework entrypoint of native calls (if/do/put).
 - Refactor cell.call
    - Have an unified interface through cell.call.
@@ -449,6 +449,240 @@ views
 ```
 
 ## Development notes
+
+### 2025-11-10
+
+Business model for cell as a service: zero ten ten.
+- Free usage: with no account, 1MB cells with 7 day deletion. With account, up to 10MB with no deletion.
+- 10 bucks per person per organization, or also for personal use (Personal use within an organization account is fine if the organization allows it).
+- Other companies that directly offer cell as a service pay 10% of revenue as a license. This doesn't include companies which build a product on top of cell.
+
+The seven primitive operators of lisp (according to pg in The Roots of Lisp), mapped to cell:
+1. quote: no need. Instead we have @ to represent references.
+2. atom: we have @ t (@ type) instead, to return the type, since there's four types instead of two (lisp has only atom and list).
+3. eq: @ eq.
+4/5. car/cdr: we just use numbers in a reference. We can use @ slice to get everything but the first element of a list.
+6. cons: can be @ concat or @ push
+7. cond: @ if
+
+Then, the function notation:
+
+- lambda: @ s (formerly @ do)
+
+Helpers:
+- null (can be @ eq ""
+- and/not/or (all defined in terms of conditionals against the empty list; in cell, they would be against "" or 0).
+- append
+- pair
+- assoc
+
+"Lexical scope does not complicate the denition of eval very much but it may make compilers harder to write."
+
+I wonder if what we already have, with walking up, is a good enough scoping mechanism. It is dynamic, but it is not liable to the typical pitfalls of dynamic scope.
+
+- No global scope where setting x inside a nested structure sets it at the top level.
+- A function defined elsewhere can access the free variables of the nested environment. That's a powerful feature. If the function doesn't want a free variable, it should define that internally and there won't be capture.
+- A subtle assumption: utility sequences should not rely on free variables, and take everything they use in their message.
+
+Change:
+- Instead of @ do, I want to write @ s. "s" stands for "sequence". Perhaps it could also be @ seq.
+
+
+The main calls, ordered by length.
+
+     @         @ s         @ if         @ put       @ loop      @ catch
+|---------| |--------| |-----------| |----------| |---------| |----------|
+ reference   sequence   conditional    storage     iteration     error
+    (0)         (1)         (2)          (3)          (4)         (5)
+
+Idea: shortand for put. For example, `put . foo 3`. Basically, if there's no `v`, you assume that's `v`. This could work.
+
+Something to remember: all the logic is in the colon, that is, in the expansion.
+
+cell is all prefix, unlike forth. the call always comes first.
+
+ideas for html generation (not all are new):
+- Each element is a hash.
+- The children go in _ and can be either another element or a list of elements.
+- Use `cl` shorthand for class and allow to pass a list of texts.
+
+For example:
+
+```
+div id z
+    cl - a
+       - b
+       - "c d"
+    _ p cl - u
+        onclick @ s @ shine
+        _ Hello!
+```
+
+Notice how you can pass a sequence to a handler and `@ s` freezes it.
+
+Cell is special because it prepends every call with an @ rather than asking you to quote. So you can have the data right there. Lisp allows numbers only. Perhaps this is why it doesn't have hashes.
+
+In tcl, everything's a string but there are parenthesis (brackets, actually). call is at the beginning. dispatch everything to the command. It uses variables, control structures and functions and i/o.
+
+Structure of cell
+
+```
+|---------|----------|-----------
+|         | language |          |
+| editor  |----------| service  |
+|         |  engine  |          |
+|--------------------------------
+```
+
+OK, let's design the language in action.
+
+fizzbuzz:
+- Receives a number.
+- If divisible by 3 and not by 5, returns "fizz".
+- If divisible by 5 and not by 3, returns "buzz".
+- If divisible by 3 and 5, returns "fizzbuzz".
+
+```
+fizzbuzz @ s n 1 @ if cond @ % 3 @ n
+                      else @ push p . output
+                                  v fizz
+               2 @ if cond @ % 5 @ n
+                      else @ push p . output
+                                  v buzz
+               3 @ . output
+```
+
+Let's look at the execution:
+
+```
+= ""
+: n 4
+  s 1 = ""
+      @ if cond = 1
+                @ % 3 = 4
+                      @ n
+           else @ push p . output
+                       v fizz
+    2 = ""
+      @ if cond = 4
+                @ % 5 = 4
+                      @ n
+           else @ push p . output
+                       v buzz
+
+    3 = ""
+      @ . output
+@ fizzbuzz 4
+```
+
+What if I don't use the colon, and just use `s` to show the sequence?
+The two problems I'm having: have a "place" for intermediate values (including the message) which has to be a hash, and then having the sequence, which is a list!
+
+Maybe we can do : s and put the sequence there.
+
+We need dots on mere references to avoid going "up". Either that, or initialize the variable.
+
+Maybe dots are mistakes. Maybe we need to initialize things explicitly to know where they hang in the tree. Everything is too dynamic. Is this speed bump going to become annoying? But what are the alternatives?
+
+No, what we need is not dots. What we need is 1) to initialize explicitly; 2) to be able to go more than one up with an "up" operator. For example: `@ up output`. But let's add that one when we need it.
+
+So, let's do this without dots:
+
+```
+fizzbuzz @ s n - @ put p . output
+               - @ if cond @ % 3 @ n
+                      else @ push p output
+                                  v fizz
+               - @ if cond @ % 5 @ n
+                      else @ push p output
+                                  v buzz
+               - @ . output
+= ""
+: n 4
+  output ""
+  s 1 = to ""
+      @ put p . output
+    2 = ""
+      @ if cond = 1
+                @ % 3 = 4
+                      @ n
+           else @ push p output
+                       v fizz
+    2 = ""
+      @ if cond = 4
+                @ % 5 = 4
+                      @ n
+           else @ push p output
+                       v buzz
+
+    3 = ""
+      @ . output
+@ fizzbuzz 4
+
+= fizzbuzz
+: n 15
+  output fizzbuzz
+  s 1 = to ""
+      @ put p . output
+    2 = ""
+      @ if cond = 1
+                @ % 3 = 4
+                      @ n
+           else @ push p output
+                       v fizz
+    2 = ""
+      @ if cond = 4
+                @ % 5 = 4
+                      @ n
+           else @ push p output
+                       v buzz
+
+    3 = ""
+      @ . output
+@ fizzbuzz 4
+```
+
+Seeing a diff on every put really tells you what happened!
+
+Wait, dot doesn't work. Or rather, put with dot. Because we need to do it at one up. If you are inside s 1, putting something "here" means in "s 1", whereas we want to do it outside those two, in :. Wait. We could write put p : output! That's the elegant solution. No need for a dot! But wait: it will try to find `: output` and won't find it (on initialization, right?). And then it will walk all the way up and then finally set : output there. Not so cool. And If I do `p :` and `v output 30` then I'm also overwriting everything. Not good.
+It makes sense for put to walk up also when the path is more than one. No "only the first" silliness.
+
+Wait, this should work. Find the colon, then find something else. But that something else wouldn't be there?
+
+Solutions:
+- Make the colon path be special inside a sequence (urgh)
+- Pass a context path to put (:)
+- Do a put that upserts instead of overwriting
+- Change the logic so that the first element of p is first found; if that is found, then you found your anchor. This is not like get, where you walk up on the whole path.
+
+What would be beautiful is to be able to just write:
+
+```
+fizzbuzz @ s n - @ put p : output
+```
+
+Let's go for a bit with that walking up logic that only uses the first element of the path to find an anchor. Then, it would work only if that call didn't have its own expansion! If it did, it would be snagged.
+
+Yet another option is to somehow initialize output, but that violates the principle of the sequence doing its thing. No, it has to be solved here.
+
+It'd be silly to have to say "up" already in a standard case like this. You want your expansion to have these top level variables of the expansion.
+
+I wonder if there's a single proper mechanism for walking up, both for put and get. Is it "whole path", or "leading step"? Leading step has its virtues: you follow just one comparison, instead of having to look at the entire tree to see if there's a match. But this is pure "only the first" silliness. My question is: does it still make sense?
+
+I need more test cases.
+
+```
+fizzbuzz @ s n - @ put p : output
+               - @ if cond @ % 3 @ n
+                      else @ push p output
+                                  v fizz
+               - @ if cond @ % 5 @ n
+                      else @ push p output
+                                  v buzz
+               - @ . output
+```
+
+Add put to todis, because that's persistence. transform is sequence and conditional. communicate is reference.
 
 ### 2025-11-06
 
