@@ -1,0 +1,11 @@
+Fortieth episode of season 3! I'm building a programming environment from scratch while recording myself. Low energy episode. Working on the main mechanisms of the language.
+
+Hi Earth!
+
+Silent episode today. I'm feeling sick, but I figured I would doodle a little bit. I might as well record it.
+
+I'm reading about TCL (yet again), and working on the problems of having a workable language.
+
+Maybe let's rewrite a few tests to feel we did something tangible today.
+
+I'm going to stop here. Thanks for watching!

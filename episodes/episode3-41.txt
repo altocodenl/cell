@@ -1,0 +1,3 @@
+Forty-first episode of season 3! I'm building a programming environment from scratch while recording myself. More energy today: I tackle rewriting the tests of all the parts that (for now) I know will stay like that. Almost done with the parsing and JS/fourdata tests!
+
+https://github.com/altocodenl/cell

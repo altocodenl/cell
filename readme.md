@@ -450,6 +450,127 @@ views
 
 ## Development notes
 
+### 2025-11-12
+
+I will never sort a number together with text in the context of paths, because they cannot go at the same level except as values. And as values, they are sorted by whatever prefix they have!
+
+But I need that logic because the sorter goes before the validator, the validator looks up a little bit because things were sorted already.
+
+Definition: a quoted number is a step that looks like a number but it is surrounded by quotes, and is therefore considered text. For example: "1.5"
+
+### 2025-11-11
+
+It's TCL, not forth nor lisp, that is the closest to what I'm looking for in cell.
+
+The main problems I have right now in front of me is: make the language usable and expressive enough. Everything else can and must follow from that. Tackle the difficult parts first. The heart of the innovation, so to speak.
+
+What works this far (as far as I'm concerned);
+- Fourdata and fourtext (the data representation).
+- The unified dataspace.
+- The call and response model.
+
+What's snagging me?
+- How do we set variables in the tree?
+- How do we avoid dynamic capture? Because we have no lexical scope. It is all runtime.
+
+Let's go back to fizzbuzz:
+
+```
+fizzbuzz @ s n - @ put p : output
+               - @ if cond @ % 3 @ n
+                      else @ push p output
+                                  v fizz
+               - @ if cond @ % 5 @ n
+                      else @ push p output
+                                  v buzz
+               - @ output
+```
+
+The only problem here is the initialization of output. When I run it (abridging the rest, just focusing on initializing output):
+
+```
+= fizzbuzz
+: output <should go here>
+  s - = ok
+      @ put p : output
+@ fizzbuzz 30
+```
+
+This will only work if 1) there's no : in the call itself; if put is a native call and has no expansion, then it will work. Otherwise, it won't. 2) that we only use the first step of the path to find a match, instead of the whole thing. Otherwise, we'd go up/left finding `: output` instead of just `:`.
+
+1) can be circumvented by an `up` operator. It can either be `p up : output` or
+
+```
+p : output
+up 1
+```
+
+I need to write more code. Otherwise I won't know.
+
+Let's look at the implementation of lith, my old library for generating HTML for object literals, and reimplement it but with the new way of representing html in cell.
+
+Let's try it without validation and without empty tags.
+
+```
+div id z
+    cl - a
+       - b
+       - "c d"
+    _ p cl - u
+        onclick @ s @ shine
+        _ Hello!
+
+```
+```
+html tags @ list div p // Here, @ list breaks down the steps of a single path into a list. This is to avoid taking up so many lines, nothing else.
+     generate @ s input : -
+
+```
+
+I'm hopelessly naked here. Even without validation, this is not possible now. What I need to do is:
+- Initialize an output variable, or get it recursively. How would I do this? Ah, no need, you can simply return the outputs of nested calls and append them.
+- Pick up the first step of input and put that as the tag. then iterate all the non _ elements and add the attributes, entityifying whatever you need to and appending it all. Special logic for classes. Then, jump on to _ by making a recursive call and appending its result to your output. Then, return the output.
+
+Going again through [Antirez's TCL writeup](https://antirez.com/articoli/tclmisunderstood.html).
+
+In TCL, calls are wrapped in brackets. In cell, they are prepended by an @.
+
+`$a` is the same as `@ a` in cell.
+
+`puts "Hello World"`: quoting is the same here.
+
+`puts "Hello $a World [string length $b]"` not here: in this quote, variables and commands are substituted. The really literal quotes are `{Hello $a World}`.
+
+Function definitions go between braces. There's an eval coming up that executes what's between curly brackets.
+
+```
+set a pu
+set b ts
+$a$b "Hello World"
+```
+
+```
+a i
+b f
+c @ concat - @ a
+           - @ b
+@ = if
+  @ c cond ...
+      else ...
+```
+
+Not quite as elegant.
+
+"If you are reading this article you already know what Eval is. The command eval {puts hello} will of course evaluate the code passed as argument, as happens in many other programming languages. In Tcl there is another beast, a command called uplevel that can evaluate code in the context of the calling procedure, or for what it's worth, in the context of the caller of the caller (or directly at the top level). What this means is that what in Lisp are macros, in Tcl are just simple procedures."
+
+uplevel makes it "walk up", only that it's explicit and you control by how much.
+
+There will be no explicit async in cell. Things that are taking some time will just take some time; when their results come in, further changes will be triggered.
+
+The only problem is doing things sequentially. If you do only one thing at a time and a sequence is waiting for something slow to complete, the cell is blocked. This is sometimes desirable, if for example you are doing bank transactions. What i'm thinking of is a lock (actually queue) on a fraction of the dataspace, to allow other ops to continue.
+
+Going back to the structure of the language: I'm paying dearly for removing parenthesis/brackets/braces. You cannot simply just surround a call with them and put them in the context of anohter clal. But you can put them side by side. So where's the limit? Perhaps there is none. This is just unfamiliar territory.
+
 ### 2025-11-10
 
 Business model for cell as a service: zero ten ten.
@@ -3301,10 +3422,10 @@ Outside of the loop that goes line by line, we check whether we got an `error`. 
    if (error) return [['error', error]];
 ```
 
-If the flag that marks we are inside multiline text is still set, there's an error. We report it.
+If the flag that marks we are inside multiline text is still set, there's an error. We report it. Note that in this case, we remove the newline at the end of the last step of the last path, because if the following line (this one) didn't properly close the multiline text, it probably means that the error is contained solely in the previous line and the newline is just noise.
 
 ```js
-   if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`']];
+   if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)).replace (/\n$/, '') + '`']];
 ```
 
 If we are here, the parsing was successful. We dedash (change dashes to numbers in lists) and sort the paths.

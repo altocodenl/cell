@@ -175,7 +175,7 @@ cell.textToPaths = function (message) {
    });
 
    if (error) return [['error', error]];
-   if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)) + '`']];
+   if (insideMultilineText) return [['error', 'Multiline text not closed: `' + teishi.last (teishi.last (paths)).replace (/\n$/, '') + '`']];
 
    paths = cell.sorter (cell.dedasher (paths));
    var error = cell.validator (paths);
@@ -875,197 +875,9 @@ var test = function () {
 
    var errorFound = false === dale.stop ([
 
-      // *** TEXT <-> PATHS ***
-
-      ...dale.go ([
-         ['', []],
-         [' ', [], {nonreversible: true}],
-         [' s', [['error', 'The first line of the message cannot be indented: ` s`.']]],
-         ['a\tb', [['error', 'The line `a\tb` contains a space that should be contained within quotes.']]],
-         ['holding"out', [['error', 'The line `holding"out` has an unescaped quote.']]],
-         [['"multiline', ' trickery" some 2 "calm', '                   animal"'], [['multiline\ntrickery', 'some', 2, 'calm\nanimal']]],
-         [['a b', 'c d'], [['a', 'b'], ['c', 'd']]],
-         [['foo bar 1', '   jip 2'], [['error', 'The indent of the line `   jip 2` does not match that of the previous line.']]],
-         [['foo bar 1', '                        jip 2'], [['error', 'The indent of the line `                        jip 2` does not match that of the previous line.']]],
-         [['foo bar 1', '    jip  2'], [['error', 'The line `    jip  2` has at least two spaces separating two elements.']]],
-         [['foo bar 1', '    jip 2'], [['foo', 'bar', 1], ['foo', 'jip', 2]]],
-         [['foo bar 1', 'foo jip 2'], [['foo', 'bar', 1], ['foo', 'jip', 2]], {nonreversible: true}],
-         [['foo bar 0.1', '    jip 2.75'], [['foo', 'bar', 0.1], ['foo', 'jip', 2.75]]],
-         [['foo 1 hey', '    2 yo'], [['foo', 1, 'hey'], ['foo', 2, 'yo']]],
-         ['something"foo" 1', [['error', 'The line `something"foo" 1` has an unescaped quote.']]],
-         ['"foo bar" 1', [['foo bar', 1]]],
-         ['"foo" "bar" 1', [['foo', 'bar', 1]], {nonreversible: true}],
-         ['"/"foo/" /"bar/" 1"', [['"foo" "bar" 1']]],
-         ['"foo bar"x1', [['error', 'No space after a quote in line `"foo bar"x1`']]],
-         [['foo "bar', '     i am on a new line but I am still the same text" 1'], [['foo', 'bar\ni am on a new line but I am still the same text', 1]]],
-         ['foo "1" bar', [['foo', '1', 'bar']]],
-         ['foo "\t" bar', [['foo', '\t', 'bar']]],
-         [['"i am text', '', '', ' yep"'], [['i am text\n\n\nyep']]],
-         ['foo "bar"', [['foo', 'bar']], {nonreversible: true}],
-         ['foo "bar yep"', [['foo', 'bar yep']]],
-         ['date 2025-01-01', [['date', '2025-01-01']]],
-         ['empty "" indeed', [['empty', '', 'indeed']]],
-         [['"just multiline', '', ' "'], [['just multiline\n\n']]],
-         [['"just multiline', ' ', ' "foo'], [['error', 'No space after a quote in line ` "foo`']]],
-         [['"just multiline', ' //', ' /""'], [['just multiline\n/\n"']]],
-         [['foo bar 1 jip', '        2 yes'], [['foo', 'bar', 1, 'jip'], ['foo', 'bar', 2, 'yes']]],
-         ['"/""', [['"']]],
-         ['" //"', [[' /']]],
-         ['"///""', [['/"']]],
-         ['" //" " ////" // " //a"', [[' /', ' //', '//', ' /a']]],
-         ['"A single call must start with /"@/" but instead starts with /"w/""', [['A single call must start with "@" but instead starts with "w"']]],
-         [['dialog "1" from user', '           message "@ foo"'], [['dialog', '1', 'from', 'user'], ['dialog', '1', 'message', '@ foo']]],
-         [['dialog 2 from user', '         message "@ foo"'], [['dialog', 2, 'from', 'user'], ['dialog', 2, 'message', '@ foo']]],
-         [['dialog " //" from user', '             message "@ foo"'], [['dialog', ' /', 'from', 'user'], ['dialog', ' /', 'message', '@ foo']]],
-         [['dialog "" from user', '          message "@ foo"'], [['dialog', '', 'from', 'user'], ['dialog', '', 'message', '@ foo']]],
-         ['" /"', [['error', 'Multiline text not closed: ` "\n`']]],
-         ['" //"', [[' /']]],
-         ['" ////"', [[' //']]],
-         ['//', [['//']]],
-         ['"//"', [['//']], {nonreversible: true}],
-         ['" /a"', [['error', 'Unmatched slash in text with spaces or double quotes: ` /a`']]],
-         [['" ', ' /a"'], [['error', 'Unmatched slash in text with spaces or double quotes: `/a`']]],
-         ['" //a"', [[' /a']]],
-         ['" ///a"', [['error', 'Unmatched slash in text with spaces or double quotes: ` ///a`']]],
-         [['- foo bar', '  sub acu ', '  jip heh'], [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']], {nonreversible: true}],
-      ], function (test) {
-         var output = [
-            {f: cell.textToPaths, input: test [0], expected: test [1]},
-         ];
-         if (! (test [1] [0] && test [1] [0] [0] === 'error' || test [2])) output.push ({f: cell.pathsToText, input: test [1], expected: test [0]});
-         return output;
-      }).flat (),
-      {f: cell.pathsToText, expected: ['- foo bar', '  jip heh', '  sub acu'], input: [['-', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']]},
-
-      // *** TEXT <-> PATHS HELPERS ***
-
-      {f: cell.dedasher, input: [['foo', '-', 'first'], ['foo', '-', 'second']], expected: [['foo', 1, 'first'], ['foo', 2, 'second']]},
-      {f: cell.dedasher, input: [['foo', '-', 'first'], ['bar', '-', 'second']], expected: [['foo', 1, 'first'], ['bar', 1, 'second']]},
-      {f: cell.dedasher, input: [['foo', 'klank', 'first'], ['foo', '-', 'second']], expected: [['foo', 'klank', 'first'], ['foo', 1, 'second']]},
-      {f: cell.dedasher, input: [['foo', '-', 'first'], ['foo', '-', 'second'], ['foo', '-', 'third']], expected: [['foo', 1, 'first'], ['foo', 2, 'second'], ['foo', 3, 'third']]},
-      {f: cell.dedasher, input: [['-', 'foo', 'bar'], [null, 'jip', 'heh'], [null, 'sub', 'acu']], expected: [[1, 'foo', 'bar'], [1, 'jip', 'heh'], [1, 'sub', 'acu']]},
-
-      {f: cell.sorter, input: [['foo', 'bar', 1], ['foo', 'bar', 2]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
-      {f: cell.sorter, input: [['foo', 'bar', 2], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'bar', 2]]},
-      {f: cell.sorter, input: [['foo', 'jip', 1], ['foo', 'bar', 1]], expected: [['foo', 'bar', 1], ['foo', 'jip', 1]]},
-      {f: cell.sorter, input: [['foo', 'jip', 1], ['Foo', 'jip', 1]], expected: [['foo', 'jip', 1], ['Foo', 'jip', 1]]},
-      {f: cell.sorter, input: [['Foo', 'jip', 1], ['foo', 'jip', 1]], expected: [['foo', 'jip', 1], ['Foo', 'jip', 1]]},
-      {f: cell.sorter, input: [['foo', 'jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'jip', 1]]},
-      {f: cell.sorter, input: [['foo', 'Jip', 1], ['foo', 1, 1]], expected: [['foo', 1, 1], ['foo', 'Jip', 1]]},
-      {f: cell.sorter, input: [[':', 'foo'], ['=', 'bar']], expected: [['=', 'bar'], [':', 'foo']]},
-      {f: cell.sorter, input: [[':foo'], ['=bar']], expected: [[':foo'], ['=bar']]},
-
-      {f: cell.validator, input: [['foo', 'jip']], expected: []},
-      {f: cell.validator, input: [['foo', 'bar', 1]], expected: []},
-      {f: cell.validator, input: [['foo', 'jip'], ['foo', 'bar', 1]], expected: [['error', 'The path `foo bar 1` is setting a hash but there is already a text at path `foo`']]},
-      {f: cell.validator, input: [['foo', 'mau5', 'jip'], ['foo', 'mau5', 'bar', 1]], expected: [['error', 'The path `foo mau5 bar 1` is setting a hash but there is already a text at path `foo mau5`']]},
-      {f: cell.validator, input: [['foo', 'jip', 1], ['foo', 2, 2]], expected: [['error', 'The path `foo 2 2` is setting a list but there is already a hash at path `foo`']]},
-      {f: cell.validator, input: [['foo', 'mau5', 'jip', 1], ['foo', 'mau5', 2, 2]], expected: [['error', 'The path `foo mau5 2 2` is setting a list but there is already a hash at path `foo mau5`']]},
-      {f: cell.validator, input: [['foo']], expected: []},
-      {f: cell.validator, input: [[1]], expected: []},
-      {f: cell.validator, input: [], expected: []},
-      {f: cell.validator, input: [['foo'], [1]], expected: [['error', 'The path `1` is setting a number but there is already a text at path ``']]},
-      {f: cell.validator, input: [['foo', 'bar'], ['foo', 'jip']], expected: [['error', 'The path `foo jip` is repeated.']]},
-      // TODO: add a nonconsecutive list
-
       // *** PATHS <-> JS ***
 
-      {f: cell.JSToPaths, input: {c: 'd', a: 'b'}, expected: [['a', 'b'], ['c', 'd']]},
-      {f: cell.JSToPaths, input: [1, 2, 3], expected: [[1, 1], [2, 2], [3, 3]]},
-      {f: cell.JSToPaths, input: {boo: [true, false], why: new Date ('2025-01-01T00:00:00.000Z')}, expected: [['boo', 1, 1], ['boo', 2, 0], ['why', '2025-01-01T00:00:00.000Z']]},
-      {f: cell.JSToPaths, input: {foo: null, some: '', thing: parseInt ('!')}, expected: [['foo', ''], ['some', ''], ['thing', '']]},
-      {f: cell.pathsToJS, input: [], expected: ''},
-      {f: cell.pathsToJS, input: [['']], expected: ''},
-      {f: cell.pathsToJS, input: [[1]], expected: 1},
       {f: cell.pathsToJS, input: [['bar', 1, 'jip'], ['bar', 2, 'joo'], ['jup', 'yea'], ['soda', 'wey']], expected: {bar: ['jip', 'joo'], jup: 'yea', soda: 'wey'}},
-
-      // *** CALL ***
-
-      /* TODO: remove
-      {f: cell.call, input: 1, expected: [['error', 'The message must be text but instead is integer']]},
-      {f: cell.call, input: '', expected: []},
-      {f: cell.call, input: 'foo bar', expected: [['error', 'A single call must start with `@` but instead starts with `foo`']]},
-      {f: cell.call, input: ['@ foo bar', 'Groovies jip'], expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
-      {f: cell.call, input: ['@ something is', '  another thing'], expected: [['error', 'A get call cannot have multiple paths, but it has a path `@ something is`']]},
-      {f: cell.call, input: ['@ put something', 'Groovies jip'], expected: [['error', 'The call must not have extra keys besides `@`, but it has a key `Groovies`']]},
-      {f: cell.call, input: ['@ put something', '@ Groovies jip'], expected: [['error', 'The call must not have a path besides `@ put`, but it has a path `@ Groovies`']]},
-      {f: cell.call, input: ['@ put foo bar 1', '@ put foo jip 2'], expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
-      {f: cell.call, input: ['@ put 1 foo', '      2 bar'], expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
-      {f: cell.call, input: ['@ put k foo', '      v bar'], expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
-      {f: cell.call, input: ['@ put p foo', '      v bar', '      x jip'], expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
-      {f: cell.call, input: ['@ put p foo', '      v bar', '      x jip'], expected: [['error', 'A put call has to be a hash with path and value (`p` and `v`).']]},
-
-      // *** GET ***
-
-      {reset: []},
-      {f: cell.call, input: '@', expected: [
-      ]},
-
-      {f: cell.call, input: '@ foo', expected: [
-      ]},
-
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-         ['something', 'else']
-      ]},
-      {f: cell.call, input: '@', expected: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-         ['something', 'else']
-      ]},
-      {f: cell.call, input: '@ foo', expected: [
-         ['bar', 1, 'jip'],
-         ['bar', 2, 'joo'],
-         ['soda', 'wey'],
-      ]},
-      {f: cell.call, input: '@ foo bar', expected: [
-         [1, 'jip'],
-         [2, 'joo'],
-      ]},
-      {f: cell.call, input: '@ foo bar 1', expected: [
-         ['jip'],
-      ]},
-      {f: cell.call, input: '@ foo bar 1 jip', expected: []},
-      {f: cell.call, input: '@ no such thing', expected: []},
-      {f: cell.call, input: '@ foo soda', expected: [
-         ['wey']
-      ]},
-      {f: cell.call, input: '@ something', expected: [
-         ['else']
-      ]},
-      {f: cell.call, input: '@ something else', expected: []},
-
-      // *** GET WITH CONTEXT ***
-
-      {reset: [
-         ['foo', 10],
-         ['inner', 'foo', 20],
-         ['inner', 'jip', 'foo', 30],
-      ]},
-      {f: cell.get, query: ['foo'], context: [], expected: [[10]]},
-      {f: cell.get, query: ['foo'], context: ['foo'], expected: [[10]]},
-      {f: cell.get, query: ['foo'], context: ['bar'], expected: [[10]]},
-      {f: cell.get, query: ['bar'], context: ['foo'], expected: []},
-      {f: cell.get, query: ['foo'], context: ['inner'], expected: [[20]]},
-      {f: cell.get, query: ['foo'], context: ['inner', 'jip'], expected: [[30]]},
-      {f: cell.get, query: ['foo'], context: ['inner', 'jip', 'foo'], expected: [[30]]},
-      {f: cell.get, query: ['foo'], context: ['something', 'else', 'completely'], expected: [[10]]},
-
-      // *** GET WITH DOT ***
-
-      {reset: [
-         ['foo', 10],
-         ['inner', 'foo', 20],
-      ]},
-      {f: cell.get, query: ['.', 'foo'], context: [], expected: [[10]]},
-      {f: cell.get, query: ['.', 'foo'], context: ['inner'], expected: [[20]]},
-      {f: cell.get, query: ['.', 'inner', 'foo'], context: [], expected: [[20]]},
-      {f: cell.get, query: ['.'], context: ['inner', 'foo'], expected: [[20]]},
-      {f: cell.get, query: ['.', 'foo'], context: ['something', 'else', 'completely'], expected: []},
-      */
 
       // *** PUT ***
 
@@ -1163,84 +975,6 @@ var test = function () {
       {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 20], ['something', 'else', 'foo', 20]]},
       {f: cell.put, input: [['p', '.', 'foo'], ['v', 30]], context: ['inner'], expected: [['ok']]},
       {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 30], ['something', 'else', 'foo', 20]]},
-
-      // *** RESPOND (CALLS TO CELL.RESPOND START HERE) ***
-
-      /*
-      {reset: [
-         ['foo', 10],
-      ]},
-      {f: cell.call, input: ['@ put p reffoo', '@ put v @ foo'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 10], ['reffoo', '=', 10], ['reffoo', '@', 'foo']]},
-
-      {f: cell.call, input: ['@ put p foo', '@ put v 20'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
-
-      // Even if you overwrite the = keys, they will be overwritten again by cell.respond!
-      {f: cell.call, input: ['@ put p reffoo =', '@ put v 30'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
-
-      // A reference to nothing combined with an unrelated reference to something.
-      {f: cell.call, input: ['@ put p a', '@ put v @ nil'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['a', '=', ''], ['a', '@', 'nil'], ['foo', 20], ['reffoo', '=', 20], ['reffoo', '@', 'foo']]},
-
-      {reset: [
-         ['foo', 1],
-         ['list', 1, 'bar'],
-      ]},
-      {f: cell.call, input: ['@ put p indirect', '@ put v @ list @ foo'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 1], ['indirect', '=', 'bar'], ['indirect', '@', 'list', '=', 1], ['indirect', '@', 'list', '@', 'foo'], ['list', 1, 'bar']]},
-
-      {reset: [
-         ['aqualung', 'great'],
-         ['score', 'great', 100]
-      ]},
-      {f: cell.call, input: ['@ put p rrref', '@ put v @ score @ aqualung'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['aqualung', 'great'], ['rrref', '=', 100], ['rrref', '@', 'score', '=', 'great'], ['rrref', '@', 'score', '@', 'aqualung'], ['score', 'great', 100]]},
-
-      {reset: [
-         ['foo', 'bar'],
-      ]},
-
-      {f: cell.call, input: ['@ put p joo', '@ put v @ jip'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['joo', '=', ''], ['joo', '@', 'jip' ]]},
-      {f: cell.call, input: ['@ put p jip', '@ put v @ foo'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['jip', '=', 'bar'], ['jip', '@', 'foo'], ['joo', '=', '=', 'bar'], ['joo', '=', '@', 'foo'], ['joo', '@', 'jip' ]]},
-
-      {reset: [
-         ['location', 'trompe', 1],
-         ['pixies', 'trompe', 1, 'alec eiffel'],
-         ['pixies', 'trompe', 2, 'mons'],
-      ]},
-      {f: cell.call, input: ['@ put p record', '@ put v @ pixies @ location'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['location', 'trompe', 1], ['pixies', 'trompe', 1, 'alec eiffel'], ['pixies', 'trompe', 2, 'mons'], ['record', '=', 'alec eiffel'], ['record', '@', 'pixies', '=', 'trompe', 1], ['record', '@', 'pixies', '@', 'location']]},
-
-      {reset: [
-         ['foo', 1, 'bar'],
-         ['foo', 2, 'jip'],
-      ]},
-      {f: cell.call, input: ['@ put p ref', '@ put v @ foo'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 1, 'bar'], ['foo', 2, 'jip'], ['ref', '=', 1, 'bar'], ['ref', '=', 2, 'jip'], ['ref', '@', 'foo']]},
-      {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 'bar'], ['ref', '=', 'bar'], ['ref', '@', 'foo']]},
-
-      {reset: [
-         ['context', 'foo', 20],
-         ['foo', 10],
-      ]},
-      {f: cell.call, input: ['@ put p context ref', '@ put v @ foo'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['context', 'foo', 20], ['context', 'ref', '=', 20], ['context', 'ref', '@', 'foo'], ['foo', 10]]},
-
-      {reset: [
-         ['bar', 1, 'a', 'A', 'C'],
-         ['bar', 2, 'b', 'B', 'D'],
-         ['foo', 1, 'a'],
-         ['foo', 2, 'b'],
-      ]},
-      // TODO: implement or forbid this
-      //{f: cell.call, input: ['@ put p jip', '@ put v @ bar @ foo'], expected: [['ok']]},
-      //{f: cell.call, input: ['@'], expected: [['bar', 1, 'a', 'A', 'C'], ['bar', 2, 'b', 'B', 'D'], ['foo', 1, 'a'], ['foo', 2, 'b'], ['jip', '=', 'A', 'C'], ['jip', '=', 'B', 'D'], ['jip', '@', 'bar', '=', 1, 'a'], ['jip', '@', 'bar', '=', 2, 'b'], ['jip', '@', 'bar', '@', 'foo']]},
-      */
 
       // *** COND ***
 
@@ -1494,8 +1228,10 @@ var test = function () {
       return false;
    });
 
-   var isNode = typeof exports === 'object';
-   if (isNode) {
+   try {
+      var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
+      if (newTests.error) return clog (newTests.error);
+
       var dataspace = [];
       var get = function () {
          return dataspace;
@@ -1503,56 +1239,60 @@ var test = function () {
       var put = function (v) {
          dataspace = v;
       }
-
-      try {
-         var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
-         if (newTests.error) return clog (newTests.error);
-      }
-      catch (error) {
-         var newTests = [];
-      }
-      dale.stop (newTests, false, function (suite) {
-         if (type (suite) === 'string') return;
-         clog ('\n' + dale.keys (suite) [0]);
-         return dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
-            if (test.tag) clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
-
-            // test.c has a properly formatted call
-            // text ct has text that might or might not be proper fourtext.
-
-            if (test.c !== undefined) {
-               var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
-            }
-            else {
-               var result = cell.call (test.ct, 'user', 'cell', false, get, put);
-               if (test.r === undefined) test.r = test.ct;
-            }
-
-            // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
-            // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
-            if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
-
-            // Remove the dialog or omit id and ms
-            result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
-               if (path [0] !== 'dialog') return path;
-               if (! test.keepDialog) return;
-               if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
-               return path;
-            }));
-
-            if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If it's not text (it could be number or a list of paths), make it into text.
-            if (result !== test.r) {
-               pretty ('expected', test.r);
-               pretty ('result', result);
-               errorFound = true;
-               return false
-            }
-         });
-      });
    }
+   catch (error) {
+      var newTests = [];
+   }
+
+   dale.stop (newTests, false, function (suite) {
+      if (type (suite) === 'string') return;
+      clog ('\n' + dale.keys (suite) [0]);
+      return dale.stop (suite [dale.keys (suite) [0]], false, function (test) {
+         if (test.tag) clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
+
+         // text.ct has text that might or might not be proper fourtext
+         // text.js has JSON that has to be converted to fourdata
+         // test.cjs has a call that has to be converted to JSON
+         // test.c has a call that is valid fourtext
+
+         if (test.ct !== undefined) {
+            var result = cell.call (test.ct, 'user', 'cell', false, get, put);
+            if (test.r === undefined) test.r = test.ct;
+         }
+         if (test.js !== undefined) {
+            var result = cell.JSToText (JSON.parse (test.js));
+         }
+         if (test.cjs !== undefined) {
+            var result = JSON.stringify (cell.textToJS (test.cjs));
+         }
+         if (test.c !== undefined) {
+            var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+         }
+
+         // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
+         // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
+         if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
+
+         // Remove the dialog or omit id and ms
+         result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
+            if (path [0] !== 'dialog') return path;
+            if (! test.keepDialog) return;
+            if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
+            return path;
+         }));
+
+         if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If it's not text (it could be number or a list of paths), make it into text.
+         if (result !== test.r) {
+            pretty ('expected', test.r);
+            pretty ('result', result);
+            errorFound = true;
+            return false
+         }
+      });
+   });
 
    if (errorFound) return clog ('A test did not pass');
    else clog ('All tests successful', (teishi.time () - start) + 'ms');
 }
 
-test ();
+if (isNode && process.argv [2] === 'test') test ();

@@ -1,6 +1,15 @@
-- "TEXT TO PATHS" - ct ""
+- "TEXT <> PATHS" - ct ""
                     r ""
                     tag "Empty text"
+
+                  - ct "foo"
+                    tag "Single text"
+
+                  - ct "1"
+                    tag "Single number"
+
+                  - ct "1"
+                    tag "Single number"
 
                   - ct " "
                     r ""
@@ -69,6 +78,14 @@
                     r "deep widget count 1
                                    price 12"
                     tag "Two paths with one prefix two steps long (semiabridged) come back abridged"
+
+                  - ct "1 foo bar
+                        1 jip heh
+                        1 sub acu"
+                    r "1 foo bar
+                         jip heh
+                         sub acu"
+                    tag "List comes back abridged"
 
                   - ct "product price 0.1
                                 quantity 2.75"
@@ -142,12 +159,191 @@
                   - ct "/" /////""
                     tag "Space and a slash"
 
+                  - ct "/" /////////""
+                    tag "Space and two slashes"
+
+                  - ct "////"
+                    tag "Two slashes"
+
+                  - ct "/"/////""
+                    r "//"
+                    tag "Two slashes unnecessarily quoted"
+
                   - ct "/"///////"/""
                     tag "Slash and a quote"
 
                   - ct "/" /////" /" /////////" //// /" ////a/""
-                    r 1
                     tag "Space and slash, space and two slashes, space and three slashes, space and four slashes, space, slash and `a`."
+
+                  - ct "history /"1/" from user
+                                    message /"@ foo/""
+                    tag "Quoted number and quoted text as steps."
+
+                  - ct "history /" /////" from user
+                                      message /"@ foo/""
+                    tag "Step with multiple slashes"
+
+                  - ct "/" ///""
+                    r error "Multiline text not closed: ` /"`"
+                    tag "Unclosed multiline"
+
+                  - ct "/" //a/""
+                    r error "Unmatched slash in text with spaces or double quotes: ` //a`"
+                    tag "Unmatched slash"
+
+                  - ct "/"
+                         //a"
+                    r error "Unmatched slash in text with spaces or double quotes: `//a`"
+                    tag "Unmatched slash in multiline text"
+
+                  - ct "/" //////a"
+                    r error "Unmatched slash in text with spaces or double quotes: ` //////a`"
+                    tag "Unmatched slash with multiple slashes."
+
+                  - ct "/"A single call must start with ///"@///" but instead starts with ///"w///"/""
+                    tag "Long quoted text"
+
+                  - ct "foo - first
+                            - second
+                            - third"
+                    r "foo 1 first
+                           2 second
+                           3 third"
+                    tag "Dedasher with list with three elements"
+
+                  - ct "bar - first
+                        foo - second"
+                    r "bar 1 first
+                       foo 1 second"
+                    tag "Dedasher with two consecutive lists"
+
+                  - ct "foo jip 1
+                            bar 2"
+                    r "foo bar 2
+                           jip 1"
+                    tag "Sort lowercase hashes"
+
+                  - ct "Foo bar 1
+                        foo jip 2"
+                    r "foo jip 2
+                       Foo bar 1"
+                    tag "Uppercase goes after lowercase"
+
+                  - ct "foo bar 1
+                        Foo jip 2"
+                    r "foo bar 1
+                       Foo jip 2"
+                    tag "Uppercase goes after lowercase, no-op"
+
+                  - ct "foo bar 1
+                            bar 2"
+                    r error "The path `foo bar 2` is repeated."
+                    tag "Repeated path"
+
+                  - ct ": foo
+                        = bar"
+                    r "= bar
+                       : foo"
+                    tag "Standalone colon goes after standalone equal"
+
+                  - ct "=bar 1
+                        :foo 2"
+                    r ":foo 2
+                       =bar 1"
+                    tag "Text starting with colon goes before text starting with equal"
+
+                  - ct "foo
+                        bar"
+                    r error "The path `foo` is repeated."
+                    tag "Values without prefixes"
+
+                  - ct "foo 1
+                        foo 2"
+                    r error "The path `foo 2` is repeated."
+                    tag "Repeated hash elements"
+
+                  - ct "foo 1
+                        bar 2
+                        foo 3"
+                    r error "The path `foo 3` is repeated."
+                    tag "Repeated non-consecutive hash elements"
+
+                  - ct "foo jip
+                            bar 1"
+                    r error "The path `foo jip` is setting a text but there is already a hash at path `foo`"
+                    tag "Type clash: text on hash"
+
+                  - ct "foo mau5 bar
+                                 jip 1"
+                    r error "The path `foo mau5 jip 1` is setting a hash but there is already a text at path `foo mau5`"
+                    tag "Type clash: hash on text"
+
+                  - ct "foo jip 1
+                            2 2"
+                    r error "The path `foo jip 1` is setting a hash but there is already a list at path `foo`"
+                    tag "Type clash: hash on list"
+
+                  - ct "foo
+                        1"
+                    r error "The path `foo` is setting a text but there is already a number at path ``"
+                    tag "Type clash: text on number"
+
+- "JS <> PATHS" - js "{/"c/": /"d/", /"a/": /"b/"}"
+                  r "a b
+                     c d"
+                  tag "Parse JSON object"
+
+                - js "[1, 2, 3]"
+                  r "1 1
+                     2 2
+                     3 3"
+                  tag "Parse JSON list"
+
+                - js "/"json/""
+                  r "json"
+                  tag "Parse JSON text"
+
+                - js "1"
+                  r "1"
+                  tag "Parse JSON number"
+
+                - js "true"
+                  r "1"
+                  tag "Parse JSON boolean"
+
+                - js "null"
+                  r "/"/""
+                  tag "Parse JSON null"
+
+                - js "{/"boo/": [true, false], /"null/": null, /"why/": /"2025-11-12T20:53:20.774Z/"}"
+                  r "boo 1 1
+                         2 0
+                     null /"/"
+                     why 2025-11-12T20:53:20.774Z"
+                  tag "Parse object with booleans, null and date"
+
+                - cjs ""
+                  r "/"/""
+                  tag "Empty text outputs empty text"
+
+                - cjs "/"/""
+                  r "/"/""
+                  tag "An empty text also outputs empty text"
+
+                - cjs "1"
+                  r "1"
+                  tag "Number to JSON"
+
+                - cjs "1"
+                  r "1"
+                  tag "Quoted number to JSON"
+
+                - TODO "jup yea
+                        suda wey
+                        bar 1 jip
+                            2 joo"
+                  r "{/"bar/": [/"jip/", /"joo/"], /"jup/": /"yea/", /"soda/": /"wey/"}"
+                  tag "Four paths into JSON"
 
 - "PUT VALIDATION" 1 c @ put foo bar 1
                                  jip 2
@@ -554,3 +750,7 @@
 
                   But, for now, we don't need this multireference. It even seems that it's better to just implement multireference as a loop. Time will tell. We go with the above for now.
                   "
+
+- CONDITIONAL
+
+- SEQUENCE
