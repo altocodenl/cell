@@ -15,7 +15,7 @@ var pretty = function (label, ftx) {
    teishi.clog (label, '\n' + ftx);
 }
 
-// *** MAIN FUNCTIONS ***
+// *** PARSING FUNCTIONS ***
 
 cell.toNumberIfNumber = function (text) {
    if (text.match (/^-?(\d+\.)?\d+$/) !== null) return parseFloat (text);
@@ -239,6 +239,30 @@ cell.sorter = function (paths) {
    });
 }
 
+// Assumes that paths are dedashed and sorted!
+cell.validator = function (paths) {
+
+   var seen = {};
+
+   var error = dale.stopNot (paths, undefined, function (path) {
+
+      return dale.stopNot (path, undefined, function (v, k) {
+         if (type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + cell.pathsToText ([path]) + '` uses it as a key.';
+
+         var Type = type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
+
+         var seenKey = JSON.stringify (path.slice (0, k));
+         if (! seen [seenKey]) seen [seenKey] = Type;
+         else {
+            if (seen [seenKey] !== Type) return 'The path `' + cell.pathsToText ([path]) + '` is setting a ' + Type + ' but there is already a ' + seen [seenKey] + ' at path `' + cell.pathsToText ([path.slice (0, k)]) + '`';
+            if (Type === 'number' || Type === 'text') return 'The path `' + cell.pathsToText ([path]) + '` is repeated.';
+         }
+      });
+   });
+
+   return error ? [['error', error]] : [];
+}
+
 cell.pathsToText = function (paths) {
 
    var spaces = function (n) {
@@ -283,6 +307,8 @@ cell.pathsToText = function (paths) {
 
    return output.join ('\n');
 }
+
+// *** JS HELPERS ***
 
 cell.JSToPaths = function (v, paths) {
 
@@ -342,29 +368,7 @@ cell.textToJS = function (text) {
    return cell.pathsToJS (cell.textToPaths (text));
 }
 
-// Assumes that paths are dedashed and sorted!
-cell.validator = function (paths) {
-
-   var seen = {};
-
-   var error = dale.stopNot (paths, undefined, function (path) {
-
-      return dale.stopNot (path, undefined, function (v, k) {
-         if (type (v) === 'float' && k + 1 < path.length) return 'A float can only be a final value, but path `' + cell.pathsToText ([path]) + '` uses it as a key.';
-
-         var Type = type (v) === 'string' ? (k + 1 < path.length ? 'hash' : 'text') : (k + 1 < path.length ? 'list' : 'number');
-
-         var seenKey = JSON.stringify (path.slice (0, k));
-         if (! seen [seenKey]) seen [seenKey] = Type;
-         else {
-            if (seen [seenKey] !== Type) return 'The path `' + cell.pathsToText ([path]) + '` is setting a ' + Type + ' but there is already a ' + seen [seenKey] + ' at path `' + cell.pathsToText ([path.slice (0, k)]) + '`';
-            if (Type === 'number' || Type === 'text') return 'The path `' + cell.pathsToText ([path]) + '` is repeated.';
-         }
-      });
-   });
-
-   return error ? [['error', error]] : [];
-}
+// *** ENTRYPOINT ***
 
 cell.call = function (message, from, to, hide, get, put) {
 
@@ -474,6 +478,8 @@ cell.call = function (message, from, to, hide, get, put) {
    //*/
 }
 
+// *** RESPOND ***
+
 cell.respond = function (path, get, put) {
 
    if (path.indexOf ('@') === -1 || path [0] === 'dialog') return;
@@ -550,108 +556,6 @@ cell.respond = function (path, get, put) {
 
    cell.put (pathsToPut, [], get, put);
    return true;
-}
-
-cell.native = function (call, message, contextPath, get) {
-   var nativeCalls = [
-      'if', 'do', // Conditional & sequence
-      '+', '-', '*', '/', '%', // Math
-      'eq', '>', '<', '>=', '<=', // Comparison
-      'and', 'or', 'not', // Logical
-      'upload' // Organization
-   ];
-
-   if (nativeCalls.indexOf (call) === -1) return false;
-
-   /*
-   if (call === 'do') return cell.do ('define', messagePath, contextPath, null, get);
-   if (call === 'if') return cell.if (messagePath, contextPath, get);
-
-   message = cell.pathsToJS (stripper (cell.get (messagePath, contextPath, get)))
-   */
-
-   // Ignore definitions, jump to values
-   var stripper = function (paths) {
-      return dale.fil (paths, undefined, function (path) {
-         if (path.indexOf ('@') !== -1) return;
-         return dale.fil (path, undefined, function (v) {
-            if (v !== '=') return v;
-         });
-      });
-   }
-
-   message = cell.pathsToJS (stripper (message))
-
-   var types = [];
-   dale.go (message, function (v) {
-      var t = {float: 'number', integer: 'number', string: 'text', object: 'hash', array: 'list'} [type (v)];
-      if (types.indexOf (t) === -1) types.push (t);
-   });
-
-   var round = function (n) {
-      return Math.round (n * 1000000000) / 1000000000;
-   }
-
-   if (call === '+') {
-      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
-      if (types.length > 1 && ! teishi.eq (types.sort, ['number', 'text'])) return [['error', 'Cannot mix these elements:', types.join (', ')]];
-
-      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {return a.concat (b)}));
-
-      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
-         dale.go (b, function (v, k) {a [k] = b});
-         return a;
-      }));
-
-      return [[dale.acc (message, function (a, b) {return a + b})]];
-   }
-   if (call === '-') {
-      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
-      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
-      if (types.length > 1) return [['error', 'Cannot mix these elements:', types.join (', ')]];
-
-      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {
-         return dale.fil (a, undefined, function (v) {
-            if (! dale.stop (b, true, function (v2) {
-               return teishi.eq (v, v2);
-            })) return v;
-         });
-      }));
-
-      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
-         dale.go (b, function (v, k) {delete a [k]});
-         return a;
-      }));
-
-      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a - b})]];
-   }
-   if (call === '*' || call === '/') {
-      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
-      if (types [0] !== 'number') return [['error', 'Operation only defined for number.']];
-
-      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
-   }
-   if (call === '%') {
-      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
-      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
-
-      // TODO; % for intersection of list and hash (values vs keys)
-
-      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a % b})]];
-   }
-
-   if (call === 'eq') {
-      return [[dale.stop (message, false, function (v, k) {
-         if (k === 0) return true;
-         return teishi.eq (v, message [k - 1]);
-      })] ? 1 : 0];
-   }
-
-   if (call === 'upload') {
-      clog ('debug', message);
-   }
-
-   return [['']];
 }
 
 cell.if = function (queryPath, contextPath, get) {
@@ -757,6 +661,108 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    return output;
 }
 
+cell.native = function (call, message, contextPath, get) {
+   var nativeCalls = [
+      'if', 'do', // Conditional & sequence
+      '+', '-', '*', '/', '%', // Math
+      'eq', '>', '<', '>=', '<=', // Comparison
+      'and', 'or', 'not', // Logical
+      'upload' // Organization
+   ];
+
+   if (nativeCalls.indexOf (call) === -1) return false;
+
+   /*
+   if (call === 'do') return cell.do ('define', messagePath, contextPath, null, get);
+   if (call === 'if') return cell.if (messagePath, contextPath, get);
+
+   message = cell.pathsToJS (stripper (cell.get (messagePath, contextPath, get)))
+   */
+
+   // Ignore definitions, jump to values
+   var stripper = function (paths) {
+      return dale.fil (paths, undefined, function (path) {
+         if (path.indexOf ('@') !== -1) return;
+         return dale.fil (path, undefined, function (v) {
+            if (v !== '=') return v;
+         });
+      });
+   }
+
+   message = cell.pathsToJS (stripper (message))
+
+   var types = [];
+   dale.go (message, function (v) {
+      var t = {float: 'number', integer: 'number', string: 'text', object: 'hash', array: 'list'} [type (v)];
+      if (types.indexOf (t) === -1) types.push (t);
+   });
+
+   var round = function (n) {
+      return Math.round (n * 1000000000) / 1000000000;
+   }
+
+   if (call === '+') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types.length > 1 && ! teishi.eq (types.sort, ['number', 'text'])) return [['error', 'Cannot mix these elements:', types.join (', ')]];
+
+      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {return a.concat (b)}));
+
+      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         dale.go (b, function (v, k) {a [k] = b});
+         return a;
+      }));
+
+      return [[dale.acc (message, function (a, b) {return a + b})]];
+   }
+   if (call === '-') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
+      if (types.length > 1) return [['error', 'Cannot mix these elements:', types.join (', ')]];
+
+      if (types [0] === 'list') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         return dale.fil (a, undefined, function (v) {
+            if (! dale.stop (b, true, function (v2) {
+               return teishi.eq (v, v2);
+            })) return v;
+         });
+      }));
+
+      if (types [0] === 'hash') return cell.JSToPaths (dale.acc (message, function (a, b) {
+         dale.go (b, function (v, k) {delete a [k]});
+         return a;
+      }));
+
+      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a - b})]];
+   }
+   if (call === '*' || call === '/') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] !== 'number') return [['error', 'Operation only defined for number.']];
+
+      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
+   }
+   if (call === '%') {
+      if (type (message) !== 'array') return [['error', 'Expecting a list.']];
+      if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
+
+      // TODO; % for intersection of list and hash (values vs keys)
+
+      if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a % b})]];
+   }
+
+   if (call === 'eq') {
+      return [[dale.stop (message, false, function (v, k) {
+         if (k === 0) return true;
+         return teishi.eq (v, message [k - 1]);
+      })] ? 1 : 0];
+   }
+
+   if (call === 'upload') {
+      clog ('debug', message);
+   }
+
+   return [['']];
+}
+
 cell.upload = function (name, mime, base64, data) {
 
 
@@ -768,6 +774,8 @@ cell.upload = function (name, mime, base64, data) {
 
    // 1) put it in files
 }
+
+// *** REFERENCE & STORE ***
 
 cell.get = function (queryPath, contextPath, get) {
    var dataspace = get ();
@@ -874,10 +882,6 @@ var test = function () {
    var dataspace = [];
 
    var errorFound = false === dale.stop ([
-
-      // *** PATHS <-> JS ***
-
-      {f: cell.pathsToJS, input: [['bar', 1, 'jip'], ['bar', 2, 'joo'], ['jup', 'yea'], ['soda', 'wey']], expected: {bar: ['jip', 'joo'], jup: 'yea', soda: 'wey'}},
 
       // *** PUT ***
 
@@ -1252,7 +1256,7 @@ var test = function () {
 
          // text.ct has text that might or might not be proper fourtext
          // text.js has JSON that has to be converted to fourdata
-         // test.cjs has a call that has to be converted to JSON
+         // test.cjs has a call that has to be converted to JSON and compared with r, which is stringified JSON
          // test.c has a call that is valid fourtext
 
          if (test.ct !== undefined) {
@@ -1263,7 +1267,13 @@ var test = function () {
             var result = cell.JSToText (JSON.parse (test.js));
          }
          if (test.cjs !== undefined) {
-            var result = JSON.stringify (cell.textToJS (test.cjs));
+            var result = cell.textToJS (test.cjs);
+            if (! teishi.eq (result, JSON.parse (test.r))) {
+               pretty ('result', JSON.stringify (result));
+               pretty ('expected', JSON.stringify (JSON.parse (test.r)));
+               return false;
+            }
+            return;
          }
          if (test.c !== undefined) {
             var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
@@ -1281,8 +1291,8 @@ var test = function () {
             return path;
          }));
 
-         if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If it's not text (it could be number or a list of paths), make it into text.
-         if (result !== test.r) {
+         if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If we're not testing for JSON (t.cjs) and the expected result is not text (it could be number or a list of paths), make it into text.
+         if (! teishi.eq (result, test.r)) { // We use teishi.eq to compare two objects if this is a test.cjs
             pretty ('expected', test.r);
             pretty ('result', result);
             errorFound = true;

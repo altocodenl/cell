@@ -1,0 +1,3 @@
+Forty-second episode of season 3! I'm building a programming environment from scratch while recording myself. A breakthrough episode, at least for my standards. We grab the bull by the horns and work out decent definitions and expansions for fizzbuzz, one implementation being a sequence of four and the second one containing an actual loop. Tomorrow, we could pick another problem to work on.
+
+https://github.com/altocodenl/cell

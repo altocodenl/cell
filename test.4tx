@@ -288,6 +288,18 @@
                     r error "The path `foo` is setting a text but there is already a number at path ``"
                     tag "Type clash: text on number"
 
+                  - ct "- yes"
+                    r "1 yes"
+                    tag "Dashed list with one element"
+
+                  - ct "foo first 1
+                        bar x
+                        foo second 2"
+                    r "bar x
+                       foo first 1
+                           second 2"
+                    tag "Unabridged, unsorted split prefix"
+
 - "JS <> PATHS" - js "{/"c/": /"d/", /"a/": /"b/"}"
                   r "a b
                      c d"
@@ -334,45 +346,45 @@
                   r "1"
                   tag "Number to JSON"
 
-                - cjs "1"
-                  r "1"
+                - cjs "/"1/""
+                  r "/"1/""
                   tag "Quoted number to JSON"
 
-                - TODO "jup yea
-                        suda wey
-                        bar 1 jip
-                            2 joo"
+                - cjs "jup yea
+                       soda wey
+                       bar 1 jip
+                           2 joo"
                   r "{/"bar/": [/"jip/", /"joo/"], /"jup/": /"yea/", /"soda/": /"wey/"}"
                   tag "Four paths into JSON"
 
-- "PUT VALIDATION" 1 c @ put foo bar 1
+- "PUT VALIDATION" - c @ put foo bar 1
                                  jip 2
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with direct values"
 
-                   2 c @ put 1 foo
+                   - c @ put 1 foo
                              2 bar
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with numeric keys"
 
-                   3 c @ put k foo
+                   - c @ put k foo
                              v bar
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with wrong key names"
 
-                   4 c @ put p foo
+                   - c @ put p foo
                              v bar
                              x jip
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with extra key x"
 
-                   5 c @ put p foo
+                   - c @ put p foo
                              v bar
                              x jip
                      r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
                      tag "Invalid put with extra key x (duplicate)"
 
-- "GET & PUT" 1 c @
+- "GET & PUT" - c @
                 r ""
                 tag "Get everything when the dataspace is empty"
                 comments leftmostAt 0
@@ -382,183 +394,183 @@
                          valuePath <empty>
                          prefix ??
 
-              2 c @ x
+              - c @ x
                 r ""
                 tag "Get one prefix when the dataspace is empty"
 
-              3 c @ put p party
+              - c @ put p party
                         v list 1 Jan
                                2 Jip
                           open 1
                 r ok
                 tag "Create a hash with three paths"
 
-              4 c @ put p serious
+              - c @ put p serious
                         v business
                 r ok
                 tag "Create another hash"
 
-              5 c @
+              - c @
                 r party list 1 Jan
                              2 Jip
                         open 1
                   serious business
                 tag "Get everything and obtain both hashes"
 
-              6 c @ party
+              - c @ party
                 r list 1 Jan
                        2 Jip
                   open 1
                 tag "Get one prefix to get the entire party"
 
-              7 c @ party list
+              - c @ party list
                 r 1 Jan
                   2 Jip
                 tag "Get a longer prefix to get just the list"
 
-              8 c @ party list 1
+              - c @ party list 1
                 r Jan
                 tag "Get the first guest only"
 
-              9 c @ party list 1 Jan
+              - c @ party list 1 Jan
                 r ""
                 tag "Get the entire first path and obtain nothing"
 
-              10 c @ no such thing
-                 r ""
-                 tag "Get no such thing"
+              - c @ no such thing
+                r ""
+                tag "Get no such thing"
 
-              11 c @ party open
-                 r 1
-                 tag "Get the status of the party"
+              - c @ party open
+                r 1
+                tag "Get the status of the party"
 
-              12 c @ serious
-                 r business
-                 tag "Get just the business"
+              - c @ serious
+                r business
+                tag "Get just the business"
 
-              13 c @ serious business
-                 r ""
-                 tag "Get the entire last path and obtain nothing"
+              - c @ serious business
+                r ""
+                tag "Get the entire last path and obtain nothing"
 
-              14 c @ put p party
-                         v 1
-                 tag "Overwrite prefix with multiple paths"
+              - c @ put p party
+                        v 1
+                tag "Overwrite prefix with multiple paths"
 
-              15 c @
-                 r party 1
-                   serious business
-                 tag "Get everything after overwriting prefix with multiple paths"
+              - c @
+                r party 1
+                  serious business
+                tag "Get everything after overwriting prefix with multiple paths"
 
-              16 c @ put p party
-                         v list 1 Jan
-                                2 Jip
-                           open 1
-                 tag "Restore party"
+              - c @ put p party
+                        v list 1 Jan
+                               2 Jip
+                          open 1
+                tag "Restore party"
 
-- WIPE 1 c @ wipe serious
+- WIPE - c @ wipe serious
          r ok
          tag "Wipe serious"
 
-       2 c @
+       - c @
          r party list 1 Jan
                       2 Jip
                  open 1
          tag "Get everything after serious was wiped"
 
-       3 c @ wipe party list 1 Jan Hertog
+       - c @ wipe party list 1 Jan Hertog
          r ok
          tag "Wipe a path that does not exist, should change nothing"
 
-       4 c @
+       - c @
          r party list 1 Jan
                       2 Jip
                  open 1
          tag "Get everything after wipe no-op"
 
-       5 c @ wipe party list 1
+       - c @ wipe party list 1
          tag "Wipe the first member of the list"
 
-       6 c @ party
+       - c @ party
          r list 1 Jip
            open 1
          tag "Get party after one element was wiped"
 
-       7 c @ wipe
+       - c @ wipe
          tag "Wipe everything"
 
-       8 c @
+       - c @
          r ""
          tag "Get everything after wipe and obtain nothing"
 
-       9 c @ put p nested
+       - c @ put p nested
                  v 1 list 1 Jan
                           2 Jip
                    2 open
          tag "Setting a nested list"
 
-       10 c @ wipe nested 1 list 1
-          tag "Wiping part of a nested list"
+       - c @ wipe nested 1 list 1
+         tag "Wiping part of a nested list"
 
-       11 c @
-          r nested 1 list 1 Jip
-                   2 open
-          tag "Get everything after wiping part of a nested list"
+       - c @
+         r nested 1 list 1 Jip
+                  2 open
+         tag "Get everything after wiping part of a nested list"
 
-       12 c @ wipe
-          tag "Wipe everything"
+       - c @ wipe
+         tag "Wipe everything"
 
-- "GET WITH CONTEXT" 1 c @ put v employee price 15
+- "GET WITH CONTEXT" - c @ put v employee price 15
                                  friend price 20
                                  price 30
                        tag "Initialize the three prices"
 
-                     2 c @
+                     - c @
                        r employee price 15
                          friend price 20
                          price 30
                        tag "Verify that the three prices are initialized"
 
-                     3 c @ price
+                     - c @ price
                        r 30
                        tag "Get outermost price"
 
-                     4 c @ put p employee gets
+                     - c @ put p employee gets
                                v @ price
                        tag "Set reference to employee price"
 
-                     5 c @ employee gets
+                     - c @ employee gets
                        r = 15
                          @ price
                        tag "Get employee price"
 
-                     6 c @ put p friend gets
+                     - c @ put p friend gets
                                v @ price
                        tag "Set reference to friend price"
 
-                     7 c @ friend gets
+                     - c @ friend gets
                        r = 20
                          @ price
                        tag "Get friend price"
 
-                     8 c @ put p outside gets
+                     - c @ put p outside gets
                                v @ price
                        tag "Set reference to outside price"
 
-                     9 c @ outside gets
+                     - c @ outside gets
                        r = 30
                          @ price
                        tag "Get outside price"
 
-                     10 c @ wipe
+                     - c @ wipe
 
-- "GET WITH DOT" 1 c @ put v employee @ . price
+- "GET WITH DOT" - c @ put v employee @ . price
                                       price 15
                              @ . price
                              price 30
                              z @ . price
                    tag "Set two prices and three dot references"
 
-                 2 c @
+                 - c @
                    r employee price 15
                               = 15
                               @ . price

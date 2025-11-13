@@ -143,7 +143,7 @@ TODO
 - Find
    - Have a cursor [DONE]
    - Move it around with the keys [DONE]
-   - Fold/unfold [IN PROGRESS]
+   - Fold/unfold
    - Jumping search
    - Auto scroll to where the cursor is, if the cursor jumps
    - Copy (the cursor determines the selection)
@@ -203,28 +203,25 @@ TODO
 
 ### Language
 
-- Experiment with put without v: just assume it is v. Also put without v, assume it is "". This is for initialization. And always return the old value and the new value. If the old value was nothing (not even an empty text), just return one value? No, because it could be ambiguous with some lists. Return a list with one item. So we have a diff. Or better: from and to.
-- Rework entrypoint of native calls (if/do/put).
-- Refactor cell.call
+- Text to paths [DONE]
+   - Dedash
+   - Sort
+   - Validate
+- Paths to text [DONE]
+- JS to paths & paths to JS [DONE]
+- Reference (cell.get) [DONE]
+- Storage (cell.put) [DONE]
+   - [TODO] Experiment with put without v: just assume it is v. Also put without v, assume it is "". This is for initialization. And always return the old value and the new value. If the old value was nothing (not even an empty text), just return one value? No, because it could be ambiguous with some lists. Return a list with one item. So we have a diff. Or better: from and to.
+   - [TODO] Give back a diff of paths instead of "ok"
+- Entrypoint (cell.call) -- must rework.
    - Have an unified interface through cell.call.
    - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
-- Upload
-   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
-   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
-- Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
 - Rewrite all the existing tests and add new ones for anything untested.
-- Include test for multiline texts in the middle of paths that then have one path below that's indented up (or further) than the position of the multiline text in the previous path.
-- Literal dashes.
-- Upload.
-- Allow single paths with multiple values for native calls for shorter notation.
-- Loop (without macro?)
-- More calls: edit, wipe, push, lepush (left add), pop, lepop
-- do
+- Sequence (cell.s)
+   - Rename to s
+   - Figure out how the expansion looks
+   - Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
    - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
-   - native calls
-      - add validations
-      - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
-      - test each of them, also with multiple arguments
    - Allow early response with `response`
    - allow for multiple args (destructuring of lists) and no args (the sequence just there)
    - test fizzbuzz (http://localhost:2315/#/river-chair-phone)
@@ -234,6 +231,19 @@ TODO
    - test recursive calls
    - test descending funarg (pass function)
    - test ascending funarg (return function)
+- Loops (cell.loop)
+
+
+
+- Upload
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+- Native calls
+   - Allow single paths with multiple values for native calls for shorter notation.
+   - add validations
+   - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
+   - test each of them, also with multiple arguments
+- More calls: edit, push, lepush (left add), pop, lepop
 - error (catch)
 - search (general call to get matching paths)
 - replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
@@ -250,7 +260,7 @@ TODO
 - Efficient recalculation in cell.respond
 - @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
 
-### Database
+### Engine
 
 - Sublinear search
    - Set from a path to all its following steps (just the next one)
@@ -449,6 +459,169 @@ views
 ```
 
 ## Development notes
+
+### 2025-11-13
+
+Let's allow literal dashes: if a dash in the context of a hash, we consider it to be a literal hash.
+
+No, never mind. This requires sorting and comparing prefixes. I only want to allow it because it would be possible to express it without harming the main case, but now, implementation wise, it complicates things. So I will let it be like this, and a lone dash, at least for now, will always represent an unspecified index/step of a list.
+
+The two big problems I'm facing now:
+
+- The sequence problem.
+- The loop problem.
+
+The sequence problem is that I still don't know how sequences should be written and how their expansions should look. This is core.
+
+The loop problem is exactly the same thing, but for loops.
+
+References, conditionals look good. I also think catch will be straightforward. The difficulty lies with these two workhorses, sequence and iteration.
+
+In the graph of a few days above, what belongs to the engine part and what to the language, if they're both in the center and only divided by a dotted line? In the engine goes everything that must run in the DB, for performance and consistency reasons; if it can go outside, it's the language.
+
+Let's tackle again the problem of how a sequence really looks.
+
+```
+fizzbuzz @ seq n - @ put : output ""
+                 - @ if cond @ % - @ n
+                                 - 3
+                        else @ push p output
+                                    v fizz
+                 - @ if cond @ % - @ n
+                                 - 5
+                        else @ push p output
+                                    v buzz
+                 - @ output
+```
+
+Or with a loop:
+
+```
+fizzbuzz @ seq n - @ put : output ""
+                 - @ loop data fizz 3
+                               buzz 5
+                          seq path - @ if cond @ % - @ n
+                                                   - @ path 2
+                                          else @ push p output
+                                                      v @ path 1
+                 - @ output
+```
+
+In ES5 JS, I'd do:
+
+```
+var fizzbuzz = function (n) {
+    var output = '';
+    [['fizz', 3], ['buzz', 5]].forEach (function (v) {
+        if (! (n % v [1])) output += v [0];
+    });
+    return output;
+}
+```
+
+8 lines vs 7. Very close. Without indents, 142 chars vs 150. This has the same compression! cell takes up more real estate on the screen because it goes right more. There's more room (space) between characters.
+
+An iterating function, instead of receiving k and v (where k is just the key and v is a value, probably nested). Wait, I just realized that k is car, and v is cdr. So we just pass the entire path, but only one path at a time. This won't always be useful. In this case (fizzbuzz iteration), it is.
+
+Finding the first step when walking up on a get or put reminds me of falling and grabbing a ledge in Prince of Persia.
+
+Let's tackle the expansions now. First, the non-loop version.
+
+```
+= fizzbuzz
+: n 15
+  output fizzbuzz
+  s - = to ""
+      @ put : output ""
+              = 0
+                    = 15
+    - if cond @ % - @ n
+                  - 3
+              = from ""
+                to fizz
+         else @ push p output
+                     v fizz
+              = 0
+                    = 15
+    - if cond @ % - @ n
+                  - 3
+              = from fizz
+                to fizzbuzz
+         else @ push p output
+                     v fizz
+      = fizzbuzz
+    - @ output
+@ fizzbuzz 15
+```
+
+Now, let's do the loop version.
+
+```
+= fizzbuzz
+: n 15
+  output fizzbuzz
+  s - = to ""
+      @ put : output ""
+              = 0
+    - = - from ""
+          to fizz
+        - from fizz
+          to fizzbuzz
+      @ loop data fizz 3
+                  buzz 5
+             seq - = from ""
+                     to fizz
+                             = from ""
+                               to fizz
+                                   = 15
+                   @ if cond @ % - @ n
+                                   = 3
+                                 - @ path 2
+                             = from ""
+                               to fizz
+                        else @ push p output
+                                      = fizz
+                                    v @ path 1
+                    : path fizz 3
+                 - = from fizz
+                     to fizzbuzz
+                             = from fizz
+                               to fizzbuzz
+                                   = 15
+                   @ if cond @ % - @ n
+                                   = 5
+                                 - @ path 2
+                             = from fizz
+                               to fizzbuzz
+                        else @ push p output
+                                      = buzz
+                                    v @ path 1
+                    : path buzz 5
+      = fizzbuzz
+    - @ output
+@ fizzbuzz 15
+```
+
+The colon cannot be batched! You have to expand everything where it is! There's no point (I think) in putting the expansion of the loop in its :, just go in its definition and expand it! I'm not sure where the limit should be.
+
+Interesting one: the if responds with whatever the do or else responded! It's one of the two. They are really two functions/sequences.
+
+Words I need to substitute in my talking/writing:
+- Function -> sequence
+- Variable -> path
+- Return -> respond
+
+I think this is it: an iteration is a sequence, the same sequence over an over, but with different arguments. Express it as a sequence. After all, this is what it is.
+
+Having the definition of the loop in the expansion feels a bit unnecessary. But maybe it works. After all, you do have it in the sequence, when you call it? Actually, no, you don't have the definition again.
+
+We could do the expansion at seq path! Rather than have the definition again, just put the expansion there in seq.
+
+Interesting difference: when iterating, we usually do NOT want to share the prefix, so we can set variables with the same names but different values. We're "inside" a function when iterating, but when we're going on a sequence we're doing line after line of code, like statement after statement. Perhaps this is a bad chair setting the shape of your spine, after all these years. When I need a variable to be shared by the loop, I set it outside. Perhaps we should explore whether we can have a common ground by default. Let's see.
+
+To make the put respond with diffs is beautiful. It turns side effects into values.
+
+Claude gets it: "This is why you're obsessing over the expansion format. It's not just debug output - it IS the execution model."
 
 ### 2025-11-12
 
