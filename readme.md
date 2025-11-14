@@ -460,6 +460,81 @@ views
 
 ## Development notes
 
+### 2025-11-14
+
+Having a single diff as response of put is a good reason to just pass one path to put. If you call it with multiple pahs, then you'd have to respond with multiple diffs. But that wouldn't be too bad either.
+
+When you call a loop, its `seq` part gets expanded into a list. This is good. I just put the colon on each of these steps, so that the value of `path` is taken from there.
+
+Now, for the hard question: is this expansion better than console.log? I think so, but only if you don't show me the whole thing and rather let me either unfold (expand) or search. I could go and look for what happens in the second iteration of the loop, or I could search for "buzz" and see where it appears in the expansion.
+
+So yes.
+
+A lot of repetition happens only with those results that get propagated (responded, really) upwards. But you don't necessarily see them unless you unfold them.
+
+Is this a good language for thinking? That's an open question. If this is not a good language for thinking, I missed the mark.
+
+The path ahead, immediately: build things with cell (can be just the design, we can implement later) and be highly demanding of it to be expressive, direct and comfortable for tackling anything that I would think of doing.
+
+Case in point: HTML generation.
+
+Let's tackle that one again.
+
+```
+html tags all @ list "!DOCTYPE HTML" LITERAL a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption cite code col colgroup command datalist dd del details dfn div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins kbd keygen label legend li link map mark menu meta meter nav noscript object ol optgroup option output p param pre progress q rp rt ruby s samp script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead time title tr track u ul var video wbr
+          void "!DOCTYPE HTML" area base br col command embed hr img input keygen link meta param source track wbr
+     validate @ seq input - @ put p : t
+                                  v @ type @ input
+                          - @ if cond @ has l - number
+                                              - text
+                                            v @ t
+                                 do 1
+                          - @ if cond @ eq list @ t
+                                 do @ loop data input
+                                           seq @ html validate
+                          - @ if cond @ eq hash @ t
+                                 do - @ if cond @ not @ has l @ html tags all
+                                                            v @ list @ input 1 1
+                                           do stop @ text - @ list @ input 1 1
+                                                          - "is not a valid tag"
+
+
+
+
+
+input1 div id z
+           cl - a
+              - b
+              - "c d"
+           _ p cl - u
+               onclick @ s @ shine
+               _ Hello!
+```
+
+A `do` inside `if` should be able to take a sequence. I'm bothered by the do/else in contrast to the `seq` when we define and the `seq` when we're inside a loop. This could be unified, perhaps.
+
+These calls that take paths and make them into lists, or the other way around, or peel them, these will be the main mechanisms of (data) transformation in cell. That's what's shaping up now.
+
+A path is also a list. Why not see it like this? When you get a value in a loop, you get either zero or more paths. Let's assume it's one or more.
+
+If you get one path, and you know it, you just treat the path as a list. You can slice it and then send it to another call.
+
+If you get multiple ones, you'd have to do double accessing to get one value.
+
+So we need slice left-right over one or many, and also see how many we let through. But we can just pass paths around. The question is: can we deal with paths as values without having to convert back and forth? Because there's this "listy" representation and then the "data is there" representation. The rift is there more clearly for a hash. But maybe these are just my old ways of thinking, in js.
+
+Come back to the ground. If you have a hash and then you do input 1, you'll get nothing, because 1 is a number, and hashes have texts as keys. So we do need to convert this data to a path. And by path, I mean to a list of paths.
+
+Maybe, when you convert a hash to a list, what you do is you convert it to a list of paths and you work with the data in that format instead. It's not an "internal representation", it's just another, very useful way to loo at the data. That whas the whole thing. And by having a normal type (list) you don't have to add more operations just for that. It's all data, and you find the natural representation for it. Much better than going with timid accessors on objects. And there are not many cases! A number or a text, when converted to a list, they have just one element, because they are one path. The only multiple value (complex value) that is not a list is a hash. So this is the only place where you need to convert! That's it!
+
+And you can take the hash, make it into a list, slice all the lists inside the list (the paths) removing the (say) first element, and then you changed the data and then you make it back into a hash! So you're just going back and forth from list to hash and back to list. It's all data. It's beautiful.
+
+In the list representation, you reference positionally. In hashes, you reference by value. That's basically it. When you need to work positionally on the list (say, remove a prefix) you make it into a list; when you need to access by value, instead of iterating with an @ eq, you can make it into a hash and just bring that.
+
+I'm interested in the situations where a list can be converted to a hash. This would make sense for sets? Yes, for sets, and the left steps would be the values and the right ones would be (perhaps) the positions. I am not sure where I would use this yet. What I would use is to take a list of paths that represent a hash and make it back into a hash. That, for certain we could use. So perhaps @ hash could take exactly that: a list of paths that actually represent a hash.
+
+@ text can take a list and we can make it into a single text that separates them with single spaces. There are natural defaults for type conversion between values, there's a few practical, everyday usages for them. Much better than tricky and meaningless coercions.
+
 ### 2025-11-13
 
 Let's allow literal dashes: if a dash in the context of a hash, we consider it to be a literal hash.
@@ -571,6 +646,7 @@ Now, let's do the loop version.
                   buzz 5
              seq - = from ""
                      to fizz
+                   : path fizz 3
                              = from ""
                                to fizz
                                    = 15
@@ -582,9 +658,10 @@ Now, let's do the loop version.
                         else @ push p output
                                       = fizz
                                     v @ path 1
-                    : path fizz 3
+                   : path fizz 3
                  - = from fizz
                      to fizzbuzz
+                   : path buzz 5
                              = from fizz
                                to fizzbuzz
                                    = 15
@@ -596,7 +673,7 @@ Now, let's do the loop version.
                         else @ push p output
                                       = buzz
                                     v @ path 1
-                    : path buzz 5
+                   : path buzz 5
       = fizzbuzz
     - @ output
 @ fizzbuzz 15
