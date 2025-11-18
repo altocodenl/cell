@@ -460,6 +460,295 @@ views
 
 ## Development notes
 
+### 2025-11-18
+
+OK, HTML generation.
+
+```
+   lith.entityify = function (string, prod) {
+      if (! prod && teishi.stop ('lith.entityify', ['Entityified string', string, 'string'], undefined, true)) return false;
+
+      return string
+         .replace (/&/g, '&amp;')
+         .replace (/</g, '&lt;')
+         .replace (/>/g, '&gt;')
+         .replace (/"/g, '&quot;')
+         .replace (/'/g, '&#39;')
+         .replace (/`/g, '&#96;');
+html entiyify @ seq text - @ loop data & &amp;
+                                       < &lt;
+                                       > &gt;
+                                       "/"" &quot;
+                                       ' &#39;
+                                       ` &#96;
+                                  do path - @ put p text
+                                                  v @ replace from @ path 1
+                                                              to @ path 2
+                                                              v @ text
+                         - @ text
+     generate @ seq input - @ put p : output
+                          - @ put p : t
+                                  v @ type input
+                          - @ if cond @ eq number t
+                                 do @ push p output
+                                           v @ input
+                          - @ if cond @ eq text t
+                                 do @ push p output
+                                           v @ html entityify @ input
+                          - @ if cond @ eq list t
+                                 do @ loop data input
+                                           do data @ push p output
+                                                          v @ html generate @ data v
+                          - @ if cond @ eq hash t
+                                 do - @ push p output
+                                             v - <
+                                               - @ list @ input , 1
+                                               - >
+                                    - @ loop data @ input @ list @ input , 1
+```
+
+Why would any of this make sense? What will be different as soon as it works?
+
+- The data is right there in your code.
+- You have constant feedback on your calls, and you can unfold.
+- The editor works in steps, not characters, so you are jumping around.
+
+The price of this is not even the implementation (well, a little bit). But actually figuring out the meat and potatoes of the mechanisms that you use in sequences. Variable getting/setting, loops, match, slice, push. The works.
+
+Let's do it.
+
+What is enough to design so that we can then implement?
+- HTML validation/generation.
+- Spine of a web server.
+
+Loops have cond / do / else. Should loops have data / do instead of data / seq? We can keep `seq` just for definition of sequences. The only reason I don't put seq for conditionals is that the s comes after e, so else would be there before do. Same goes for then. Nah, let's go with do. It's what we would say in natural language.
+
+Replace shouold replace all instances, not the first one. I don't remember using the single-char replacement in replace ever.
+
+We could even have the default that you respond with your message? Hmmm, no. Let's make it more explicit, at least for now. Yes, it has to be self-similar and you need to see where this response comes from.
+
+Open problems with this scope:
+- Cannot access an x above if you also define an x below. The x below blocks the x above (this also happens in js).
+- Unintentional variable capture if you have a library in the middle of your code, between the high and the low, and they use the same variable names that you are using to access something "up". JS doesn't have this problem because of dynamic scope.
+
+What's killing me with iteration sometimes is that I need to pass all the distinct prefixes in a grouped way. If we have, let's say, just three items, it would be:
+
+```
+1 a
+2 b
+3 9
+```
+
+And there, I need to get the second element of each. But what if we have this?
+
+```
+1 div cl a
+      id b
+2 b
+3 9
+```
+
+It would make sense to iterate not on paths but on list elements. This would actually make more sense, at least some of the time. If I do this, then, if I'm iterating a list, I would only go n times, one per element of the list, instead of one per path. Then, k would be @ path 1, and v would be @ path 2 onwards. This could work. It also works for the simple case of simple elements on a list or a hash. This is totally car/cdr.
+
+But wait! If we do this, then you can have MULTIPLE @ path 2s. In the example above, you don't, actually, you have one which then forks. But you could have this:
+
+```
+1 cl a
+  id b
+2 b
+3 9
+```
+
+So, on the first iteration, what is @ path 2? Well, it could be a list. It could be a list where the first element is cl and the second one is id. Same goes for path 3. And you cannot confuse this with anything else, or rather, this is not ambiguous, because you know you're working with paths.
+
+I'm about to retreat to iterating not on paths, but on k and v.
+
+If the complex structure is a list, do you change anything by having it as paths? Yes, how you group them:
+
+```
+1 1 a
+  2 b
+  3 c
+```
+
+v is
+
+```
+- a
+- b
+- c
+```
+
+but path 2 would be
+
+```
+- 1
+- 2
+- 3
+```
+
+And path 3 would be
+
+```
+- a
+- b
+- c
+```
+
+Making path 2 pretty unnecessary, unless you have items that skip (sparse lists).
+
+This is key. How we take away the grain of complex data is what makes iteration, and later, querying. Querying is, essentially, fast iteration + a DSL/shorthand.
+
+Rather than k/v, we could have data, and you access it by data p (the key/prefix) and data v (the value, everything else). The debate between the new paradigm of paths that is conceptually unifying vs the traditional practicality of working with values is moot. What matters is to find the few use cases that can stand on themselves and see which way they will tilt the scales. This is the only thing that can and should determine the default for a loop. And in the cases where the secondary representation of the message passed to the loop call is useful, this can help us flesh it out in a better way.
+
+The problem with not having parenthesis is that doing something like Object.keys (data) [0] is making me have to store a variable somewhere, so that I can then access it! This is not good.
+
+Let's reconsider anew an unary opearator that splits things, for example, a comma.
+
+```
+@ list data , 1
+```
+
+The comma would make the call ignore the 1 for finding data, and would even call @ list with it (or nothing, if there's no data). Then, the comma would disappear. It's somehow balanced with the amount of calls. Then, after @ list data is resolved, we get its 1.
+
+How is this expressed in the @? We would like to see the intermediate results: @ list data gives you a bunch of stuff, then you get 1? Or does comma operate in one go, and you just get that element? I'm leaning heavily towards the latter.
+
+Maybe this could work. It's a sort of precedence indicator that builds some tension on the left until it gets resolved. It can just map to a single call, a single @.
+
+Interesting chat with Claude. The comma could be almost considered a pipe.
+
+OK, the problem with the comma is that we don't see the intermediate values, there's just too much going on. And, as with unix pipes, you can only see what comes out.
+
+So what if a , is like an @, in that we see something on top of it?
+
+```
+@ list data , 1
+```
+
+expands to:
+
+```
+           - div
+- - div
+  - cl
+  - a
+- - div
+  - id
+  - b
+@ list data , 1 1
+```
+
+Claude: "And here's the kicker: the visual feedback naturally limits abuse. If you do:
+`@ list data , 1 , prop , 0 , name`
+You'll see 5 results stacked up, and it'll be visually obvious you're doing something gnarly. The editor essentially says "look at this mess you're making" without forbidding it."
+
+This cannot be just for reference, because a reference is a call. Self-similarity all the way, it has to be the same for everything. Because it is all the same, really, right? It's just calls. I'm of course with my hands on my head when writing this.
+
+claude: "Your insight: Threading + mandatory visibility = debuggability without cognitive overhead."
+
+What's new here, in the end?
+- You can see any data with the same representation.
+- You can make any call from the same space.
+- All transformation is done in one way, through call & response.
+- Every call has its result on top so you can see it.
+
+I'm realizing that forth has pipes by default: you put data, then you call a word and the result is there and then you either add more data or put another word that takes the previous result. It's piped by default. You write it in the order in which it has to be executed. Words that are data simply don't execute anything, they just build up data/tension in the stack. It's beautiful.
+
+claude: "In JS/C, intermediate state is hidden but addressable"
+good point. Forth and APL don't have this, at least not at their best. They have great flow, but no way to get ahold of what's in the middle. You really have to run it in your head.
+
+APL also has symbols that are not easily readable, which complicates it further.
+
+Why not lisp, then? Is it the lack of in-built hashes?
+
+
+```
+                                    - @ loop data @ input @ list @ input , 1
+```
+
+I need to sleep on it. How to get the value that's behind the first step (key) of a hash?
+
+### 2025-11-17
+
+Again.
+
+Two problems:
+- Access paths: the second element of each path (attribute keys), but without repeating it to avoid extra validations? Also the third element of each path (attribute values).
+- Regexes.
+
+One way to do it would be to vanilla iterate the hash, where the key is only "seen" once per group, so no common prefixes are iterated twice.
+
+But let's think about efficiency in context. The internal representation of the data is already as paths. If the operation is cheap, there's no point in skipping it? Let's go with something, now. So, we're iterating paths. We have two options: we either do the cheap operation, or we have an "unique" filter to apply the operation on things. This actually makes sense from a performance perspective, and it also clarifies the code, because it reflects that a certain step could have multiple values?
+
+No, not really! In this case, each key has to have one text value! That's it! The only exception is `_`, which requires a recursive call. Then we can just iterate the hash.
+
+Interesting idea I'm immediately discarding: an unary separator, like : or (better) , to distinguish what's the path to the sequence and what is the message. Or to split ambiguous elements in single line/path calls.
+
+Problem for tomorrow: we need to pass the whole thing that belongs to `_`, not just a path!
+
+```
+html tags all @ list "!DOCTYPE HTML" LITERAL a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption cite code col colgroup command datalist dd del details dfn div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins kbd keygen label legend li link map mark menu meta meter nav noscript object ol optgroup option output p param pre progress q rp rt ruby s samp script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead time title tr track u ul var video wbr
+          void @ list "!DOCTYPE HTML" area base br col command embed hr img input keygen link meta param source track wbr
+     validate @ seq input - @ put p : t
+                                  v @ type @ input
+                          - @ if cond @ has l - number
+                                              - text
+                                            v @ t
+                                 do 1
+                          - @ if cond @ eq list @ t
+                                 do @ loop data input
+                                           seq @ html validate
+                          - @ if cond @ eq hash @ t
+                                 do - @ if cond @ has l @ html tags all
+                                                      v @ list @ input 1 1
+                                           else stop @ text - @ list @ input 1 1
+                                                            - "is not a valid tag"
+                                    - @ loop data input
+                                             seq path - @ if cond @ eq _ @ path 1
+                                                             do stop @ html validate @ input _
+                                                      - @ if cond @ > @ len 2 @ path
+                                                          do stop @ text - Attribute
+                                                                         - @ path 1
+                                                                         - "has a value that is not text:"
+                                                                         - @ slice range 2
+                                                                                   v @ path
+                                                      - @ if cond @ < @ len 2 @ path
+                                                          do stop @ text - Attribute
+                                                                         - @ path 1
+                                                                         - "has no value"
+                                                      -  @ if cond @ not @ match regexp - (begin)
+                                                                                        - or - a-z
+                                                                                             - _
+                                                                                             - :
+                                                                                        - range 0
+                                                                                          or - a-z
+                                                                                             - _
+                                                                                             - :
+                                                                                             - 0-9
+                                                                                             - .
+                                                                                             - -
+                                                                                             - \u0080-\uffff
+                                                                                  v @ path 1
+                                                              else stop @ text - Attribute
+                                                                               - @ path 1
+                                                                               - "start with an ASCII letter, underscore or colon, and be followed by letters, digits, underscores, colons, periods, dashes, extended ASCII characters, or any non-ASCII characters."
+
+
+input1 div id z
+           cl - a
+              - b
+              - "c d"
+           _ p cl - u
+               onclick @ s @ shine
+               _ Hello!
+
+{div: {id: 'z', cl: ['a', 'b', 'c'], _: {p: {cl: 'u', onclick: '@ s @ shine', _: 'Hello!'}}}}
+
+['div', {id: 'z', class: ['a', 'b', 'c']}, ['p', {cl: 'u', onclick: '@ s @ shine'}, 'Hello!']]
+```
+
+I do need the underscore to go at the bottom, sorting wise...
+
 ### 2025-11-14
 
 Having a single diff as response of put is a good reason to just pass one path to put. If you call it with multiple pahs, then you'd have to respond with multiple diffs. But that wouldn't be too bad either.
@@ -497,6 +786,7 @@ html tags all @ list "!DOCTYPE HTML" LITERAL a abbr address area article aside a
                                                             v @ list @ input 1 1
                                            do stop @ text - @ list @ input 1 1
                                                           - "is not a valid tag"
+
 
 
 

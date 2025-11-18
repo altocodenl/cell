@@ -1,0 +1,3 @@
+Forty-fourth episode of season 3! I'm building a programming environment from scratch while recording myself. Tackling the writing of non-trivial sequences, to see if the whole thing holds water.
+
+https://github.com/altocodenl/cell
