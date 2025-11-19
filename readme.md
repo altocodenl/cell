@@ -460,21 +460,82 @@ views
 
 ## Development notes
 
+### 2025-11-19
+
+Look at the other side: the common elements we use for most logic, for most transformation.
+
+Logic is transformation!
+
+The message going from call to call goes as is. It is not transformed, just transmitted. This is a strong assumption, or perhaps even an axiom. It makes sense that it would be the same on either side. This ties back (or is the same thing) as Shannon's definition of the fundamental problem of communication as reproduction of a message from one place to another.
+
+Storage could be reduced to communication and transformation in this way: you communicate what goes in and you get back an acknowledgment (which is its own form of transformation). Then, with another message, you can get back what you sent originally (another transformation). But this pattern is so fundamental that it makes sense to consider storage as a leg of the tripod. But storage can be autopoietic, and actually is so. Those bits we send to it are not just stored in one place inside of it; the physical bits are usually in several places and might not even be contiguous. And these layers of internal representations can still be understood as calls.
+
+What makes the TODIS paradigm autopoietic is that it lets each call have its own poiesis/construction. The message is the beginning, but what happens between the call and the response is a construction, also made of calls, in the call's own space.
+
+If the call is breathing in and the response breathing out, there's a lot that happens in between; and it's not just the same air that comes out. It bears a relationship to the one that came in, but other things happen in the middle. And those other things also have to do with other patterns inside the space of the call.
+
+What's considered external on the dataspace of the cell is what has no expansion, calls where you cannot see the poiesis (expansion as poiesis). This is the case for native calls (`+ 2 2`) or HTTP calls to an external API. But this is not always an obvious boundary. You could have, through access restrictions, only the ability to make a call but not see its expansion. So the visibility of the expansion is also relative; relative to what? To a part of the dataspace which can make those calls.
+
+There's no real "outside" in this paradigm because: 1) it lays claim on being able to represent any communication/transformation sequence; 2) there's no entity beyond call, so there's deep symmetry/self-similarity. It is just relative to where you are and what the calls that you can access from a certain spot let you do, how they respond to you.
+
+Streams are a problem for the call/response paradigm, because call and response requires finiteness. An open communication channel would have to be represented with a sequence of calls and responses that belong together. This is only for streams where you want to do something with the stream before it finishes flowing.
+
+However: a stream can be a location to which you're constantly appending data. Every incoming chunk that comes is really a call, not a response. The response is the adding of the chunk to the location. Consuming the stream is also making calls to it to read, and probably also to chop off what's been read already. The setting up of the stream is done by one call which then adds the call that can be called by the calls coming from outside to push the chunks.
+
+Terminology:
+- A text is a single path with a single step where the value of that single step is a text.
+- A number is a single path with a single step where the value of that single step is a number.
+- A list is a sequence of paths where the value of the first step of each of the paths is a number.
+- A hash is a sequence of paths where the value of the first step of each of the paths is a text.
+- To shorten saying "has a value", we can just say is. So, the M step of the N path IS X.
+- When we have a list or hash, we say it has N elements when its paths have N distinct values on the first step of each of its paths.
+- A prefix is the left part of a path. It can have a length of 0 up to the length of the path minus 1.
+- The value of a step of a path can only be one text or one number.
+- The value of a prefix is the sequence of all paths that have that prefix, but with the prefix chopped off each of them.
+- Two prefixes cannot have different values.
+- The same prefix cannot have two paths whose M element are of different types, UNLESS the M element is the last element of each of those paths. This prevents inconsistent types. Every prefix has a value of one type only.
+
+Let's reconsider pipes, again. Why do we need them? Yesterday's use case:
+
+- We start with a hash with only one element.
+- We want to get the value of this element. For that, we need to do `@ "<original hash>" "<value of the first step of the original hash>"
+- Getting the value of the first step of the original hash can be obtained by either:
+   - Making the hash into a list of paths, then getting the first step of the first path. `@ list @ input 1 1`.
+   - Making a `@ keys` call that gives back a list of first steps of the paths of the hash. From there, we'd do `1`: `@ keys @ input 1`.
+- Both have the same problem: we want to do `(@ list @ input) 1 1`, or `(@ keys @ input) 1`. But I have ruled out parenthesis. So what can we do?
+- The solution I was thinking of was to write `@ list @ input , 1 1` or `@ keys @ input , 1`.
+- How would it really work? We'd first resolve @ input, then @ list (or @ input and then @ keys), THEN do , 1.
+- But how far left can this thing go? We could say that it only works for the current path, and it doesn't go "up". So it's really about doing things on the same line, which it really is, because this whole thing is to avoid clunky variable assignments.
+- In this case, it would work. But what about:
+
+```
+                                    - @ loop data @ input @ list @ input , 1 1
+```
+
+In this case, I want `@ loop data @ input ((@ list @ input) 1 1)`. I don't need parenthesis around the outermost @ input because that goes right to left and we're fine.
+
+With commas, we could do it like this?
+
+
+```
+                                    - @ loop data @ input , @ list @ input , 1 1
+```
+
+So commas would be resolved right to left. You start at the rightmost @ and resolve until you hit either the beginning or another comma to your left. Then, if there's a comma to your right, you do the reference of what's after that comma and put the value on top of it. Then, you keep on doing the same for more commas to the left.
+
+Why not parenthesis? Because you cannot see the result on top! Do you put it on ( or on )? You could still put it on (. But I think this method of the commas is perhaps more elegant. It has that unary, forthy quality that comes from natural language.
+
+Parenthesis would still work, but they are clunky because they are two. If we were to use them, we'd definitely put the result on top of (, not ). Still, I like the comma better.
+
+Am I getting away with this?
+
+The comma is apparently like Haskell's `$`.
+
 ### 2025-11-18
 
 OK, HTML generation.
 
 ```
-   lith.entityify = function (string, prod) {
-      if (! prod && teishi.stop ('lith.entityify', ['Entityified string', string, 'string'], undefined, true)) return false;
-
-      return string
-         .replace (/&/g, '&amp;')
-         .replace (/</g, '&lt;')
-         .replace (/>/g, '&gt;')
-         .replace (/"/g, '&quot;')
-         .replace (/'/g, '&#39;')
-         .replace (/`/g, '&#96;');
 html entiyify @ seq text - @ loop data & &amp;
                                        < &lt;
                                        > &gt;
