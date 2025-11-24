@@ -460,6 +460,30 @@ views
 
 ## Development notes
 
+### 2025-11-24
+
+Interesting article on [Haskell](https://mrcjkb.dev/posts/2025-10-08-haskell-for-renewables.html). My
+
+> "In Haskell, types are a rigorous framework for representing real-world constraints directly in code."
+
+The article references another article called [Parse, Don't Validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
+
+> Consider: what is a parser? Really, a parser is just a function that consumes less-structured input and produces more-structured output. By its very nature, a parser is a partial function.
+
+This, to me, is exactly what validation means. You take a message (input) that can have many possibilities, and you reduce the number of possibilities. It is still large, but you have more information (in the Shannon sense, that information is what reduces the amount of possibilities). I'm not considering the possibilities to be infinite because the maximum number of characters for an input should be finite. Back to the main point: whether you call this parsing, or validating, you're referring to the same thing. I don't see any reason why this wouldn't be considered a validation. Validation can (and should) be done at runtime and as soon as the data comes in through the call boundary.
+
+However, it is a great point that once you added information/restricted the set of possibilities about the message, have that available in the system later. cell should be able to keep track of those assertions.
+
+Recursion requires a conditional, otherwise you'd keep on going forever. Unless you're building something that keeps on going forever, like a traditional Turing Machine. You could see U as a recursive function.
+
+### 2025-11-22
+
+If asked for the why of cell and I had to narrow it down to three points (as I was yesterday), I would say:
+
+- Low-noise way to represent data and code (fourdata + fourtext, pillar 1).
+- See the result on top of the query (call and response, pillar 3).
+- The editor accessible through the browser and the service being automatically provided. This is actually stronger than the LLM component.
+
 ### 2025-11-19
 
 Look at the other side: the common elements we use for most logic, for most transformation.
