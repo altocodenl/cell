@@ -1,0 +1,3 @@
+Forty-seventh episode of season 3! I'm building a programming environment from scratch while recording myself. Unexpectedly, the season comes to an end! I now have a much clearer vision of what a demo entails, and how it could all come together. The coming together starts in season 4.
+
+https://github.com/altocodenl/cell

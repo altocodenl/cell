@@ -438,6 +438,9 @@ Please see [here](https://github.com/altocodenl/TODIS?tab=readme-ov-file#pillar-
 
 ```
 access
+api
+   email
+   http
 cron
 dialog
    - call
@@ -450,19 +453,102 @@ editor (client side only, not persisted in the server)
    cursor
    expand
    search
-endpoints
-   email
-   http
-files
-rules
-views
+file
+rule
+view
 ```
 
 ## Development notes
 
+### 2025-11-25
+
+Any abstraction layer should be described succintly in what it provides (and therefore, what you'd have to either miss or build yourself if you didn't use it). If this description is not possible, then that's a show-stopping problem.
+
+Coming back to yesterday's observation about parsing vs validating, what I'd really like to see is a set of assertions that are **expressible as data**, lists of them, actually. They could even be nested lists so that you could reuse parts of them. This barrage of assertions reduces the possibility space for any message that passes the assertion. And the validation is really a call with a message composed of 1) the rules; 2) the thing you're validating. By having this in a dynamic way, instead of (as in a static type system) a static type system with a different syntax from the rest of the language and a SingleLongCamelCasedName, I believe we can go much further.
+
+Compiling should end, for most practical purposes. If the sequence of calls can be made not to waste anything, I bet that the principles of the Toyota Production System will show us that any batch-and-queue process (such as compiling) actually makes things more complex. I am particularly interested in places where this is obviously not true, and in particular **how**. They might yield very useful insights, or perhaps a glowing counterargument.
+
+Thinking about the Von Neumann architecture, where code and data coexist, this is an unified dataspace. Something I heard on this talk by [John Ousterhout](https://www.youtube.com/watch?v=tqhVJouaE8k), however, suggests that approaches with separated data and code had the advantage of treating data in a more flexible way, whereas the typical way to do it with a VN architecture is to have the data strictly tailored to what one particular program expects. But, in cell, we can have everything in one dataspace, and have the data to be represented in a sufficient universal/standalone manner (four types) to be of use by different programs.
+
+Also following John Ousterhout on TK design, in the UI, we'll have one dataspace per application (the whole thing), not one per widget.
+
+Do I call them constraints, rules or validations? I would call them rules. Short and powerful. No, because I have no verb "to rule" in the sense of validating. Whereas with validation, you can have a validation (noun) and validate (verb). But we can say "check" as verb. The check function/call takes a number of rules. Or we can just call them checks? Let's just do check (verb) rules (noun).
+
+Rethinking the demo:
+- Start with data: CSV with list of sales; or CSV with list of books (choose your own adventure: money vs knowledge).
+- Upload the data through the editor.
+- Data is placed in the dataspace.
+- Publishing path:
+   - Make a dashboard:
+      - Total entries
+      - Amount sold/amount of pages (sum)
+      - Top customers/top authors (sum with grouping)
+   - Create API endpoints:
+      - Get more data in with a POST (with rules)
+      - Download all data with a GET
+- Thinking path:
+   - Use rules to find & clean up invalid data (repeated entries, invalid values)
+   - Bring data from external APIs to get complementary data
+   - Interact with the LLM to set interesting aggregations also within the editor
+
+What's interesting about the above?
+- You never leave your browser.
+- You don't even have to sign up.
+- You can see the dashboard as an overlay on the editor, so you don't leave your tab either (but you do show the standalone dashboard by clicking on a link that opens a new tab).
+- You can see the results of each call on top of it.
+- Besides the editor, you also have your UI and API there in your cell.
+- What you do not need: a backend, a frontend or a database, whether it is remote or local.
+- When you close your browser and you open it again, the data is still there.
+
+What do I need to make this happen?
+- Upload
+   - Single entrypoint at cell.call
+   - Actual upload that stores the file in the dataspace
+- For everything else
+   - Language
+      - Sequence + reworked cell.get/put
+      - Loop
+      - Useful data handling
+         - Count
+         - Sum
+         - Aggregate
+         - Duplicates
+   - @ check
+   - @ api
+      - Register api calls
+      - Serve api calls
+      - Send api calls through the service
+   - @ view
+      - Serving the view
+      - HTML generation
+      - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
+
+UI design:
+- Each widget is its own space? Or all the widgets you define on the cell have a single view? No, it can't be that because you might want to have different views based on the same cell. Although the simplification, from a functional perspective, is tantalizing. Why do I want to have a single one? Because the user would get confused less. No, let's go with multiple views. We have a call @ view that gives you a view.
+- Views can and should be nestable. If you define a view somewhere else on the cell, you should be able to refefence it and it will get inserted.
+- OK, state management: the view will load. The HTML is fine. But what about the data that goes in the view call? The direct wiring (the state of the cell is the state of the UI) cannot work because 1) privacy/security; 2) multiple clients with diverging state at the same time.
+- But how do we avoid having to make the same API endpoints for querying things? We can make the views register automatically (but visibly) api calls that are getters to what the view needs.
+- This begets the question: are all views in the same place? And are all API endpoints in the same place? No, they can't be, because you want them to be where they should be. But then how do you keep track of what's there, because there has to be a unified directory of view and API resources on the cell. But the calls to @ view or @ api (we could call it @ api instead of @ http) can register something in a special part of the dataspace, which is `api` and `view` as a side-effect that can allow or block the setting of that view or api. But then you have full wiring happening naturally as part of your view creation. This could completely work.
+- We could even bundle all that a view needs into a single API. That'd give you custom wiring.
+- The call is @ view.
+
+I don't think that checks should be enforced globally. Or do we? If you don't enforce them globally (well, on the cell as a whole), you need that all changes happen through a certain tunnel, like an API call. But then, internal data handling is done "on live wire" and if you want to do things internally, you can be breaking your own consistency. Hey, this is probably why databases have the schema so baked in. You want to be able to have freedom but not to break your own rules, especially because of typos or temporary carelessness. So yes, rules have to be enforced globally. So we have three global resources that can be called/set from anywhere:
+
+- api
+- rule
+- view
+
+(also we have access, cron and file, which we'll deal with later. Also dialog). So seven, six of which you set yourself.
+
+Why these rules make sense? They replace the type system. You can also have them inside calls, for specific data. But the outermost ones work for every put: put will only go through if the rule is respected. This would be like if you had a put that you write yourself with a set of rules. The result is the same.
+
+When setting rules that are not passed by what's already there, you see the errors on top of the rule itself (which is a call!). That's the post-hoc cleanup. And new bad data coming in won't be let through, and you'll see the error on the top of the put, and if you are bringing that bad data from an api call, the error from the put (if it's a global rule) goes as the response. It'd be cool to see that on the UI.
+
+Claude: "Rules as ersatz type system - This is more flexible than traditional types because you can express domain constraints ("price must be positive", "customer email must be unique") that type systems can't naturally express. And unlike TypeScript (compile-time only), these are enforced at runtime where data actually lives."
+
 ### 2025-11-24
 
-Interesting article on [Haskell](https://mrcjkb.dev/posts/2025-10-08-haskell-for-renewables.html). My
+Interesting article on [Haskell](https://mrcjkb.dev/posts/2025-10-08-haskell-for-renewables.html). My takeaway:
 
 > "In Haskell, types are a rigorous framework for representing real-world constraints directly in code."
 
