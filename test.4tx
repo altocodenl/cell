@@ -1,3 +1,26 @@
+- TODO: MOVE SEQUENCE TO THE BOTTOM
+
+- SEQUENCE - c @ put p fizzbuzz
+                     v @ do n - @ put p : output
+                                        v ""
+                              - @ if cond @ % - @ n
+                                              - 3
+                                     else @ push p output
+                                                 v fizz
+                              - @ if cond @ % - @ n
+                                              - 5
+                                     else @ push p output
+                                                 v buzz
+                              - @ output
+             r ok
+             tag "Define fizzbuzz"
+
+           - c @ put p "fizzbuzz 15"
+                     v @ !izzbuzz 15
+             r ok
+             tag "Fizzbuzz 15"
+           - c @ wipe
+
 - "TEXT <> PATHS" - ct ""
                     r ""
                     tag "Empty text"
@@ -765,4 +788,3 @@
 
 - CONDITIONAL
 
-- SEQUENCE

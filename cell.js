@@ -15,6 +15,13 @@ var pretty = function (label, ftx) {
    teishi.clog (label, '\n' + ftx);
 }
 
+var counters = {};
+var count = function (what, n) {
+   if (! counters [what]) counters [what] = 0;
+   counters [what] += (n || 1);
+   clog (counters);
+}
+
 // *** PARSING FUNCTIONS ***
 
 cell.toNumberIfNumber = function (text) {

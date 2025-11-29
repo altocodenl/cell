@@ -460,6 +460,125 @@ view
 
 ## Development notes
 
+### 2025-11-28
+
+The main calls, ordered by length.
+
+```
+     @         @ do        @ if         @ put       @ loop      @ catch
+|---------| |--------| |-----------| |----------| |---------| |----------|
+ reference   sequence   conditional    storage     iteration     error
+    (0)         (2)         (2)          (3)          (4)         (5)
+```
+
+Store the sequence in `: do` instead of `: seq`.
+
+
+Single "hook" on get and put. Simplifies the walking up. Then you need to walk left/right to separate destination from message, starting at n-1 and then walking it left.
+
+"Walk" a step, "run" a program.
+
+Crazy idea: put retro music on cell, as a moodsetter, like old games.
+
+### 2025-11-26
+
+OK, cracking towards the demo.
+
+The impasse from a few (twenty?) episodes ago?
+- I want to rewrite cell.call to basically run a program in the call, rather than call @ put separately.
+- Calling @ put inside a sequence generated issues.
+- I decided not to throw away the test suite to make sure that @ put still works, so I decided to rewrite the test suite in a better format.
+
+Where are we now?
+- The test suite is more than half rewritten, but not fully.
+- I could just finish rewriting it, but I'm probably going to change the behavior of @ put, and of @ seq.
+- cell.call is not rewritten yet and we do not support yet putting @ put inside a sequence.
+
+So where do we start?
+
+- @ put in isolation doesn't make sense. We need to implement it with the purpose of making it useful inside a sequence and a loop.
+- Therefore, let's implement sequence and loop first, properly. With put supporting it.
+- Tests; as long as we can test sequence and loop through cell.call (which we can), we're OK for now. Once the definition of @ put (and @) settles, we can rewrite the tests.
+
+Proposed sequence:
+- Implement no-loop version of fizzbuzz: write it, make it run, make it pass the tests. Modify @ put if necessary.
+- Implement loop version of fizzbuzz.
+- Implement html validation & html generation.
+- Unified entrypoint with cell.call.
+- With this solid base, rewrite all existing tests in the new format.
+- Proceed from the upload down.
+
+```
+fizzbuzz @ do n - @ put p : output
+                        v ""
+                - @ if cond @ % - @ n
+                                - 3
+                       else @ push p output
+                                   v fizz
+                - @ if cond @ % - @ n
+                                - 5
+                       else @ push p output
+                                   v buzz
+                - @ output
+```
+
+```
+fizzbuzz @ do n - @ put p : output
+                        v ""
+                - @ loop data fizz 3
+                              buzz 5
+                         do path - @ if cond @ % - @ n
+                                                 - @ path 2
+                                        else @ push p output
+                                                    v @ path 1
+                - @ output
+```
+
+Call it @ seq or @ do? Why do?
+- Shorter.
+- Easy to pronounce.
+- Fits between "cond" and "else" on the if. In a loop it also goes well.
+
+Why seq?
+- It follows from "sequence".
+
+Let's just go with do.
+
+I need to get a grip on cell.respond, fast.
+- If I had a dependency graph, I would only call cell.respond on the changed elements, which means: on the new elements themselves, as well as their dependents (things on which the new elements depend are not changed).
+- But if I don't have a dependency graph, at least I can run it through all the paths. It should not run so many times, though.
+
+For the entire test suite, it's somewhat reasonable to have 1k puts, 1.5k responds that have a reference to be resolved and 5k gets (although I think it could be lower). But 122k at the top of respond is just crazy. Do we have so much stuff that should not be expanded?
+{ put: 973, 'respond top': 122511, get: 5082, 'respond call': 1550 }
+
+On average, when cell.put iterates the dataspace and calls cell.respond on each path, there's on average 127 paths on the dataspace, which explains the 122k figure. How so many? I'm constantly wiping the dataspace. Maybe it is the dialog?
+
+  'no dialog': 184565,
+  'put -> respond times': 188985,
+So only 4k calls to respond if we filter out the dialogs. But this is still very slow.
+
+We spend most of our time in put, perhaps 2/3 of the test runtime.
+
+  'put initialization': 40.0000000143296,
+  'put after getting dataspace': 169.00000001323312,
+  'put after walking': 778.0000000086417,
+  'put after sorting': 1641.0000000068717,
+  'put after validating': 2578.0000000056716,
+  'put after putting to disk': 2692.000000005302
+
+    'put initialization': 24.000000014490325,
+  'put after getting dataspace': 106.00000001373114,
+  'put after walking': 591.0000000094716,
+  'put after sorting': 1208.0000000077716,
+  'put after validating': 1871.0000000068517,
+  'put after putting to disk': 1931.0000000065518
+
+Walking is about 20%, sorting is a whopping 33-40%, validating is 20%.
+
+So, put seems to be taking most of the time. We should call it way less than 1k times. We should also definitely improve the performance of the sorting function.
+
+OK, mystery solved with performance: we need dependencies. But at least we now know where we're slow. Let's tackle the entire logic for cell.respond for fizzbuzz and come up with any possible improvements to the clarity of the whole thing.
+
 ### 2025-11-25
 
 Any abstraction layer should be described succintly in what it provides (and therefore, what you'd have to either miss or build yourself if you didn't use it). If this description is not possible, then that's a show-stopping problem.
