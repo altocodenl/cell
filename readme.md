@@ -460,6 +460,55 @@ view
 
 ## Development notes
 
+### 2025-11-30
+
+Idea: instead of if cond else, add support for notcond (not "ncond" because things have to be pronounceable). No, it doesn't look good. Let's keep what we have.
+
+- Language
+   - Sequence + reworked cell.get/put (including cell.respond)
+   - Loop
+   - Implement fizzbuzz & html validation/generation
+- Upload
+   - Single entrypoint at cell.call
+   - Actual upload that stores the file in the dataspace
+- Useful data handling
+   - Count
+   - Sum
+   - Aggregate
+   - Duplicates
+- @ check
+- @ api
+   - Register api calls
+   - Serve api calls
+   - Send api calls through the service
+- @ view
+   - Serving the view
+   - HTML generation
+   - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
+
+I need a good, short manual that explains the language from scratch. It should be based on the editor, but there I'm torn because I'm also thinking about cell in pure text. The key is to see the equivalence/mapping between the editor and text.
+
+Rough notes from the run:
+
+- cell.respond: algorithm design. How would it work with dependencies?
+- when we have a certain prefix on an @ and we checked its value, we can skip forward to the next path without that entire prefix: any calls to the right of that are already taken into account. also that is equivalent of the firstPath check we currently have, only faster.
+- on every single put, if we have no dependencies, every single call (@) gets checked.
+- calls on the right of a path are dependencies on things on the same path to its left. but not the only ones.
+- each call has a prefix, this can identify it. then, our graph of dependencies can be called `graph` and be a list where on the left side you have the prefix of each call, and on the right side a list of one or more paths on which that call directly depends. it cannot be a hash because you can have things that are terminals and nonterminals at the same time. hey @ foo @ bar would have entries for key and key @ foo, and I cannot have a list at graph key and also a hash. so it should be a sorted list, the graph, for quick retrieval.
+- commas are also calls, so they should also be in the graph.
+- for dependencies, there are two things: determining the dependencies, and responding to their changes.
+- is there a "combination of like subparses" mechanism here, a la earley?
+- there could be changes that update a value but not the grpah of dependencies.
+- instead of the prefix, I can speak of the path to a call. I can stop calling a path just the whole thing, or the whole thing minus the last step. I could instead talk about "complete paths".
+- if you don't have a dependency graph, you have to go back to the top when you change something.
+- if a comma doesn't have a matching @, we can put an error on top. no need to break it, or report a syntax error. this is much better than html being tolerant with errors: you just show where the error is without losing the functioning of the entire thing. not having syntax throw off the entire system is key.
+- the single hook is key to simplify the understanding and the implementation of walking up. a call depends on whatever its hook depends. where it lands, then it's a matter of how you split between destination and message, but the dependency is still clearly there.
+- When the message has a call too, then the call has two dependencies, the destination and the message. It has to be a list. Also, if a call depends on a list or a hash that has multiple calls inside (directly, not in a sequence, because the sequence puts everything in the =), then you also have multiple direct dependencies there.
+- it's interesting that a sequence has a "masking" property that multiple dependencies are stuffed inside but only expressed through the sequence's result. Those are one step removed. This made me think of something obscure: if your definition depends on something that changes, do you re-run the sequence? The answer is yes, because the stripper will give you a different result for the sequence. So it also changes when you change the definition, not just the message you send. This makes sequences very, very dynamic, to a point that I haven't experienced yet in js.
+- Interesting dualism: in the same way you have single and multiple data types, you also have literals and calls. literals are things that refer to themselves, calls that are stable because they point to themselves, whereas calls reference something else. calls are also represented as data in that the @ is also a literal, also its location.
+- it's important to explain that cell is not just (or even mainly) its implementation, but a conceptual model that also works on paper or plain text. cell can always be represented with text. The editor gives you three things: jump, fold and run. Running is that the thing is actually live and executing, a machine. Jump allows you to move, both in numeric offsets (list-like) and search to value (hash-like). Fold/unfold allows you to show/hide parts of the dataspace that you're zooming in. These three things are movement verbs: jump, fold and run. This is not a coincidence.
+- A good search with fold could be better that a custom search. Something you can quickly do by typing. If you want to store it, then you just write it in a part of the dataspace and see it there.
+
 ### 2025-11-28
 
 The main calls, ordered by length.
@@ -473,10 +522,11 @@ The main calls, ordered by length.
 
 Store the sequence in `: do` instead of `: seq`.
 
-
 Single "hook" on get and put. Simplifies the walking up. Then you need to walk left/right to separate destination from message, starting at n-1 and then walking it left.
 
 "Walk" a step, "run" a program.
+
+> "Music (and generally audio) can make or break a product. It's basically the moodsetter. To some extent: visuals = intellectual and audio = emotional." -- [Paul Van Der Valk](https://amp.dascene.net/detail.php?view=5673&detail=interview)
 
 Crazy idea: put retro music on cell, as a moodsetter, like old games.
 
