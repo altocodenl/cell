@@ -460,6 +460,165 @@ view
 
 ## Development notes
 
+### 2025-12-02
+
+> "Practically the first thing everyone tries in a game is jumping. If the game doesn't let you jump, then people enter a Fuck You mode that can be hard (possible, but hard) to overcome." -- Steve Yegge
+
+- Jumping should be the first movement we should be able to do in the editor.
+- Have skins in the editor, like winamp skins. Customizable looks.
+- Standard colors: green & white; selected cell changes to blue background with a thick yellow border, so that the fovea is unmistakable.
+- The commas on both sides look great. A bit repetitive, but much more clear. Put the result on top of the right comma. There has to be an even amount of commas in a path.
+- Test put and get with single hook. I think it conceptually makes a ton of sense to simplify it like this. If there was no ambiguity between destination and message on a call, it'd be perhaps ok to try different lengths, but if we already have that, then single hook works all the way to reduce uncertainty of interpretation (never mind the implementation).
+- Declarative is perhaps what concerns the interface: message vs response. You can do it with assertions on values, or on verifiable properties of the response vs the message. But that doesn't make it the implementation. Maybe there is something to declarative vs procedural: the interface is declarative and the implementation is procedural. But that works on every level.
+- We can perhaps reach a concrete measure of complexity, by seeing what's the call count to implement something, and have calls all the way down to basic CPU operations. An equivalent interface can compare the complexity of two implementations by seeing which one is still correct (as per the assertions of the interface) and has the least amount of calls. But is that calls by definition or effective calls that get expanded on a range of inputs? The latter is roughly performance, and the former is about cyclomatic complexity or understandability.
+- Are certain calls' implementations fully determined (and therefore, inferrable) from assertions on its interface? And perhaps some that are not? Would this perhaps reveal the hardness of the problem? I'm thinking in P/NP terms.
+
+```
+html entiyify @ seq text - @ loop do pair - @ put p text
+                                                  v @ replace from @ pair 1
+                                                              to @ pair 2
+                                                              v @ text
+                                  v & &amp;
+                                    < &lt;
+                                    > &gt;
+                                    "/"" &quot;
+                                    ' &#39;
+                                    ` &#96;
+                         - @ text
+     generate @ seq input - @ put p : output
+                                  v ""
+                          - @ put p : t
+                                  v @ type input
+                          - @ if cond @ eq number t
+                                 do @ push p output
+                                           v @ input
+                          - @ if cond @ eq text t
+                                 do @ push p output
+                                           v @ html entityify @ input
+                          - @ if cond @ eq list t
+                                 do @ loop do data @ push p output
+                                                          v @ html generate @ data v
+                                           v @ input
+                          - @ if cond @ eq hash t
+                                 do - @ push p output
+                                             v - <
+                                               - @ list @ input , 1
+                                               - >
+                                    - @ loop data @ input @ list @ input , 1
+```
+
+, also depends on the path itself? It doesn't go to the upper path? But this kind of thing can change if you remove an upper path. Isn't this dangerous? The alternative is to mark always with two commas:
+
+```
+                                 do - @ push p output
+                                             v - <
+                                               - , @ list @ input , 1
+                                               - >
+```
+
+Then they really are parenthesis.
+
+So, I just realized I'm doing my own, probably simpler version of the fizzbuzz problem: output for just one number, not all from 1 to n. I'll keep it like that.
+
+TODO:
+- Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
+- Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+- Reimplement cell.respond fully understanding the algorithm, including the commas.
+
+```
+# No loop version
+fizzbuzz @ do n - @ put p : output
+                        v ""
+                - @ if cond @ % - @ n
+                                - 3
+                       else @ push p output
+                                   v fizz
+                - @ if cond @ % - @ n
+                                - 5
+                       else @ push p output
+                                   v buzz
+                - @ output
+```
+
+```
+# Loop version
+fizzbuzz @ do n - @ put p : output
+                        v ""
+                - @ loop do path - @ if cond @ % - @ n
+                                                 - @ path 2
+                                        else @ push p output
+                                                    v @ path 1
+                         v fizz 3
+                           buzz 5
+                - @ output
+```
+
+Common names:
+- v for the data (in put, loop)
+- do for the sequence (in @ do, in loop, in cond)
+
+```
+html tags all @ list "!DOCTYPE HTML" LITERAL a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption cite code col colgroup command datalist dd del details dfn div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins kbd keygen label legend li link map mark menu meta meter nav noscript object ol optgroup option output p param pre progress q rp rt ruby s samp script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead time title tr track u ul var video wbr
+          void @ list "!DOCTYPE HTML" area base br col command embed hr img input keygen link meta param source track wbr
+     entiyify @ do text - @ loop do pair - @ put p text
+                                                 v @ replace from @ pair 1
+                                                             to @ pair 2
+                                                             v @ text
+                                 v & &amp;
+                                   < &lt;
+                                   > &gt;
+                                   "/"" &quot;
+                                   ' &#39;
+                                   ` &#96;
+                        - @ text
+     generate @ do input - @ put p : output
+                                 v ""
+                         - @ put p : t
+                                 v @ type input
+                         - @ if cond @ eq number @ t
+                                do @ push p output
+                                          v @ input
+                         - @ if cond @ eq text @ t
+                                do @ push p output
+                                          v @ html entityify @ input
+                         - @ if cond @ eq list @ t
+                                do @ loop do item @ push p output
+                                                         v @ html generate @ item
+                                          v @ input
+                         - @ if cond @ eq hash @ t
+                                do - @ push p output
+                                            v - <
+                                              - , @ list @ input , 1
+                                              - @ loop do attribute - if cond @ eq _ @ attribute 1
+                                                                         do stop
+                                                                    - stop - " "
+                                                                           - @ lith entityify attribute 1
+                                                                           - "=/""
+                                                                           - @ lith entityify attribute 2
+                                                                           - "/""
+                                                       v @ list @ input , @ list @ input , 1
+                                              - >
+                                              - @ loop do @ lith generate
+                                                        v @ input _
+                                              - @ if cond @ contains p @ html tags void
+                                                                     v , @ list @ input , 1
+                                                     do stop - </
+                                                             - , @ list @ input , 1
+                                                             - >
+                         - output
+```
+
+- Commas are reminiscent of appositive phrases.
+- The do in if doesn't have a message name, but the one from @ do or the one in @ loop do. It is interesting that we are not passing a direct message to the sequence in a conditional. It's already kind of there in cond.
+- Push could autoflatten its inputs, why not?
+- Still what gets passed into the "do" of a loop is a bit of an enigma. Do we get distinct values or are these still paths? Let's do it at "runtime".
+- Interesting trick: to make a sequence just return a list without naming it, just put one item with "stop". But now that I think about it, we can just make it respond with the list, if the list only has one item!! But wait, I need the stop, otherwise the list would be considered a list of steps in the sequence. stop just does that, make it into a single step that has that value.
+- Source of confusion: steps of a sequence go up/down, steps of a path go left/right.
+- I'm really going against equality with two values on the same path, equality would have to have access to the path to see where the @s were placed, and I can think of corner cases. I'm not discarding it, but let's try without and see. Never mind, perhaps if we put one literal first and then one call, it's easy to distinguish it. If it's two calls/references, then already use a list. Another nice thing of using a list: you can check for equality of 3 or more things.
+- Looping something that is "" should not iterate at all.
+
+Next session: html validation.
+
 ### 2025-11-30
 
 Idea: instead of if cond else, add support for notcond (not "ncond" because things have to be pronounceable). No, it doesn't look good. Let's keep what we have.

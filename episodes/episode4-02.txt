@@ -1,0 +1,3 @@
+Second episode of season 4! I'm building a programming environment from scratch while recording myself. Committed to having a demo and launch in December. Right now, it sounds downright quixotic. But if we move fast towards clarity this can really be possible. Today, we tackle references, sequences, conditionals and loops, how they really look in real code that generates HTML from a validated representation of it.
+
+https://github.com/altocodenl/cell
