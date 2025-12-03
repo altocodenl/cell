@@ -460,6 +460,116 @@ view
 
 ## Development notes
 
+### 2025-12-03
+
+I can really envision folks writing their own cells (if they ever like the original), much like Chuck Moore wanted a proliferation of underground forths. Hopefully the tools (both conceptual and executable) allow to do this in different levels.
+
+- The eager vs lazy problem loses a lot of its weight in cell, because you have both the calls and the responses. So, for example, native calls like = can determine where a value came from (by checking for the @ below the =), so you can have the benefit of lazy evaluation, so to speak, by the calls being able to access cell's equivalent of the parse tree (which is the entire dataspace).
+
+- I think the reasonable thing to do by default on loops is to pass key + value (which would be first step + what it points to), with simple values being considered a list of 1 item (except for "", which is a nonvalue that produces zero iterations (but an explicit list of `- ""` is iterated)).
+- So you get k as input 1 and v as input 2. Or should we do it at `input p` and `input v`? Maybe that's better, for consistency.
+- Instead of @ list, we can do @ paths? No, I like the idea based on the type, that paths are related to lists. But we do need 1 1, to get the first step of the first path.
+- I find it interesting that default variables are the ones that flow up, rather than the here variables. Perhaps a better default in put is to do them "here"? But then you'd have to specify when you go up. I'm not really sure. I'd rather make walk up as default.
+
+```
+     generate @ do input - @ put p : output
+                                 v ""
+                         - @ put p : t
+                                 v @ type @ input
+                         - @ if cond @ eq number @ t
+                                do @ push p output
+                                          v @ input
+                         - @ if cond @ eq text @ t
+                                do @ push p output
+                                          v @ html entityify @ input
+                         - @ if cond @ eq list @ t
+                                do @ loop do item @ push p output
+                                                         v @ html generate @ item v
+                                          v @ input
+                         - @ if cond @ eq hash @ t
+                                do - @ put p : tagname
+                                           v , @ list @ input , 1 1
+                                   - @ push p output
+                                            v - <
+                                              - @ tagname
+                                              - @ loop do attribute - if cond @ eq _ @ attribute p
+                                                                         do stop
+                                                                    - stop - " "
+                                                                           - @ lith entityify attribute p
+                                                                           - "=/""
+                                                                           - @ lith entityify attribute v
+                                                                           - "/""
+                                                       v @ input @ tagname
+                                              - >
+                                              - @ loop do @ lith generate
+                                                        v @ input _
+                                              - @ if cond @ contains p @ html tags void
+                                                                     v @ tagname
+                                                     do stop - </
+                                                             - @ tagname
+                                                             - >
+                         - output
+```
+
+Let's do validate now.
+
+- We need a double stop to make the loop stop, not just the inner function. Would this work? I think so, we're peeling one stop inside, then it comes up? No, it has to be part of what loop does. But by putting it as a value, I avoid having to have specialized aprts of the message on the call to @ loop, like I had in dale (dale.stop).
+- Yeah, we can put comments in sequences without changing anything, without even quoting them.
+- I can do @ + to concatenate texts.
+- Note the repetition on the recursive call between the list and the hash. I'm wondering how I could make the latter reference the former.
+- To @ join or to @ text? The latter feels more fundamental, because it's a type. But passing the with step is really nice too.
+
+```
+# Responds with empty text if input is valid
+html validate @ do input - @ put p : t
+                                 v @ type input
+                         - @ if cond @ or - @ eq text @ t
+                                          - @ eq number @ t
+                                do stop ""
+                         - @ if cond @ eq list @ t
+                                do @ loop do item - @ put p : result
+                                                          v @ html validate @ item
+                                                  - if cond @ result
+                                                       else stop stop @ result
+                                          v @ input
+                         - (If input is a hash, it must be a tag).
+                         - @ if cond @ eq hash @ t
+                                do - @ put p : tags
+                                           v @ unique @ loop do item @ item p
+                                                             v @ list @ input
+                                   - @ if cond @ > 1 @ length @ unique
+                                          do stop @ text v - "A hash has multiple tags but should only have one, found:"
+                                                           - @ join v @ tags
+                                                                    with " "
+                                                         with " "
+                                   - @ loop do item - @ if cond @ eq _ item p
+                                                           do - @ put p : result
+                                                                      v @ html validate @ item v
+                                                              - if cond @ result
+                                                                   else stop stop @ result
+                                                           else - @ if cond @ match regexp - (begin)
+                                                                                           - or - a-z
+                                                                                                - _
+                                                                                                - :
+                                                                                            - range 0
+                                                                                              or - a-z
+                                                                                                 - _
+                                                                                                 - :
+                                                                                                 - 0-9
+                                                                                                 - .
+                                                                                                 - -
+                                                                                                 - \u0080-\uffff
+                                                                       else stop stop @ join @ - Attribute
+                                                                                               - @ item p
+                                                                                               - "is invalid; it should be a text that starts with an ASCII letter, underscore or colon, and be followed by letters, digits, underscores, colons, periods, dashes, extended ASCII characters, or any non-ASCII characters.
+```
+
+I'm doing 39 lines here (without the comment), whereas with lith it was 33 and it used dale and teishi to shorten things. It's like I have this power in cell out of the box.
+
+I think some things will be cleaned up as I go with better native calls. The key is if the reference/sequence/conditional/loop really work. I think they do.
+
+I'm a bit scared of the "this is it" realization, and that "this" is what will either work or not.
+
 ### 2025-12-02
 
 > "Practically the first thing everyone tries in a game is jumping. If the game doesn't let you jump, then people enter a Fuck You mode that can be hard (possible, but hard) to overcome." -- Steve Yegge
