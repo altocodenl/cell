@@ -1,0 +1,3 @@
+Fourth episode of season 4! I'm building a programming environment from scratch while recording myself. Or so I thought. I spend an hour explaining the why and how of cell, and come up with a homespun, personally overdue theory of complexity, speed and effort.
+
+https://github.com/altocodenl/cell

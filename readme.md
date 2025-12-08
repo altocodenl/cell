@@ -1,58 +1,54 @@
 # cell
 
-cell is a programming environment for anyone who wants to work with data.
+## Why cell
 
-## Why
+cell is made to let you quickly build and understand systems.
 
-Programming is currently much harder than writing prose. Reading programs is also much harder than reading prose.
+Quickly building a system that you don't understand is a bad idea. It works well for small, throwaway projects, but not for systems you want to grow and keep around. Understanding is the basis of ownership, control, reliability, flow and joy. And ironically, the only way to retain speed after the first couple of weeks.
 
-The goal of cell is to make programming easier, so that it is only as demanding as writing prose. By making programming more accessible to more writers and readers, we hope to empower more humans to create and own their own [information systems](https://github.com/altocodenl/todis).
+Our goal is to empower more humans to build their own [systems](https://github.com/altocodenl/todis).
 
-### Additional vibe goals
+### AI can now code for us! Do we really need to understand what's going on?
 
-- Make information systems habitable.
-- Provide a different everyday fabric of computation.
-- Find a sweet spot between the low-level spreadsheets and programming languages, on one end, and big, clunky applications on the other.
+Yes, more than ever. AI coding tools let you build systems with a speed never seen before. But speed without understanding creates systems you don't own, can't control, and can't scale.
 
-### Do we still need programming tools? Can't we just ask AI to create systems for us?
+AI massively increases the *initial speed* of both skilled programmers and novices. If you are a skilled programmer, you can go much faster. If you are not skilled in programming, AI can take your requirements and make them into code, very very quickly. This is really powerful, not a fad.
 
-My contention is: if you want to build data systems using AI, you need to do three things:
+However, the limits to this process are hit quickly: you're building fast, but you're not understanding what you're building. If you're skilled, the AI will write a lot of code that you'll struggle to follow, because of its sheer amount. If you're not skilled in programming, you'll build something you understand only very superficially. In both cases, understanding is missing.
 
-1. **Host** the system. The system has to be accessible on a continuous basis and its data has to be both secured and backed-up.
-2. **Structure** the system. AIs, like humans, are fallible and inconsistent. It is very important to have solid parts in the system that uphold important constraints.
-3. **Understand** the system. AIs, also like humans, get lost in a system when it becomes too complex. Having an approach that minimizes complexity can help both human and AI to understand the system and keep it maintainable and scalable.
+For many, this initial speed quickly wears off; for those skilled programmers, this requires effort to bring the project under control. For novices, it requires bringing in skilled programmers that can either rewrite the proof of concept or build it again from scratch. The overall experience is an arc from breakneck speed to a slog.
 
-Cell intends to make the hosting, control and understanding of your system to be as easy as possible -- even if you're not a programmer. So that you can build your systems with confidence.
+If you've been there, cell could be for you. And yes, cell integrates AI too.
 
-## How
+## How cell tackles complexity
 
-The core understanding behind cell is this: originally, we developed computers to get the result of various mathematical calculations. But this is not the case anymore: most of our systems now are not concerned with calculations, but rather, with the management of data. More precisely, we use computers to store, communicate and transform data. In short, computers and programs are only valuable because they let us work with data. **The game is data.**
+Complexity is what makes it hard to understand a system. There are many sources of complexity in existing programming languages and frameworks that can be completely avoided. Rather than slap an AI editor onto the same tools, cell reconsiders programming from first principles. In doing so, it removes the following sources of complexity:
 
-Cell attempts to make programming like natural language through two innovations:
+1. Lack of a single, low-noise way to directly look at data.
+2. Fragmentation of data into multiple places.
+3. Inability to see code and data in the same place, intertwined.
+4. An unnecessary diversity of ways to express straightforward logic.
+5. Separateness between time and code (you must re-run to see changes) and between the parts of the system (the backend, the frontend, the database and the tests).
 
-- Putting the code in the same place as data (and with the same structure).
-- Putting the result of each piece of code literally on top of the code that generated it.
+For each of these, cell provides:
 
-It also helps that cell uses very few symbols, choosing instead to use regular letters and numbers. Things that can be pronounced are generally more memorable and graspable.
-
-Here's an illustration:
-
-```
-= 15
-@ plus10 5
-```
+1. A low-noise, general representation of data based on text (fourdata).
+2. An unified dataspace where code and data, as well as external resources, can be represented.
+3. Code is shown alongside data and every call has its response *right on top* of it.
+4. Write any logic with *only five constructs* which you can understand in a few minutes.
+5. An editor that constantly responds to your changes and which integrates service, interface and database. And which runs in your browser, with no installation required.
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
 ### The seven problems
 
-1. Different ways to represent data with text. High noise (syntax).
+1. Different ways to represent data with text. High noise (syntax). Or imprecise and clunky graphical representations of code, which also use text.
 2. Data being fragmented everywhere. Takes a long time to find where things are and more to make them reference each other cleanly.
 3. Lack of visibility between inputs and outputs. Console log everywhere.
 4. A panoply of ways to program, none of which are straightforward or procedural. Think OOP vs pure functional vs low-level programming with pointers.
 5. Systems that you need to re-run.
 6. 3-8 libraries and subsystems to do anything useful.
-7. Facing the blank paper and having to read a lot to do anything.
+7. Facing the blank paper and having to read a lot to do anything. Drawing a blank in the middle of the process or getting stuck.
 
 ### The seven powerups
 
@@ -459,6 +455,96 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-07
+
+The message of cell, its why, is as important as its content/implementation. I haven't defined that well.
+
+The axis of my work in programming is about understanding. Understanding as the key to everything we want: speed, ownership, control, reliability, flow, joy.
+
+When I look nowadays at new AI powered editors (Cursor, Windsurf), I see impressive AI that autocompletes code that still has three types of braces (parenthesis, square brackets and curly brackets). This reminds me of Ford's "faster horse", but I need to understand the kernel of why.
+
+claude: "Every AI coding tool - Cursor, Windsurf, Copilot - is making it faster to write the same complex code. We're making the code unnecessary in the first place."
+
+I think it's the following: this AI coding wave is about "build systems quickly". If you are a skilled programmer, you can go much faster. If you are not skilled in programming, the AI can take your requirements and make them into code, very very quickly. This is really powerful, not a fad.
+
+However, the limits to this process are hit quite quickly: you're building fast, but you're not understanding what you're building. If you're skilled, the AI will write a lot of code that you'll struggle to follow, because of its sheer amount. If you're not skilled in programming, you'll build something you understand only very superficially. In both cases, understanding is missing.
+
+The why of cell is: "build and understand systems quickly". The requirement is build+understand, not just build, and the measure of success is still speed. Why speed? What about the tortoise and the hare? As I see it, if you understand the system quickly (instead of just building it quickly), there's no debt. You fully own, control and can rely on your system. If you quickly build and understand, you are a fast tortoise.
+
+AI makes the understanding part more difficult, but doesn't cause it. What causes it is the complexity of software. The definition of complexity can be: whatever makes a system harder to build and understand.
+
+Then, going back to the top:
+- The why of cell: build and understand systems quickly.
+- The how of cell: starting from first principles, eliminate sources of complexity: multiple and high noise data representations, fragmented dataspace, code and result being separate, proliferation of logical constructs, separateness between time and code & between user & system.
+- The what of cell: data representation, unified dataspace, call/response, fivelogic, integrated editor & service.
+
+- For those who already know how to program: it becomes easier to understand without losing speed.
+- For those who don't know yet how to program: they can learn along because they can understand what the AI is doing.
+
+Things that are not so important in themselves:
+- Essential vs accidental complexity: you see this retrospectively only.
+- Comparison to prose: this will also be an emergent property of removing accidental complexity.
+
+#### A quick theory of system complexity
+
+Rule 1: effort to add/change something in an existing system = size of the change * complexity of the system
+Rule 2: complexity of the system = effort it requires to understand it
+Rule 3: system complexity grows as the inverse exponential function of how much its builders understand the system * rate of effort
+
+Clarifications:
+- Effort = skill * time
+- For small teams you generally can add effort towards the same addition/change, for large ones you generally cannot.
+- Rule 1 might be tempered (or aggravated) by how acquainted or unacquainted a team is with their own system.
+- Things to be done are either: additions or changes. In any case, it's about improving the system **without breaking what is already working in the system**.
+- Rule 3 is necessarily more complex mathematically because it is what breaks linearity and brings in exponentiality.
+
+Explanation:
+- Why complexity is key? Because it determines the overall long-term/asymptotic effort of doing *anything* in a system.
+- Understanding determines how quickly someone can fix problems since they are easy to find; and how quickly they can add features since it's clear how the new features can coexist with the existing ones without breaking them.
+- Complexity tends to increase exponentially and can quickly dwarf enormous efforts, even of large teams composed of skilled people that spent a long time understanding the system.
+- No training can dwarf large complexity either, because a sufficiently complex system cannot be understood. It can only be understood if it's simplified.
+- Minimizing complexity is the only way to retain speed in the long term.
+- Speed of development is a great metric, but not just the speed on the first week or month of the project. The speed that matters is that over the entire lifecycle of the system.
+
+====
+
+cell helps you build and understand systems quickly.
+cell helps you quickly build and understand systems.
+cell helps you quickly build systems that you can understand.
+
+I pick the middle one.
+
+Things I'm removing from the top
+
+```
+### Additional vibe goals
+
+- Make information systems habitable.
+- Provide a different everyday fabric of computation.
+- Find a sweet spot between the low-level spreadsheets and programming languages, on one end, and big, clunky applications on the other.
+
+
+The core understanding behind cell is this: originally, we developed computers to get the result of various mathematical calculations. But this is not the case anymore: most of our systems now are not concerned with calculations, but rather, with the management of data. More precisely, we use computers to store, communicate and transform data. In short, computers and programs are only valuable because they let us work with data. **The game is data.**
+
+Cell attempts to make programming like natural language through two innovations:
+
+- Putting the code in the same place as data (and with the same structure).
+- Putting the result of each piece of code literally on top of the code that generated it.
+
+It also helps that cell uses very few symbols, choosing instead to use regular letters and numbers. Things that can be pronounced are generally more memorable and graspable.
+
+Here's an illustration:
+
+= 15
+@ plus10 5
+```
+
+Side note: autopoietically speaking, any system is an information system.
+
+### 2025-12-05
+
+Impressive talk from Bret Victor, the first one (Inventing on Principle). The concept of having the expansions on the right is amazing, it is what I envisioned a couple of years earlier when wanting to see examples of execution next to each line of the function, only that he does it more clearly. I don't see how I can do that in cell right now, in the expansions, you can still read what happens, but you have to "go and look for it", rather than "it" being right there.
 
 ### 2025-12-03
 

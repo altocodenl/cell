@@ -1,3 +1,3 @@
-Second episode of season 4! I'm building a programming environment from scratch while recording myself. We finish the html validation sequence and come up with some interesting decisions and questions. I think we're ready to start coding the implementation.
+Third episode of season 4! I'm building a programming environment from scratch while recording myself. We finish the html validation sequence and come up with some interesting decisions and questions. I think we're ready to start coding the implementation.
 
 https://github.com/altocodenl/cell
