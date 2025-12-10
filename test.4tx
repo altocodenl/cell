@@ -12,13 +12,29 @@
                                      else @ push p output
                                                  v buzz
                               - @ output
-             r ok
              tag "Define fizzbuzz"
 
            - c @ put p "fizzbuzz 15"
                      v @ !izzbuzz 15
-             r ok
              tag "Fizzbuzz 15"
+
+           - c @ wipe
+           - c @ put v eleven @ plus1 10
+                       plus1 @ do int - @ + - @ int
+                                            - 1
+           - c @
+             r eleven = 11
+                      : int 10
+                        seq - = 11
+                              @ + - = 10
+                                    @ int
+                                  - 1
+                      @ plus1 10
+               plus1 = int 1
+                     @ do int - @ + - @ int
+                                    - 1
+             tag "Valid sum"
+
            - c @ wipe
 
 - "TEXT <> PATHS" - ct ""
@@ -787,4 +803,3 @@
                   "
 
 - CONDITIONAL
-

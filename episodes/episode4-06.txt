@@ -1,0 +1,5 @@
+Sixth episode of season 5! I'm building a programming environment from scratch while recording myself. Alright, we kind of have a dependency graph! We're ready to (re)tackle cell.respond.
+
+https://github.com/altocodenl/cell
+
+I think cell is a low-effort attempt to do the impossible.

@@ -1,0 +1,17 @@
+Fifth episode of season 5! I'm building a programming environment from scratch while recording myself. Quick and silent episode, nothing much to see here, moving on.
+
+Hi! Silent episode today. I'm on a train.
+
+Where were we?
+
+Yeah, let's finishing cleaning up the top of the readme.
+
+Whoops, forgot to mute myself.
+
+OK, so now what? Let's tackle the design of cell.respond, with dependencies.
+
+I'm looking up simpler sequences to see how they looked like.
+
+Why are the tests not working in the same way, the old and the new? OK, I was just copying it badly.
+
+We're going to stop here, short episode. Thank you for watching.

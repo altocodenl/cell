@@ -40,31 +40,39 @@ For each of these, cell provides:
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
 
-### The seven problems
-
-1. Different ways to represent data with text. High noise (syntax). Or imprecise and clunky graphical representations of code, which also use text.
-2. Data being fragmented everywhere. Takes a long time to find where things are and more to make them reference each other cleanly.
-3. Lack of visibility between inputs and outputs. Console log everywhere.
-4. A panoply of ways to program, none of which are straightforward or procedural. Think OOP vs pure functional vs low-level programming with pointers.
-5. Systems that you need to re-run.
-6. 3-8 libraries and subsystems to do anything useful.
-7. Facing the blank paper and having to read a lot to do anything. Drawing a blank in the middle of the process or getting stuck.
-
-### The seven powerups
-
-Cell employs seven powerups to make programming as easy (or hard) as writing prose:
-
-1. **Fourdata**: a simple way to **represent data**. This allows you to look directly at any data that comes your way.
-2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location. Everything is organized in the same place.
-3. **Dialog**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
-4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
-5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
-6. **Integrated editor**: language, database, API and UI are in one editor that runs in your web browser.
-7. **Generative AI**: automatic intelligence that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
-
 ## TODO
 
 ## Use cases
+
+### Demo
+
+- Now
+- Language
+   - Sequence + reworked cell.get/put (including cell.respond)
+      - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
+      - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+      - Reimplement cell.respond fully understanding the algorithm, including the commas.
+         - Understand the naive, from the top approach.
+         - Add dependents/dependencies to only recalculate what's necessary.
+   - Loop
+   - Implement fizzbuzz & html validation/generation
+- Upload
+   - Single entrypoint at cell.call
+   - Actual upload that stores the file in the dataspace
+- Useful data handling
+   - Count
+   - Sum
+   - Aggregate
+   - Duplicates
+- @ check
+- @ api
+   - Register api calls
+   - Serve api calls
+   - Send api calls through the service
+- @ view
+   - Serving the view
+   - HTML generation
+   - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
 
 ### Publishing
 
@@ -456,6 +464,267 @@ view
 
 ## Development notes
 
+### 2025-12-10
+
+Big questions:
+- How does cell.respond behave? Not cell.do, or cell.native, just cell.respond.
+- How do we build dependency graphs?
+
+```
+eleven : int 10
+         do - int - @ + - @ int
+                          - 1
+       @ plus1 10
+```
+
+There are three calls inside eleven:
+- eleven
+- eleven : do 1 int 1
+- eleven : do 1 int 1 @ + 1
+
+- The first call (eleven) depends on plus1 only. It depends on the very first step to the right of the @.
+- The second call depends on +. However, because it's a native call, that won't change. However, if you redefine it, it will, and you can redefine any call. So there's no skipping it. So, it depends on +. It also depends on int.
+- The third call just depends on int.
+
+I was going to say that the less nested calls that include a call depend on those calls and those calls only. That makes sense, but in the case of eleven (the outermost call), the dependencies are really against plus1, which is the one bringing the entire definition. So this already violates this principle.
+
+If the cell is somewhat big, I need the dependencies. But if this is so hard to think about, then I can take a shortcut:
+- Unrelated toplevel prefixes should not care about changes somewhere else.
+- But then, why toplevel? What I care about is, from the moment you have an @, you have to recompute things. Why can't I just have a map of all the paths that affect a prefix that are NOT starting with that prefix? Now, that is interesting.
+
+eleven depends on plus1
+Things inside eleven : do - int - depend on things to its right, but that's just understood.
+
+So, a rule would be:
+- If something to your right changes, you need to re-evaluate also what happens to your left. There could be some false positives (unnecessary recalculations) doing this, but it's fine. It's probably more expensive just to keep these extensive dependency lists (not to mention that I cannot figure out how to do it).
+
+So, the chain of dependencies can be just for non-obvious things looking to the left.
+
+What's tripping me off is that the place to look for is dynamic, non-obvious, because the system walks up until it finds something with the step after the @! So, you don't know (unless you walk) where that dependency is. Well, it is somewhere in your prefix, and if you don't find it if you go all the way to the left, it's nowhere.
+
+For practical purposes, what I need is to know that eleven depends on plus1, and recalculate eleven when plus1 changes. That's really it! And if something depends on eleven, change that as well.
+
+We also need to prevent (with an error as a value, yeah) circular references.
+
+If you have something like
+
+```
+fdynamic @ fizzbuzz @ value
+```
+
+Then, fdynamic depends on both fizzbuzz and value. Two important things:
+
+- Instead of thinking in terms of toplevel or not, let's just think in terms of prefixes before the first @. These are the static parts (I don't even have to use quotes), so these are the ones where it makes sense to have dependency entries. What this shows is that we want to have a list of dependencies for each call that is the leftmost on its path. Not calls that have another call to their left (there's the problem with the =s, but those are results really and in any case the @ are replaced with =s, so it's either irrelevant or it doesn't even happen). These are the calls that need the dependency list!
+- If those calls depend on something more "internal" that is defined internally, it doesn't matter because you're remaking the whole thing anyway, right? No, if that thing being referenced is to the left of the first call, it's outside, and, because there's no call, you know its value. So you know it. But what about referencing something that has a mere value?
+
+```
+fdynamic foo @ value
+         yo @ fizzbuzz @ foo
+```
+
+In this case, fdynamic yo depends on fdynamic foo. So we have to look at the definitions inside to see to what they might resolve.
+
+Why can't we generate dependency lists on the fly? Because we don't know who is referencing that who you just changed. That's the problem. If you don't know, or you forgot, you need to do a full pass from the top.
+
+Let's go to a low effort solution:
+
+- Track dependencies for first call prefixes only.
+- For each first call, look at all the calls to its right; take all the first steps after them, make it into a distinct set, and assume that those are dependencies at the prefix level, and also at the prefix - 1 level, all the way up.
+
+So:
+
+```
+eleven @ plus1 10
+```
+
+Dependency is eleven -> plus1
+
+When you have the expansion:
+
+```
+eleven : int 10
+         do - int - @ + - @ int
+                          - 1
+```
+
+eleven : do 1 int 1 -> + and int. For all five walk ups (starting with the zeroth, the prefix itself) you have 5x2 = ten dependencies.
+
+Really, we could just store + and int, the walk ups of the prefix are just given by the prefix itself. But, what happens when a change comes in from somewhere else?
+
+If the change is in int, potentially we need to rework this call. But if it is in bar int, we won't. It's crazy how much the single step walk up (rather than multiple step walk up) is simplifying things for us.
+
+Zoom out for a minute:
+TODO:
+- Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
+- Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+- Reimplement cell.respond fully understanding the algorithm, including the commas.
+
+Going back to fizzbuzz, the dependencies are none? No!
+
+```
+f15 @ fizzbuzz 15
+```
+
+f15 depends on fizzbuzz
+
+```
+fvalue @ fizzbuzz @ value
+```
+
+fvalue depends on fizzbuzz and value
+
+OK, so how do these little lists help me to know when something has changed and has to be recalculated?
+
+We have a bloody symbol table that is global. And it's the other way around, we store the steps that are being called, so it's a dependents graph, not dependencies.
+
+```
+dependents fizzbuzz - fvalue
+                    - f15
+           value - fvalue
+```
+
+Cleaning the dependency table shouldn't be difficult, which is something I was fearing: if the prefix changes, see if its still a dependent of where it is. But how do you quickly look that up? You also need a dependencies graph!
+
+```
+dependencies fvalue - fizzbuzz
+                    - value
+             f15 - fizzbuzz
+```
+
+You don't and cannot know the actual dependency path until you're actually executing. But you don't know whether you should re-execute, that's what we're building this responsive layer in the first place.
+
+The dependents can only be single steps. The dependencies can be paths of length 1 or more.
+
+```
+calls fvalue @ fizzbuzz @ value
+      f15 @ fizzbuzz 15
+```
+
+gives you:
+
+```
+dependents fizzbuzz - calls fvalue
+                    - calls f15
+           value - calls fvalue
+dependencies calls fvalue - fizzbuzz
+                          - value
+                   f15 - fizzbuzz
+```
+
+I feel good about this. This can work.
+
+I am just thinking about Earley's "combine like subparses". Is there anything like this available here? I'm also thinking about recursive calls: how do we not consider them to be circular dependencies? A low effort way of doing it is to track cycles in what triggers recalculations.
+
+Why fizzbuzz execution got stuck:
+
+```
+(2025-12-10T21:15:21.612Z) putting:
+p "fizzbuzz 15" : seq 2 =
+v @ push p output
+         v fizz
+(2025-12-10T21:15:21.615Z) putting:
+p "fizzbuzz 15" : seq 2 = =
+v ""
+```
+
+I need to distinguish between "there is an empty text" vs there is nothing there.
+
+I think this is the problematic line. I need to see if there's a path there that points to a "" step.
+```
+      if (currentValue.length === 0) {
+```
+
+Let's now go through it manually.
+
+```
+"fizzbuzz 15" @ fizzbuzz 15
+```
+
+```
+"fizzbuzz 15" : n 15
+                do - @ put p : output
+                           v ""
+```
+
+```
+"fizzbuzz 15" : n 15
+                output ""
+                     = ok
+                do - @ put p : output
+                           v ""
+```
+
+```
+"fizzbuzz 15" : n 15
+                output ""
+                     = ok
+                do - @ put p : output
+                           v ""
+                   - @
+```
+
+(I'll continue on the next session)
+
+Off-topic: I think cell is a low-effort attempt to do the impossible.
+
+### 2025-12-09
+
+You want to build quickly. But you also want the speed to continue.
+
+```
+fizzbuzz @ do n - @ put p : output
+                        v ""
+                - @ if cond @ % - @ n
+                                - 3
+                       else @ push p output
+                                   v fizz
+                - @ if cond @ % - @ n
+                                - 5
+                       else @ push p output
+                                   v buzz
+                - @ output
+
+(I'm doing the expansion by hand on the call below)
+
+f15 = fizzbuzz
+    : do - ""
+      output fizzbuzz
+    @ fizzbuzz 15
+```
+
+List of dependencies:
+
+- p fizzbuzz
+  v "Technically, this doesn't point anywhere else, just to itself, because the whole thing to its right is taken as a literal"
+
+Wait, I need to do this with the expansion.
+
+Loose idea: if you respond with "stop @ foo", are you freezing the @ foo? No, you're resolving the @ foo first. So there has to be a way to defuse the @. That's just by returning a definition, or rather, a sequence (interesting to think that definitions and sequences are the same, I think they are).
+
+OK, stop everything. If I go with the single hook principle, can I still access the message? Yes, you can, as long as : is on the way out. Wait, it won't work. Yes, it will. Check this out:
+
+```
+: int 10
+  seq - = 11
+        @ + - = 10
+              @ int
+            - 1
+```
+
+On : seq 1 @ + 1 @, we're looking for int.
+We try looking then for it in : seq 1 @ + 1, then on : seq 1 @ +, then on : seq 1 @, then on : seq 1, then on : seq, then on :. We find it on :. If : was behind an x, and that x was all the way out, then yes, we'd need to add an x there on the prefix. bBut not if it's on the way from the context to the general from the place where you make the call.
+
+I need to do the expansion slower:
+
+```
+eleven : int 10
+         do - int - @ + - @ int
+                          - 1
+       @ plus1 10
+```
+
+That's where we are when cell.respond kicks in.
+
 ### 2025-12-07
 
 The message of cell, its why, is as important as its content/implementation. I haven't defined that well.
@@ -504,6 +773,7 @@ Explanation:
 - Understanding determines how quickly someone can fix problems since they are easy to find; and how quickly they can add features since it's clear how the new features can coexist with the existing ones without breaking them.
 - Complexity tends to increase exponentially and can quickly dwarf enormous efforts, even of large teams composed of skilled people that spent a long time understanding the system.
 - No training can dwarf large complexity either, because a sufficiently complex system cannot be understood. It can only be understood if it's simplified.
+- Understanding gives you a reliable representation of what you understand. You don't just hold the elements of the system, but also all of their interrelations. I suspect there's a n^2 phenomenon here at play, where the effort of understanding is quadratic with the number of elements; this is also perhaps related to LLM attention training, which is also n^2 since it holds the relationship of any element against each of the other ones.
 - Minimizing complexity is the only way to retain speed in the long term.
 - Speed of development is a great metric, but not just the speed on the first week or month of the project. The speed that matters is that over the entire lifecycle of the system.
 
@@ -538,6 +808,29 @@ Here's an illustration:
 
 = 15
 @ plus10 5
+
+
+### The seven problems
+
+1. Different ways to represent data with text. High noise (syntax). Or imprecise and clunky graphical representations of code, which also use text.
+2. Data being fragmented everywhere. Takes a long time to find where things are and more to make them reference each other cleanly.
+3. Lack of visibility between inputs and outputs. Console log everywhere.
+4. A panoply of ways to program, none of which are straightforward or procedural. Think OOP vs pure functional vs low-level programming with pointers.
+5. Systems that you need to re-run.
+6. 3-8 libraries and subsystems to do anything useful.
+7. Facing the blank paper and having to read a lot to do anything. Drawing a blank in the middle of the process or getting stuck.
+
+### The seven powerups
+
+Cell employs seven powerups to make programming as easy (or hard) as writing prose:
+
+1. **Fourdata**: a simple way to **represent data**. This allows you to look directly at any data that comes your way.
+2. **Dataspace**: a single space **where all the data of your project exists**. Every part of your data has a meaningful location. Everything is organized in the same place.
+3. **Dialog**: programming as a **conversation**: you write *calls* to the system, and the system responds back with some data. You can see both your call and the response as data.
+4. **Fivelogic**: write any logic with **only five constructs** which you can understand in a few minutes.
+5. **Reactive**: the system is **always up to date** and responds to your changes (just like a spreadsheet!).
+6. **Integrated editor**: language, database, API and UI are in one editor that runs in your web browser.
+7. **Generative AI**: automatic intelligence that can write code for you, interpret data, or even act on your behalf when someone else interacts with your data.
 ```
 
 Side note: autopoietically speaking, any system is an information system.
