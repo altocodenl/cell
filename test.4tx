@@ -1,42 +1,3 @@
-- TODO: MOVE SEQUENCE TO THE BOTTOM
-
-- SEQUENCE - c @ put p fizzbuzz
-                     v @ do n - @ put p : output
-                                        v ""
-                              - @ if cond @ % - @ n
-                                              - 3
-                                     else @ push p output
-                                                 v fizz
-                              - @ if cond @ % - @ n
-                                              - 5
-                                     else @ push p output
-                                                 v buzz
-                              - @ output
-             tag "Define fizzbuzz"
-
-           - c @ put p "fizzbuzz 15"
-                     v @ !izzbuzz 15
-             tag "Fizzbuzz 15"
-
-           - c @ wipe
-           - c @ put v eleven @ plus1 10
-                       plus1 @ do int - @ + - @ int
-                                            - 1
-           - c @
-             r eleven = 11
-                      : int 10
-                        seq - = 11
-                              @ + - = 10
-                                    @ int
-                                  - 1
-                      @ plus1 10
-               plus1 = int 1
-                     @ do int - @ + - @ int
-                                    - 1
-             tag "Valid sum"
-
-           - c @ wipe
-
 - "TEXT <> PATHS" - ct ""
                     r ""
                     tag "Empty text"
@@ -621,7 +582,136 @@
 
                    tag "Get all dot references"
 
-- PUT
+                 - c @ wipe
+
+- PUT - c @ put v key value
+      - c @
+        r dialog 1 c "@ wipe"
+                   from user
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r ok
+                   to cell
+                 2 c "@ put v key value"
+                   from user
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r ok
+                   to cell
+          key value
+        keepDialog 1
+        tag "Get dataspace including dialog"
+
+      - c @ wipe
+      - c @ put p key
+                v value
+      - c @
+        r dialog 1 c "@ wipe"
+                   from user
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r ok
+                   to cell
+                 2 c "@ put p key
+                            v value"
+                   from user
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r ok
+                   to cell
+          key value
+        keepDialog 1
+        tag "Get dataspace including dialog (two path call)"
+
+      - c @ wipe
+
+      - c @ put v data list - a
+                            - b
+
+      - c @ put p data
+                v just one path
+
+      - c @ data
+        r just one path
+        tag "Overwrite prefix with multiple paths with one single path"
+
+      - c @ put p data
+                v simple
+
+      - c @ data
+        r simple
+        tag "Overwrite long path with a short one"
+
+      - c @ put p data
+                v hash 1
+
+      - c @ put p data 2
+                v 3
+        r error "The path `data hash 1` is setting a hash but there is already a list at path `data`"
+        tag "Attempt to add a list path to a hash"
+
+      - c @ put p data more
+                v 3
+
+      - c @ data
+        r hash 1
+          more 3
+        tag "Add another path to a hash prefix"
+
+      - c @ wipe
+
+      - c @ put p foo
+                v ""
+        r ok
+
+      - c @
+        r foo ""
+        tag "Empty text is set and retrieved"
+
+      - c @ put p ""
+                v bar
+
+      - c @
+        r foo ""
+          "" bar
+        tag "Empty text can be used as path"
+
+      - c @ ""
+        r bar
+        tag "Get value from path that has an empty text"
+
+      - c @ wipe
+      - c @ put v list 1 a
+                       2 b
+
+      - c @ put p list foo
+                v bar
+        r error "The path `list foo bar` is setting a hash but there is already a list at path `list`"
+        tag "Attempt to add a hash path to a list"
+
+      - c @ wipe
+
+      - c @ put v hash one thing
+
+      - c @ put p hash "
+                              bar"
+                v yes
+      - c @ hash
+        r one thing
+          "
+                 bar" yes
+        tag "Retrieve a value with a path with a step that is multiline text"
+
+      - c @ put p dialog
+                v 1
+        r error "A dialog cannot be supressed by force."
+        tag "Forbid putting to the dialog"
+
+      - c @ put p foo bar jip
+                      oh yeah
+                v 1
+        r error "Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah"
+        tag "Forbid putting multiple paths at the same time"
 
 - "PUT WITH CONTEXT PATH"
 
@@ -803,3 +893,44 @@
                   "
 
 - CONDITIONAL
+
+- SEQUENCE - c @ put p call
+                     v @ do n - @ if cond 1
+                                     do nosuchcall bar
+           - c @ put p fizzbuzz
+                     v @ do n - @ put p : output
+                                        v ""
+                              - @ if cond @ % - @ n
+                                              - 3
+                                     else @ push p output
+                                                 v fizz
+                              - @ if cond @ % - @ n
+                                              - 5
+                                     else @ push p output
+                                                 v buzz
+                              - @ output
+             tag "Define fizzbuzz"
+
+           - c @ put p "fizzbuzz 15"
+                     v @ !izzbuzz 15
+             tag "Fizzbuzz 15"
+
+           - c @ wipe
+           - c @ put v eleven @ plus1 10
+                       plus1 @ do int - @ + - @ int
+                                            - 1
+           - c @
+             r eleven = 11
+                      : int 10
+                        seq - = 11
+                              @ + - = 10
+                                    @ int
+                                  - 1
+                      @ plus1 10
+               plus1 = int 1
+                     @ do int - @ + - @ int
+                                    - 1
+             tag "Valid sum"
+
+           - c @ wipe
+

@@ -464,6 +464,10 @@ view
 
 ## Development notes
 
+### 2025-12-11
+
+What determines the type of a prefix is what the paths to its right are, or rather, we can just say its paths? Or its values, but those values are paths. If the paths are of length 1, the prefix actually only can have one path value, and it's either a text prefix or a number prefix. If the path values have a length of 2 or more, the type of the first step of each of them determines whether it is a hash prefix or a list prefix.
+
 ### 2025-12-10
 
 Big questions:
@@ -5954,12 +5958,6 @@ We take the sole path inside `leftSide` and set `leftSide` to it. If there's no 
    leftSide = leftSide [0] || [];
 ```
 
-We forbid overwriting `put`.
-
-```js
-   if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
-```
-
 We forbid overwriting `dialog` unless the `updateDialog` flag is passed.
 
 ```js
@@ -6142,7 +6140,7 @@ We update the dataspace through `put`, return OK and close the function.
 ```js
    put (dataspace);
 
-   return ['ok'];
+   return [['ok']];
 }
 ```
 

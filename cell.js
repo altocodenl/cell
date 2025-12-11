@@ -818,7 +818,6 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    leftSide = leftSide [0] || [];
 
-   if (leftSide [0] === 'put') return [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']];
    if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
 
    var dataspace = get ();
@@ -879,7 +878,7 @@ cell.wipe = function (prefix, get, put) {
 
    put (dataspace);
 
-   return ['ok'];
+   return [['ok']];
 }
 
 // *** TESTS ***
@@ -889,68 +888,6 @@ var test = function () {
    var dataspace = [];
 
    var errorFound = false === dale.stop ([
-
-      // *** PUT ***
-
-      {reset: []},
-      {f: cell.call, input: ['@ put p foo', '@ put v bar'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [
-         ['dialog', 1, 'c', '@ put p foo\n@ put v bar'],
-         ['dialog', 1, 'from', 'user'],
-         ['dialog', 1, 'id', '<OMITTED>'],
-         ['dialog', 1, 'ms', '<OMITTED>'],
-         ['dialog', 1, 'r', 'ok'],
-         ['dialog', 1, 'to', 'cell'],
-         ['foo', 'bar']
-      ], keepDialog: true},
-
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-      ]},
-      {f: cell.call, input: ['@ put p foo bar', '@ put v hey'], expected: [['ok']]},
-      {f: cell.call, input: '@ foo', expected: [['bar', 'hey']]},
-      {f: cell.call, input: ['@ put p foo', '@ put v 1'], expected: [['ok']]},
-      {f: cell.call, input: '@ foo', expected: [[1]]},
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-      ]},
-      {f: cell.call, input: ['@ put p foo', '@ put v bar hey'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', 'bar', 'hey']]},
-      {f: cell.call, input: ['@ put p foo 2', '@ put v something'], expected: [['error', 'The path `foo bar hey` is setting a hash but there is already a list at path `foo`']]},
-      {f: cell.call, input: ['@ put p foo yup', '@ put v go'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', 'bar', 'hey'], ['foo', 'yup', 'go']]},
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-      ]},
-      {f: cell.call, input: ['@ put p foo', '@ put v ""'], expected: [['ok']]},
-      {f: cell.call, input: '@ foo', expected: [['']]},
-      {f: cell.call, input: '@', expected: [['foo', '']]},
-      {f: cell.call, input: ['@ put p ""', '@ put v 1'], expected: [['ok']]},
-      {f: cell.call, input: '@', expected: [['foo', ''], ['', 1]]},
-      {f: cell.call, input: '@ ""', expected: [[1]]},
-      {reset: [
-         ['foo', 'bar', 1, 'jip'],
-         ['foo', 'bar', 2, 'joo'],
-         ['foo', 'soda', 'wey'],
-      ]},
-      {f: cell.call, input: ['@ put p foo jup', '@ put v yea'], expected: [['ok']]},
-      {f: cell.call, input: '@ foo', expected: [
-         ['bar', 1, 'jip'],
-         ['bar', 2, 'joo'],
-         ['jup', 'yea'],
-         ['soda', 'wey']
-      ]},
-      {f: cell.call, input: ['@ put p foo bar yes', '@ put v sir'], expected: [['error', 'The path `foo bar yes sir` is setting a hash but there is already a list at path `foo bar`']]},
-      {f: cell.call, input: ['@ put p foo "\n             \n             bar"', '@ put v 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@ foo "\n       \n       bar"'], expected: [[1]]},
-
-      {f: cell.call, input: ['@ put p put', '@ put v 1'], expected: [['error', 'I\'m sorry Dave, I\'m afraid I can\'t do that']]},
-      {f: cell.call, input: ['@ put p dialog', '@ put v 1'], expected: [['error', 'A dialog cannot be supressed by force.']]},
-      {f: cell.call, input: ['@ put p foo bar jip', '@ put p foo oh yeah', '@ put v 1'], expected: [['error', 'Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah']]},
 
       // *** PUT WITH CONTEXT PATH ***
 
