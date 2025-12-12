@@ -627,11 +627,9 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
-      cell.put ([
-         ['p'].concat (contextPath).concat (':'),
-      ].concat (dale.go (message, function (v) {
+      cell.put ([['p', '.', ':']].concat (dale.go (message, function (v) {
          return ['v', messageName].concat (v);
-      })), [], get, put);
+      })), contextPath, get, put);
 
       return output;
    }
@@ -648,10 +646,10 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
       });
 
       if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
-         ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
+         ['p', '.', ':', 'seq', stepNumber],
       ].concat (dale.go (currentStep, function (v) {
          return ['v'].concat (v);
-      })), [], get, put);
+      })), contextPath, get, put);
 
       var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
       if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
@@ -888,41 +886,6 @@ var test = function () {
    var dataspace = [];
 
    var errorFound = false === dale.stop ([
-
-      // *** PUT WITH CONTEXT PATH ***
-
-      {reset: [
-         ['foo', 'something'],
-      ]},
-      {f: cell.put, context: ['foo'], input: [['p', 'bar'], ['v', 1]], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['bar', 1], ['foo', 'something']]},
-
-      {reset: [
-         ['foo', 'bar', 0],
-      ]},
-      {f: cell.put, context: ['foo'], input: [['p', 'bar'], ['v', 1]], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 'bar', 1]]},
-
-      {reset: [
-         ['foo', 'bar', 1],
-         ['foo', 'jip', 2],
-         ['foo', 'something', 'else'],
-      ]},
-      {f: cell.put, context: ['foo', 'something', 'else'], input: [['p', 'bar'], ['v', 3]], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 'bar', 3], ['foo', 'jip', 2], ['foo', 'something', 'else']]},
-
-      // *** PUT WITH DOT ***
-
-      {reset: [
-         ['foo', 10],
-         ['inner', 'foo', 20],
-      ]},
-      {f: cell.put, input: [['p', '.', 'foo'], ['v', 20]], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 20]]},
-      {f: cell.put, input: [['p', '.', 'foo'], ['v', 20]], context: ['something', 'else'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 20], ['something', 'else', 'foo', 20]]},
-      {f: cell.put, input: [['p', '.', 'foo'], ['v', 30]], context: ['inner'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [['foo', 20], ['inner', 'foo', 30], ['something', 'else', 'foo', 20]]},
 
       // *** COND ***
 
@@ -1219,7 +1182,12 @@ var test = function () {
             }
             return;
          }
-         if (test.c !== undefined) {
+         // test.context is only present for a few calls to cell.put
+         if (test.context) {
+            var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
+            var result = cell.put (call, test.context, get, put);
+         }
+         if (test.c !== undefined && ! test.context) {
             var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
          }
 

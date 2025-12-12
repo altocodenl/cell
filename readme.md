@@ -54,6 +54,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
          - Understand the naive, from the top approach.
          - Add dependents/dependencies to only recalculate what's necessary.
+      - Be able to pass sequences to do/else in cell.if; do we need an expansion? If we don't, can we also not need an expansion (:) on cell.do and cell.loop, when we pass lambdas to them?
    - Loop
    - Implement fizzbuzz & html validation/generation
 - Upload
@@ -463,6 +464,46 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-12
+
+Any explanation of a grammatical construct should start with an apology.
+
+The do/else in @ if is like that of @ do and @ loop, except that it doesn't receive a message. And, for that reason, it doesn't have a :, and the actual definition gets expanded. But, why don't I have this in @ do and @ loop if I have a lambda? There's something not quite fitting here.
+The thing is, where can I put the expansion for cell.do or cell.loop, if not right there? It has to go in :. @ is the call itself, no room there. = is the result. So it has to go in the middle. But why is this not the case for if?
+
+```
+@ if cond = 1
+          @ not 1
+     do = 1
+        @ not 0
+```
+
+It is because do or else are fully free, you can put the entire expansion there and expand it. In cell.do:
+
+```
+f15 @ fizzbuzz 15
+```
+
+To the right of f15 you have fizzbuzz, the actual reference. If you had a reference to a sequence next to do, it'd be the same thing.
+
+In any case, I'm not sure if you could have good lambdas in do or else without :. Because you'd have no way to reference other steps. I'm tempted to make it also have a : if it's more than just one call. More than one call: sequence. Just one call: reference. Could it really be just this simple? But references to a sequence also have an expansion.
+
+Changing tack:
+
+Testing cell.put with context path:
+- cell.call (single entrypoint) calls cell.put with an empty path as context.
+- We don't want to call cell.put directly, but rather do it through cell.call.
+- Solution: test the context from within a sequence.
+- We are not passing the context path in any call to cell.put, except for the couple of tests we're trying to rewrite right now.
+
+Why not drop the context path altogether for cell.put? Well, we use it in cell.get. Many invocations to cell.get have a context path. Could we just use the context path more?
+
+OK, we restored contexts to the calls to cell.put from inside cell.do. Now, we use the context path. It's found its good place, and we have symmetry with cell.get. The other calls to cell.put are either on cell.call (outermost) or one in cell.respond. That one is too sophisticated, does too much logic, to resort to the simple walking up of cell.put. At least for now; perhaps this will change when we refactor it into something simpler. There's no more other calls to cell.put.
+
+BUT, we don't want to rely on cell.do to test cell.put, so we will just expose that context parameter in the tests. End of story!
+
+It must be clear that without dot, there's no way, from inside a context, to set a new variable (note to self, come up with a better name than "variable"!) that is not at the top level! The dot is what prevents the walking up. There's no way we can do without it, unless we send silly calls with the entire prefix we are in to put, which is the equivalent of only being able to use absolute paths in a file system.
 
 ### 2025-12-11
 
@@ -5729,14 +5770,12 @@ If they are not the same, that can be because of two reasons:
 1. This is the first time that this call is being responded.
 2. The message name, or its value, changed.
 
-In both cases, the required action is the same: we will then set `contextPath` plus `:` to the new message. We do this through a direct call to `cell.put`.
+In both cases, the required action is the same: we will then set `:` to the new message. We do this through a direct call to `cell.put`. Note we use the dot to indicate that this has to be done right here, instead of looking for a `:` up the chain if it doesn't exist. We also pass the `contextPath`.
 
 ```js
-      cell.put ([
-         ['p'].concat (contextPath).concat (':'),
-      ].concat (dale.go (message, function (v) {
+      cell.put ([['p', '.', ':']].concat (dale.go (message, function (v) {
          return ['v', messageName].concat (v);
-      })), [], get, put);
+      })), contextPath, get, put);
 ```
 
 We then return `output` (which will be a single path with an empty text) and close the case where the message has changed.
@@ -5780,14 +5819,14 @@ We also get the current step from the definition, slicing the number from the fr
       });
 ```
 
-As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`.
+As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`. Note the dot, which creates the value where it's needed if it doesn't exist already.
 
 ```js
       if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
-         ['p'].concat (contextPath).concat ([':', 'seq', stepNumber]),
+         ['p', '.', ':', 'seq', stepNumber],
       ].concat (dale.go (currentStep, function (v) {
          return ['v'].concat (v);
-      })), [], get, put);
+      })), contextPath, get, put);
 ```
 
 Note that in the body of the conditional above, we are returning the result of `cell.put`, which will stop the loop early because it's not `undefined`.

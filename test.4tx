@@ -387,12 +387,6 @@
 - "GET & PUT" - c @
                 r ""
                 tag "Get everything when the dataspace is empty"
-                comments leftmostAt 0
-                         rightmostAt 0
-                         contextPath <empty>
-                         targetPath <empty>
-                         valuePath <empty>
-                         prefix ??
 
               - c @ x
                 r ""
@@ -713,9 +707,86 @@
         r error "Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah"
         tag "Forbid putting multiple paths at the same time"
 
-- "PUT WITH CONTEXT PATH"
+      - c @ wipe
 
-- "PUT WITH DOT"
+- "PUT WITH CONTEXT PATH" - c @ put v hook something
+
+                          - c @ put p value
+                                    v 1
+                            context - foo
+
+                          - c @
+                            r hook something
+                              value 1
+                            tag "Context path does not make a difference if there is no hook"
+
+                          - c @ wipe
+                          - c @ put v hook value 0
+                          - c @ put p value
+                                    v 1
+
+                          - c @
+                            r hook value 0
+                              value 1
+                            tag "Hook without context is irrelevant"
+
+                          - c @ put p value
+                                    v 2
+                            context - hook
+
+                          - c @
+                            r hook value 2
+                              value 1
+                            tag "Hook with context"
+
+                          - c @ wipe
+
+                          - c @ put v mothership count 1
+                                                 deeper context
+
+                          - c @ put p count
+                                    v 2
+                            context - mothership
+                                    - deeper
+                                    - context
+
+                          - c @
+                            r mothership count 2
+                                         deeper context
+
+                          - c @ wipe
+
+- "PUT WITH DOT" - c @ put v ball 1
+                             pit ball 2
+
+                 - c @ put p . ball
+                           v 3
+
+                 - c @
+                   r ball 3
+                     pit ball 2
+                   tag "Use dot without context"
+
+                 - c @ put p . ball
+                           v 4
+                   context - completely
+                           - different
+
+                 - c @
+                   r ball 3
+                     completely different ball 4
+                     pit ball 2
+                   tag "Use dot with non-existing context, creates the context"
+
+                 - c @ put p . ball
+                           v 5
+                   context - pit
+
+                 - c @
+                   r ball 3
+                     completely different ball 4
+                     pit ball 5
+                   tag "Use dot with existing context"
 
 - RESPOND - c @ wipe
 
