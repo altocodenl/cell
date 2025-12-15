@@ -887,95 +887,6 @@ var test = function () {
 
    var errorFound = false === dale.stop ([
 
-      // *** COND ***
-
-      {reset: []},
-      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do yes!', '@ put v @ if finally no!'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['result', '=', 'error', 'An if call has to be a hash with keys `cond`, `do` and `else`.'],
-          ['result', '@', 'if', 'cond', '=', ''],
-          ['result', '@', 'if', 'cond', '@', 'count'],
-          ['result', '@', 'if', 'do', 'yes!'],
-          ['result', '@', 'if', 'finally', 'no!']
-      ]},
-
-      {reset: []},
-      {f: cell.call, input: ['@ put p result', '@ put v @ if do yes!', '@ put v @ if else no!'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['result', '=', 'error', 'An if call has to contain a `cond` key.'],
-          ['result', '@', 'if', 'do', 'yes!'],
-          ['result', '@', 'if', 'else', 'no!']
-      ]},
-
-      {reset: [
-         ['count', 1],
-      ]},
-      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do yes!', '@ put v @ if else no!'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 1],
-          ['result', '=', 'yes!'],
-          ['result', '@', 'if', 'cond', '=', 1],
-          ['result', '@', 'if', 'cond', '@', 'count'],
-          ['result', '@', 'if', 'do', 'yes!'],
-          ['result', '@', 'if', 'else', 'no!']
-      ]},
-      {f: cell.call, input: ['@ put p count', '@ put v 0'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 0],
-          ['result', '=', 'no!'],
-          ['result', '@', 'if', 'cond', '=', 0],
-          ['result', '@', 'if', 'cond', '@', 'count'],
-          ['result', '@', 'if', 'do', 'yes!'],
-          ['result', '@', 'if', 'else', 'no!']
-      ]},
-
-      {reset: [
-         ['count', 1],
-      ]},
-      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if else no!'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 1],
-          ['result', '=', ''],
-          ['result', '@', 'if', 'cond', '=', 1],
-          ['result', '@', 'if', 'cond', '@', 'count'],
-          ['result', '@', 'if', 'else', 'no!']
-      ]},
-
-      {reset: [
-         ['count', 0],
-         ['inner', 'count', 1],
-      ]},
-      {f: cell.call, input: ['@ put p inner result', '@ put v @ if cond @ count', '@ put v @ if else no!'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 0],
-          ['inner', 'count', 1],
-          ['inner', 'result', '=', ''],
-          ['inner', 'result', '@', 'if', 'cond', '=', 1],
-          ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
-          ['inner', 'result', '@', 'if', 'else', 'no!']
-      ]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 0],
-          ['inner', 'count', 1],
-          ['inner', 'result', '=', ''],
-          ['inner', 'result', '@', 'if', 'cond', '=', 1],
-          ['inner', 'result', '@', 'if', 'cond', '@', 'count'],
-          ['inner', 'result', '@', 'if', 'else', 'no!']
-      ]},
-      {reset: [
-         ['count', 1],
-      ]},
-      {f: cell.call, input: ['@ put p result', '@ put v @ if cond @ count', '@ put v @ if do bar 1', '@ put v @ if do foo 2'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['count', 1],
-          ['result', '=', 'bar', 1],
-          ['result', '=', 'foo', 2],
-          ['result', '@', 'if', 'cond', '=', 1],
-          ['result', '@', 'if', 'cond', '@', 'count'],
-          ['result', '@', 'if', 'do', 'bar', 1],
-          ['result', '@', 'if', 'do', 'foo', 2],
-      ]},
-
       // *** SEQUENCE ***
 
       {reset: []},
@@ -1162,51 +1073,53 @@ var test = function () {
          if (test.tag) clog (Array (dale.keys (suite) [0].length).fill (' ').join (''), test.tag);
 
          // text.ct has text that might or might not be proper fourtext
-         // text.js has JSON that has to be converted to fourdata
-         // test.cjs has a call that has to be converted to JSON and compared with r, which is stringified JSON
-         // test.c has a call that is valid fourtext
-
          if (test.ct !== undefined) {
-            var result = cell.call (test.ct, 'user', 'cell', false, get, put);
+            var response = cell.call (test.ct, 'user', 'cell', false, get, put);
             if (test.r === undefined) test.r = test.ct;
          }
+         // text.js has JSON that has to be converted to fourdata
          if (test.js !== undefined) {
-            var result = cell.JSToText (JSON.parse (test.js));
+            var response = cell.JSToText (JSON.parse (test.js));
          }
+         // test.cjs has a call that has to be converted to JSON and compared with r, which is stringified JSON
          if (test.cjs !== undefined) {
-            var result = cell.textToJS (test.cjs);
-            if (! teishi.eq (result, JSON.parse (test.r))) {
-               pretty ('result', JSON.stringify (result));
+            var response = cell.textToJS (test.cjs);
+            if (! teishi.eq (response, JSON.parse (test.r))) {
+               pretty ('response', JSON.stringify (response));
                pretty ('expected', JSON.stringify (JSON.parse (test.r)));
+               errorFound = true;
                return false;
             }
             return;
          }
-         // test.context is only present for a few calls to cell.put
-         if (test.context) {
-            var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
-            var result = cell.put (call, test.context, get, put);
-         }
-         if (test.c !== undefined && ! test.context) {
-            var result = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+         // test.c has a call that is valid fourtext
+         if (test.c !== undefined) {
+            // test.context is only present for a few calls to cell.put
+            if (test.context) {
+               var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
+               var response = cell.put (call, test.context, get, put);
+            }
+            else {
+               var response = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
+            }
          }
 
-         // The problem with testing like this is that r is sorted when we parse it. So we need to test sorting some other way.
-         // Another limitation: we cannot test invalid fourtext because the tests won't parse otherwise
-         if (test.r === undefined) return; // Some test steps have no assertions because they are just setting the ground for the next test. We don't do any assertions over those.
+         // Some test steps have no assertions because they are just setting the ground for the next test. We don't make any assertions over those.
+         if (test.r === undefined) return;
 
          // Remove the dialog or omit id and ms
-         result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
+         response = cell.pathsToText (dale.fil (cell.textToPaths (response), undefined, function (path) {
             if (path [0] !== 'dialog') return path;
             if (! test.keepDialog) return;
             if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
             return path;
          }));
 
-         if (type (test.r) !== 'string') test.r = cell.JSToText (test.r); // If we're not testing for JSON (t.cjs) and the expected result is not text (it could be number or a list of paths), make it into text.
-         if (! teishi.eq (result, test.r)) { // We use teishi.eq to compare two objects if this is a test.cjs
+         // If we're not testing for JSON (t.cjs) and the expected response is not text (it could be number or a list of paths), make it into text.
+         if (type (test.r) !== 'string') test.r = cell.JSToText (test.r);
+         if (! teishi.eq (response, test.r)) { // We use teishi.eq to compare two objects if this is a test.cjs
             pretty ('expected', test.r);
-            pretty ('result', result);
+            pretty ('response', response);
             errorFound = true;
             return false
          }

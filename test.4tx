@@ -963,7 +963,133 @@
                   But, for now, we don't need this multireference. It even seems that it's better to just implement multireference as a loop. Time will tell. We go with the above for now.
                   "
 
-- CONDITIONAL
+          - c @ wipe
+
+- CONDITIONAL - c @ put p result
+                        v @ if cond @ count
+                               do yes!
+                               finally no!
+              - c @
+                r result = error "An if call has to be a hash with keys `cond`, `do` and `else`."
+                         @ if cond = ""
+                                   @ count
+                              do yes!
+                              finally no!
+                tag "Extraneous key in if"
+
+              - c @ wipe
+
+              - c @ put p result
+                        v @ if do yes!
+                               else no!
+
+              - c @
+                r result = error "An if call has to contain a `cond` key."
+                         @ if do yes!
+                              else no!
+                tag "Missing cond in if"
+
+              - c @ wipe
+
+              - c @ put v count 1
+                          result @ if cond @ count
+                                      do yes!
+                                      else no!
+
+              - c @
+                r count 1
+                  result = yes!
+                         @ if cond = 1
+                                   @ count
+                              do yes!
+                              else no!
+                tag "If with truthy cond"
+
+              - c @ put p count
+                        v 0
+
+              - c @
+                r count 0
+                  result = no!
+                         @ if cond = 0
+                                   @ count
+                              do yes!
+                              else no!
+                tag "If with falsy cond"
+
+              - c @ put p result
+                        v @ if cond @ count
+                               else no!
+
+              - c @
+                r count 0
+                  result = no!
+                         @ if cond = 0
+                                   @ count
+                              else no!
+                tag "If with falsy cond and no do"
+
+              - c @ put p count
+                        v 1
+
+              - c @
+                r count 1
+                  result = ""
+                         @ if cond = 1
+                                   @ count
+                              else no!
+                tag "If with truthy cond and no do"
+
+              - c @ wipe
+
+              - c @ put v count 0
+                          inner count 1
+                                result @ if cond @ count
+                                            else no!
+
+              - c @
+                r count 0
+                  inner count 1
+                        result = ""
+                               @ if cond = 1
+                                         @ count
+                                    else no!
+                tag "If with truthy cond and no do inside a context"
+
+              - c @ wipe
+
+              - c @ put v count 1
+                          result @ if cond @ count
+                                      do foo 2
+                                         bar 1
+
+              - c @
+                r count 1
+                  result = bar 1
+                           foo 2
+                         @ if cond = 1
+                                   @ count
+                              do bar 1
+                                 foo 2
+                tag "If that responds with hash"
+
+              - c @ wipe
+
+              - c @ put v count 1
+                          result @ if cond @ count
+                                      do 2 foo
+                                         1 bar
+
+              - c @
+                r count 1
+                  result = 1 bar
+                           2 foo
+                         @ if cond = 1
+                                   @ count
+                              do 1 bar
+                                 2 foo
+                tag "If that responds with list"
+
 
 - SEQUENCE - c @ put p call
                      v @ do n - @ if cond 1

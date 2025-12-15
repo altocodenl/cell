@@ -46,9 +46,9 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ### Demo
 
-- Now
 - Language
    - Sequence + reworked cell.get/put (including cell.respond)
+      - Port all tests to the new format
       - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
       - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
@@ -218,12 +218,12 @@ TODO
 - Storage (cell.put) [DONE]
    - [TODO] Experiment with put without v: just assume it is v. Also put without v, assume it is "". This is for initialization. And always return the old value and the new value. If the old value was nothing (not even an empty text), just return one value? No, because it could be ambiguous with some lists. Return a list with one item. So we have a diff. Or better: from and to.
    - [TODO] Give back a diff of paths instead of "ok"
+   - [TODO] Make v without p also overwrite things that are there
 - Entrypoint (cell.call) -- must rework.
    - Have an unified interface through cell.call.
    - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
 - Rewrite all the existing tests and add new ones for anything untested.
-- Sequence (cell.s)
-   - Rename to s
+- Sequence (cell.do)
    - Figure out how the expansion looks
    - Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
    - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
@@ -237,9 +237,6 @@ TODO
    - test descending funarg (pass function)
    - test ascending funarg (return function)
 - Loops (cell.loop)
-
-
-
 - Upload
    - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
    - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
@@ -464,6 +461,38 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-15
+
+Claude: "The deeper validation: When your test format is your data format, you can't fake clarity. If the format were genuinely awkward, writing these tests would expose it immediately. The fact that they're this readable suggests fourdata has achieved something real - it's comfortable expressing itself to itself."
+
+Continuation as what makes a program into a function without free variables
+
+https://en.wikipedia.org/wiki/Continuation-passing_style
+"Expressing code in this form makes a number of things explicit which are implicit in direct style. These include: procedure returns, which become apparent as calls to a continuation; intermediate values, which are all given names; order of argument evaluation, which is made explicit; and tail calls, which simply call a procedure with the same continuation, unmodified, that was passed to the caller."
+the s in astack is really a continuation!
+"When the CPS function has computed its result value, it "returns" it by calling the continuation function with this value as the argument."
+next (); callback!
+
+== I get types now
+
+OK, I finally get why type systems are so popular. Typescript, or any type system, is constantly running through ALL of your code! In a batch-and-queue programming language (like almost any programming language nowadays, really), this brings up a lot of potential issues, without you having to write thorough tests that test your system at runtime. The type system lets you determine the structure of things and to find inconsistencies.
+
+To me, the cost paid is prohibitive, because these assertions about the system should be done with the full power of code, its same constructs (rather than a separate syntax) and at runtime. At runtime? Yes: if your system constantly runs and updates, like a spreadsheet, there's no repetitive command you need to invoke. The system is always up to date. Any anomalies are flagged as errors that you can see.
+
+A good runtime system that allows assertions will also allow you to see what are the assertions that a value already passed, so you can really narrow it down when you're in a context. This runtime assertion system has all the benefits of a type system and none of its drawbacks, provided: 1) it's always there, not just when you run your system + a test; 2) it's integrated in the editor, so you can "see" the assertions at any point.
+
+And, for the anarchists like me out there, that's what we miss out on when we're using javascript instead of typescript. We need an e2e suite to be constantly running against our system, and we still have to remember what x is at any point. Nothing less, nothing more.
+
+==
+
+Self-similarity as recursion: the different levels are built out of the same components. Failures of self-similarity multiply complexity. That's why type systems fail.
+
+https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)
+"The hexagonal architecture divides a system into several loosely-coupled interchangeable components, such as the application core, the database, the user interface, test scripts and interfaces with other systems. This approach is an alternative to the traditional layered architecture."
+Sounds to me an awful lot like grouped sets of calls. Whether those calls are "business logic" (emphasis on those air quotes), persistence, notifications or admin is quite moot. It makes sense as an overall division of concerns, though I wouldn't separate persistence from business logic; and admin and notifications seem very related too.
+
+Types try to be metamathematics, by describing it without being it. But the way forward is to make it math all the way up and down.
 
 ### 2025-12-12
 
