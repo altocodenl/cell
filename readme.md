@@ -42,8 +42,6 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ## TODO
 
-## Use cases
-
 ### Demo
 
 - Language
@@ -57,10 +55,9 @@ I'm currently recording myself while building cell. You can check out [the Youtu
       - Be able to pass sequences to do/else in cell.if; do we need an expansion? If we don't, can we also not need an expansion (:) on cell.do and cell.loop, when we pass lambdas to them?
    - Loop
    - Implement fizzbuzz & html validation/generation
-- Upload
    - Single entrypoint at cell.call
-   - Actual upload that stores the file in the dataspace
-- Useful data handling
+- Upload: upload that stores the file in the dataspace, as well as the data
+- Data handling
    - Count
    - Sum
    - Aggregate
@@ -461,6 +458,130 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-16
+
+We went from compiled to interpreted, but we're still running the code explicitly. Off/on, then it auto-shuts down.
+
+The whole thing with p and v in @ put is about upserting vs overwriting. I just realized, if you are not overwriting nearby paths (that is, if you're upserting), then you don't need p! You just set the paths you have. For example, if you have:
+
+```
+stereolab records 1 margerine
+                  2 jaunty
+```
+
+And then you do an upsert put like this:
+
+```
+@ put stereolab records 3 emperor
+      total 3
+```
+
+Then you will end up with this:
+
+```
+stereolab records 1 margerine
+                  2 jaunty
+                  3 emperor
+total 3
+```
+
+And if you do then
+
+```
+@ put stereolab records 1 mars
+```
+
+You'll have
+
+```
+stereolab records 1 mars
+                  2 jaunty
+                  3 emperor
+total 3
+```
+
+Now, if you want to do this:
+
+```
+@ put stereolab 1
+```
+
+It will not work, because stereolab is a hash and you're making it into a number. However, what if we consider that if the type is changed, you're overwriting the whole thing?
+
+Then, the above would do:
+
+```
+stereolab 1
+total 3
+```
+
+Let's go to a situation where we have:
+
+```
+stereolab records 1 mars
+                  2 jaunty
+                  3 emperor
+```
+
+Then, if we do
+
+```
+@ put stereolab records yes!
+```
+
+Then we'll end up with
+
+```
+stereolab records yes!
+```
+
+So yes, change of type will overwrite whatever we need to overwrite. No need to pass p or v. And no need to wipe to be sure that you overwrote whatever you were setting. If you want to wipe, then you wipe, otherwise there's always an upsert, and if the type changes, we overwrite.
+This also solves the multiput problem cleanly. Each top-level prefix you send to put is its own hook.
+As long as what you send in the put is internally consistent, it will be applied.
+The left-side/right-side separation was blocking me from seeing this pattern, which looks quite natural in retrospect.
+
+Terminology:
+- path: a list of steps
+- prefix: the left part of one or more paths. N paths can share a prefix.
+- value (of a prefix): N paths that are to the right of one prefix, with the prefixes removed.
+- key (of a prefix): the last step of a prefix.
+- type (of a prefix): the type of the value of that prefix
+
+cell as a "personal server", in the original sense of "personal computer"? The cloud services haven't used that angle, perhaps because they are not trying to empower individuals to build, they're mainly focused on solving causes of headaches for companies.
+
+cell is about empowering individuals to build.
+
+claude: "So the Amiga's achievement was bringing enterprise-class multitasking to a consumer computer at around $1,300. Combined with its advanced graphics and sound, this made it feel remarkably sophisticated compared to contemporary home computers. But the underlying concepts and implementations had existed in larger systems for decades before."
+
+A cleaner way to have sets would be to have lists where you have a push that is conditional to be unique. @ unipush (or @ upush)
+
+https://byteofdev.com/posts/javascript-benchmarking-mess/
+"Many of the same design decisions that made JavaScript (relatively) performant and portable make benchmarking significantly more difficult than it is in other languages. There are many more targets to benchmark, and you have much less control in each target."
+
+https://byteofdev.com/posts/deep-dive-distributed-database/
+"While not technically a database architecture, one of the most popular ways of reducing load on a database server while improving performance for common queries is a query cache. Traditionally, this has been implemented by custom caching layers, using in-memory databases such as Redis or Memcached. Servers in between the web server and database receive the queries before the database and store the result of the query in a cache. Then, if another identical query is sent, the result can be server from the cache instead of sending it to the database. These cache servers can be deployed across the globe without any consistency issues, as they do not handle writes. Additionally, because it is a simple (often in-memory) cache, the query itself is much faster."
+
+Plan:
+- Finish porting the tests to test.4tx
+- Change put to not use p or v
+- Change get and put to use a single hook
+- Make fizzbuzz work
+
+I'm not happy with how I'm structuring sequences. A sequence, really, is a list. I'm almost thinking of making it, by default, that the first step of any sequence is to set the message to a value, and every step comes after that. The question is, how do we reference this, or more precisely, where?
+
+```
+= ...
+: 1 @ put . message value
+  2
+@ ...
+```
+
+But if you do this, you cannot put message in : because it is a list! Where is the space for the sequence to share data inside of it? It has to be at colon, therefore we need something like `do` (better than `seq`) inside colon.
+
+Finding a problem with sparse lists in the test suite. If I give the test suite to cell.textToJS (like I do), sparse lists become [undefined, ...] and then I don't have the missing elements. An option is to ignore undefined when building lists. This could work.
+
+With the porting of the tests, cell is about 1k lines and the tests are about 1.3k. I wonder if it will be a long term of "good" cell systems that the implementation and the test suite takes roughly the same amount of paths.
 
 ### 2025-12-15
 

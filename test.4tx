@@ -350,6 +350,10 @@
                   r "/"1/""
                   tag "Quoted number to JSON"
 
+                - cjs "2 second"
+                  r "[null, /"second/"]"
+                  tag "Sparse list"
+
                 - cjs "jup yea
                        soda wey
                        bar 1 jip
@@ -1090,8 +1094,149 @@
                                  2 foo
                 tag "If that responds with list"
 
+              - c @ wipe
 
-- SEQUENCE - c @ put p call
+- SEQUENCE - c @ put v invalid @ do
+                       ref @ invalid 1
+
+           - c @
+             r invalid = error "The definition of a sequence must contain a message name and at least one step."
+                       @ do
+               ref = ""
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (no message name, no step)"
+             note "Because there's nothing after the @ do, if we reference it (`@ invalid 1`) we won't get a definition, so there's no error either."
+
+           - c @ put p invalid
+                     v @ do - 1
+
+           - c @
+             r invalid = error "The definition of a sequence must contain a textual name for its message."
+                       @ do 1 1
+               ref = error "The definition of a sequence must contain a textual name for its message."
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (no message name)"
+
+           - c @ put p invalid
+                     v @ do seq - 1
+
+           - c @
+             r invalid = error "The name of the message cannot be `seq`."
+                       @ do seq 1 1
+               ref = error "The name of the message cannot be `seq`."
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (invalid message name)"
+
+           - c @ put p invalid
+                     v @ do one - thing
+                            another - thing
+
+           - c @
+             r invalid = error "The definition of a sequence can only contain a single name for its message."
+                       @ do another - thing
+                            one - thing
+               ref = error "The definition of a sequence can only contain a single name for its message."
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (multiple message names)"
+
+
+           - c @ put p invalid
+                     v @ do this 2 thing
+
+           - c @
+             r invalid = error "The definition of a sequence must start with step number 1."
+                       @ do this 2 thing
+               ref = error "The definition of a sequence must start with step number 1."
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (sequence doesn't start at 1)"
+
+           - c @ put p invalid
+                     v @ do this 1 thing
+                                 3 please
+
+           - c @
+             r invalid = error "The definition of a sequence cannot have non-consecutive steps."
+                       @ do this 1 thing
+                                 3 please
+               ref = error "The definition of a sequence cannot have non-consecutive steps."
+                   @ invalid 1
+             tag "Invoke a sequence that is invalid (sequence skips one step)"
+
+           - c @ wipe
+           - c @ put v eleven @ plus1 10
+                       plus1 @ do int - @ + - @ int
+                                            - 1
+
+           - c @
+             r eleven = 11
+                      : int 10
+                        seq - = 11
+                              @ + - = 10
+                                    @ int
+                                  - 1
+                      @ plus1 10
+               plus1 = int 1
+                     @ do int - @ + - @ int
+                                    - 1
+             tag "Valid sum: ten plus one"
+
+           - c @ put p plus1
+                     v @ do int - @ + - @ int
+                                      - 2
+
+           - c @
+             r eleven = 12
+                      : int 10
+                        seq - = 12
+                              @ + - = 10
+                                    @ int
+                                  - 2
+                      @ plus1 10
+               plus1 = int 1
+                     @ do int - @ + - @ int
+                                    - 2
+             tag "Update sequence, the sum should update"
+
+           - c @ wipe
+
+           - c @ put v eleven @ nested plus1 10
+                       nested plus1 @ do int - @ + - @ int
+                                                   - 1
+
+           - c @
+             r eleven = 11
+                      : int 10
+                        seq 1 = 11
+                              @ + - = 10
+                                    @ int
+                                  - 1
+                      @ nested plus1 10
+               nested plus1 = int 1
+                            @ do int 1 @ + - @ int
+                                           - 1
+             tag "Call a sequence at a path two steps long"
+
+           - c @ wipe
+
+           - c @ put v call @ def bar 1
+                                  foo 2
+                       def @ do message 1 @ message
+
+           - c @
+             r call = bar 1
+                      foo 2
+                    : message bar 1
+                              foo 2
+                      seq 1 = bar 1
+                              foo 2
+                            @ message
+                    @ def bar 1
+                          foo 2
+               def = message 1
+                   @ do message 1 @ message
+             tag "Call a sequence with a message that is a hash"
+
+           - c @ put p call
                      v @ do n - @ if cond 1
                                      do nosuchcall bar
            - c @ put p fizzbuzz

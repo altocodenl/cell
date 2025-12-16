@@ -327,11 +327,12 @@ cell.JSToPaths = function (v, paths) {
       if (Type === 'boolean') return v ? 1 : 0;
       if (Type === 'date') return v.toISOString ();
       if (teishi.inc (['regex', 'function', 'infinity'], Type)) return v.toString ();
-      // Invalid values (nan, null, undefined) are returned as empty text
+      // Invalid values (nan, null, but not undefined) are returned as empty text
       return '';
    }
 
    var recurse = function (v, path) {
+      if (v === undefined) return; // Skip undefined paths to properly represent sparse arrays
       if (teishi.simple (v)) paths.push ([...path, singleTo4 (v)]);
       else                   dale.go (v, function (v2, k2) {
          recurse (v2, [...path, type (k2) === 'integer' ? k2 + 1 : k2]);
@@ -881,190 +882,22 @@ cell.wipe = function (prefix, get, put) {
 
 // *** TESTS ***
 
-var test = function () {
+if (isNode && process.argv [2] === 'test') (function () {
    var start = teishi.time ();
-   var dataspace = [];
-
-   var errorFound = false === dale.stop ([
-
-      // *** SEQUENCE ***
-
-      {reset: []},
-      {f: cell.call, input: ['@ put p ref', '@ put v @ invalid 1'], expected: [['ok']]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence must contain a message name and at least one step.'],
-         ['invalid', '@', 'do'],
-         // Because there's nothing after the @ do, if we reference it (`@ invalid 1`) we won't get a definition, so there's no error either.
-         ['ref', '=', ''],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do 1 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence must contain a textual name for its message.'],
-         ['invalid', '@', 'do', 1, 1],
-         ['ref', '=', 'error', 'The definition of a sequence must contain a textual name for its message.'],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do seq 1 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The name of the message cannot be `seq`.'],
-         ['invalid', '@', 'do', 'seq', 1, 1],
-         ['ref', '=', 'error', 'The name of the message cannot be `seq`.'],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 1', '@ put v @ do bar 2'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence can only contain a single name for its message.'],
-         ['invalid', '@', 'do', 'bar', 2],
-         ['invalid', '@', 'do', 'foo', 1],
-         ['ref', '=', 'error', 'The definition of a sequence can only contain a single name for its message.'],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 2'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence must start with step number 1.'],
-         ['invalid', '@', 'do', 'foo', 2],
-         ['ref', '=', 'error', 'The definition of a sequence must start with step number 1.'],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      {f: cell.call, input: ['@ put p invalid', '@ put v @ do foo 1 1', '@ put v @ do foo 3 3'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['invalid', '=', 'error', 'The definition of a sequence cannot have non-consecutive steps.'],
-         ['invalid', '@', 'do', 'foo', 1, 1],
-         ['invalid', '@', 'do', 'foo', 3, 3],
-         ['ref', '=', 'error', 'The definition of a sequence cannot have non-consecutive steps.'],
-         ['ref', '@', 'invalid', 1],
-      ]},
-
-      // Valid sum
-      {reset: []},
-      {f: cell.call, input: ['@ put p eleven', '@ put v @ plus1 10'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['eleven', '=', 11],
-          ['eleven', ':', 'int', 10],
-          ['eleven', ':', 'seq', 1, '=', 11],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
-          ['eleven', ':', 'seq', 1, '@', '+', 2, 1],
-          ['eleven', '@', 'plus1', 10],
-          ['plus1', '=', 'int', 1],
-          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
-          ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
-      ]},
-
-      // Update value, the sum should update
-      {f: cell.call, input: ['@ put p plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 2'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['eleven', '=', 12],
-          ['eleven', ':', 'int', 10],
-          ['eleven', ':', 'seq', 1, '=', 12],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
-          ['eleven', ':', 'seq', 1, '@', '+', 2, 2],
-          ['eleven', '@', 'plus1', 10],
-          ['plus1', '=', 'int', 1],
-          ['plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
-          ['plus1', '@', 'do', 'int', 1, '@', '+', 2, 2],
-      ]},
-
-      // Call to definition with a location of two steps
-      {reset: []},
-      {f: cell.call, input: ['@ put p eleven', '@ put v @ nested plus1 10'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p nested plus1', '@ put v @ do int 1 @ + - @ int', '@ put v @ do int 1 @ + - 1'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-          ['eleven', '=', 11],
-          ['eleven', ':', 'int', 10],
-          ['eleven', ':', 'seq', 1, '=', 11],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '=', 10],
-          ['eleven', ':', 'seq', 1, '@', '+', 1, '@', 'int'],
-          ['eleven', ':', 'seq', 1, '@', '+', 2, 1],
-          ['eleven', '@', 'nested', 'plus1', 10],
-          ['nested', 'plus1', '=', 'int', 1],
-          ['nested', 'plus1', '@', 'do', 'int', 1, '@', '+', 1, '@', 'int'],
-          ['nested', 'plus1', '@', 'do', 'int', 1, '@', '+', 2, 1],
-      ]},
-
-      // Call with message with two paths
-      {reset: []},
-      {f: cell.call, input: ['@ put p def', '@ put v @ do message 1 @ message'], expected: [['ok']]},
-      {f: cell.call, input: ['@ put p call', '@ put v @ def bar 1', '@ put v @ def foo 2'], expected: [['ok']]},
-      {f: cell.call, input: ['@'], expected: [
-         ['call', '=', 'bar', 1],
-         ['call', '=', 'foo', 2],
-         ['call', ':', 'message', 'bar', 1],
-         ['call', ':', 'message', 'foo', 2],
-         ['call', ':', 'seq',  1, '=', 'bar', 1],
-         ['call', ':', 'seq',  1, '=', 'foo', 2],
-         ['call', ':', 'seq', 1, '@', 'message'],
-         ['call', '@', 'def', 'bar', 1],
-         ['call', '@', 'def', 'foo', 2],
-         ['def', '=', 'message', 1],
-         ['def', '@', 'do', 'message', 1, '@', 'message']
-      ]},
-
-      // Call list
-      {reset: []},
-      //{f: cell.call, input: ['@ do', '@ put v @ do message 1 @ message'], expected: [['ok']]},
-
-   ], false, function (test) {
-
-      if (test.reset) return dataspace = cell.sorter (test.reset);
-
-      if (test.f === cell.textToPaths  && type (test.input)    === 'array') test.input    = test.input.join ('\n');
-      if (test.f === cell.call         && type (test.input)    === 'array') test.input    = test.input.join ('\n');
-      if (test.f === cell.pathsToText  && type (test.expected) === 'array') test.expected = test.expected.join ('\n');
-      if (test.f === cell.call) test.expected = cell.pathsToText (test.expected);
-
-      var get = function () {
-         return dataspace;
-      }
-      var put = function (v) {
-         dataspace = v;
-      }
-
-      if (test.f === cell.get)       var result = cell.get (test.query, test.context, get);
-      else if (test.f === cell.put)  var result = cell.put (test.input, test.context || [], get, put);
-      else if (test.f === cell.call) var result = cell.call (test.input, 'user', 'cell', false, get, put);
-      else                           var result = test.f (test.input);
-
-      // Remove the dialog or omit id and ms
-      if (test.f === cell.call) result = cell.pathsToText (dale.fil (cell.textToPaths (result), undefined, function (path) {
-         if (path [0] !== 'dialog') return path;
-         if (! test.keepDialog) return;
-         if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
-         return path;
-      }));
-
-      if (teishi.eq (result, test.expected)) return true;
-      clog ('Test mismatch', {input: test.input, expected: test.expected, obtained: result});
-      pretty ('expected', test.expected);
-      pretty ('result', result);
-      return false;
-   });
 
    try {
       var newTests = cell.textToJS (require ('fs').readFileSync ('test.4tx', 'utf8'));
       if (newTests.error) return clog (newTests.error);
 
-      var dataspace = [];
-      var get = function () {
-         return dataspace;
-      }
-      var put = function (v) {
-         dataspace = v;
-      }
    }
    catch (error) {
-      var newTests = [];
+      return clog ('Missing test file (test.4tx)', error);
    }
+
+   var dataspace = [];
+   var get = function () {return dataspace}
+   var put = function (v) {dataspace = v}
+   var errorFound;
 
    dale.stop (newTests, false, function (suite) {
       if (type (suite) === 'string') return;
@@ -1083,10 +916,11 @@ var test = function () {
          }
          // test.cjs has a call that has to be converted to JSON and compared with r, which is stringified JSON
          if (test.cjs !== undefined) {
-            var response = cell.textToJS (test.cjs);
-            if (! teishi.eq (response, JSON.parse (test.r))) {
-               pretty ('response', JSON.stringify (response));
-               pretty ('expected', JSON.stringify (JSON.parse (test.r)));
+            test.r = JSON.stringify (JSON.parse (test.r));
+            var response = JSON.stringify (cell.textToJS (test.cjs));
+            if (test.r !== response) {
+               pretty ('response', response);
+               pretty ('expected', test.r);
                errorFound = true;
                return false;
             }
@@ -1128,6 +962,4 @@ var test = function () {
 
    if (errorFound) return clog ('A test did not pass');
    else clog ('All tests successful', (teishi.time () - start) + 'ms');
-}
-
-if (isNode && process.argv [2] === 'test') test ();
+}) ();
