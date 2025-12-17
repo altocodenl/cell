@@ -223,22 +223,32 @@
                            jip 1"
                     tag "Sort lowercase hashes"
 
-                  - ct "Foo bar 1
-                        foo jip 2"
-                    r "foo jip 2
-                       Foo bar 1"
-                    tag "Uppercase goes after lowercase"
-
                   - ct "foo bar 1
                         Foo jip 2"
-                    r "foo bar 1
-                       Foo jip 2"
-                    tag "Uppercase goes after lowercase, no-op"
+                    r "Foo jip 2
+                       foo bar 1"
+                    tag "Uppercase goes after lowercase"
+
+                  - ct "Foo bar 1
+                        foo jip 2"
+                    r "Foo bar 1
+                       foo jip 2"
+                    tag "Uppercase goes before lowercase, no-op"
 
                   - ct "foo bar 1
                             bar 2"
                     r error "The path `foo bar 2` is repeated."
                     tag "Repeated path"
+
+                  - ct "foo bar 3
+                            bar"
+                    r error "The path `foo bar 3` is setting a hash but there is already a text at path `foo`"
+                    tag "Two paths with the same prefix: the shortest one should be the only one considered valid"
+
+                  - ct "foo bar 3 hash 1
+                            bar"
+                    r error "The path `foo bar 3 hash 1` is setting a hash but there is already a text at path `foo`"
+                    tag "Two paths with the same prefix: the shortest one should be the only one considered valid (long one having three steps more)"
 
                   - ct ": foo
                         = bar"

@@ -46,9 +46,9 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 - Language
    - Sequence + reworked cell.get/put (including cell.respond)
-      - Port all tests to the new format
-      - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
+      - Change put to not use p or v
       - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+      - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
          - Understand the naive, from the top approach.
          - Add dependents/dependencies to only recalculate what's necessary.
@@ -5173,6 +5173,9 @@ TODO
 #### `cell.sorter`
 
 TODO
+
+The validation that goes in the sorter prevents a tie between two paths that have different lengths but have the same prefixer. But that assumes that validation comes before sorting, which is not the case!
+We take the minimum length and compare on that. If we still get a 0, that means that the short one is a prefix of the long one. In that case, the short one goes first. We make it 0 by default in case we're comparing two empty paths.
 
 #### `cell.pathsToText`
 

@@ -1,0 +1,17 @@
+Eleventh episode of season 4! I'm building a programming environment from scratch while recording myself. I procrastinate and have fun by improving the peformance of sort, and we save about 15-20% on the runtime when running the tests. Not bad.
+
+Hi! Quick silent episode today. We have visitors and there's a lot of background noise.
+
+I was experimenting a bit with performance, because I'm bothered by how slow the test suite is -- well, not the test suite, just cell.
+
+That line at the top of the sorter makes the time go from 950 to 825, a 10-15% reduction.
+
+If I remove the uppercase first thing, let's see: it goes to 780. If I remove the first line of equality,
+
+How can it break?!? Ah, the correctness of when it's the same. So I need that line anyway if I go with that. So, from 950 to 780 to put uppercase before is a great jump: almost 20%. I'll take it.
+
+My rough counter gives me 50ms still spent in sorting.
+
+The validation that goes in the sorter prevents a tie between two paths that have different lengths but have the same prefixer. But that assumes that validation comes before sorting, which is not the case!
+
+This was too short! Let's continue tomorrow. Thanks for watching!

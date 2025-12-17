@@ -210,6 +210,7 @@ cell.dedasher = function (paths) {
 cell.sorter = function (paths) {
 
    var compare = function (v1, v2) {
+      if (v1 === v2) return 0;
       var types = [type (v1) === 'string' ? 'text' : 'number', type (v2) === 'string' ? 'text' : 'number'];
       // Numbers first.
       if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
@@ -219,30 +220,14 @@ cell.sorter = function (paths) {
       if (v1 === '=' && v2 === ':') return -1;
       if (v1 === ':' && v2 === '=') return 1;
 
-      // Sort uppercase and lowercase separately: aA bB cC. Lowercase goes up.
-      return dale.stopNot (dale.times (Math.max (v1.length, v2.length), 0), 0, function (k) {
-         var chars = [
-            v1 [k] === undefined ? ' ' : v1 [k],
-            v2 [k] === undefined ? ' ' : v2 [k]
-         ];
-         var cases = [
-            chars [0] === chars [0].toUpperCase () ? 'upper' : 'lower',
-            chars [1] === chars [1].toUpperCase () ? 'upper' : 'lower'
-         ];
-         if (cases [0] !== cases [1]) return cases [1] === 'upper' ? -1 : 1;
-         return chars [0].charCodeAt (0) - chars [1].charCodeAt (0);
-      }) || 0;
-
+      return v1 < v2 ? -1 : 1;
    }
 
    return paths.sort (function (a, b) {
-      return dale.stopNot (dale.times (Math.max (a.length, b.length), 0), 0, function (k) {
-         var elements = [
-            a [k] === undefined ? '' : a [k],
-            b [k] === undefined ? '' : b [k],
-         ];
-         return compare (elements [0], elements [1]);
-      });
+      var result = dale.stopNot (dale.times (Math.min (a.length, b.length), 0), 0, function (k) {
+         return compare (a [k], b [k]);
+      }) || 0;
+      return result !== 0 ? result : a.length - b.length;
    });
 }
 
