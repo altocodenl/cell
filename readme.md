@@ -480,6 +480,8 @@ More generally:
 - @ is <type> <path>
 - @ is <op> <operand> <path>
 
+claude: "The unification hasn't been done because most languages don't have syntax that makes @ is text p foo read like a schema declaration while being a direct function call."
+
 https://venturebeat.com/ai/anthropic-launches-enterprise-agent-skills-and-opens-the-standard
 "Anthropic designed the system around what it calls "progressive disclosure." Each skill takes only a few dozen tokens when summarized in the AI's context window, with full details loading only when the task requires them. This architectural choice allows organizations to deploy extensive skill libraries without overwhelming the AI's working memory."
 Basically, lazy loading of prompts and already defined pieces of code.
