@@ -48,6 +48,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
    - Sequence + reworked cell.get/put (including cell.respond)
       - Change put to not use p or v
       - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+         - Add test to test new behavior against old behavior
       - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
          - Understand the naive, from the top approach.
@@ -458,6 +459,116 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-20
+
+For functions that generate random quantities, like uuid: do we read their previous value in redraws? sometimes they should!
+
+How do you separate data and code in a cell? The most basic way would be to put all data at the prefix (not path, prefix, because a path is just one list of steps) `data` and have it there. If you have multiple users, you can either store per entity, or (my preference) by user, under the id of each user, so their data is already separated.
+
+On validation: rather than have a documentation format a la openapi, or a backus naur form, just write the validations in code. But make that code beautifully readable, and have the full power of code. The validations must be code. Merging typing and schemas and all the normative stuff into something readable that can be computed is like the prince of persia character merging with his shadow.
+
+Maybe with @ is instead of @ check
+
+```
+@ is text foo
+```
+
+where `foo` is a path
+
+More generally:
+- @ is <type> <path>
+- @ is <op> <operand> <path>
+
+https://venturebeat.com/ai/anthropic-launches-enterprise-agent-skills-and-opens-the-standard
+"Anthropic designed the system around what it calls "progressive disclosure." Each skill takes only a few dozen tokens when summarized in the AI's context window, with full details loading only when the task requires them. This architectural choice allows organizations to deploy extensive skill libraries without overwhelming the AI's working memory."
+Basically, lazy loading of prompts and already defined pieces of code.
+
+"The Skills approach is a philosophical shift in how the AI industry thinks about making AI assistants more capable. The traditional approach involved building specialized agents for different use cases — a customer service agent, a coding agent, a research agent. Skills suggest a different model: one general-purpose agent equipped with a library of specialized capabilities."
+
+This is also very interesting. Specialization is extra context, but thinking remains general.
+
+"The pattern echoes strategies that have reshaped the technology industry before. Companies from Red Hat to Google have discovered that open standards can be more valuable than proprietary technology — that the company defining how an industry works often captures more value than the company trying to own it outright."
+
+https://www.businessinsider.com/claude-code-creator-vibe-coding-limits-boris-cherny-anthropic-2025-12
+"It works well for "throwaway code and prototypes, code that's not in the critical path," he said."
+"Cherny said the models are still "not great at coding."
+"Cherny said it's "insane" to compare current tools to where AI coding was just a year ago, when it amounted to little more than type-ahead autocomplete. Now, it's a "completely different world," he said, adding that what excites him is how fast the models are improving."
+
+Vibe coding has hard limits; but in one year we went from a glorified autocomplete to something else entirely.
+
+Some ideas on Rust prompted by a [glorious video on C++](https://www.youtube.com/watch?v=7fGB-hjc2Gc) by Lazo Velko:
+- Difficult to do metaprogramming.
+- The borrow checker stands in the way of quick iteration. The language makes it harder to be flexible and not specify things when you're sketching.
+- I was also surprised by the mention of it compiling slowly.
+
+I went on the rabbit hole a bit. Interesting that [Zig doesn't use LLVM](https://news.ycombinator.com/item?id=44390972): "Basically, not depending on LLVM or LLD. The above is only possible because we invested years into making our own x86_64 backend and our own linker. You can see all the people ridiculing this decision 2 years ago https://news.ycombinator.com/item?id=36529456"
+
+### 2025-12-19
+
+The risk tackled by cell is in AI creating systems that we cannot understand.
+
+Do I need the : on the push? The expansion takes place at `: do`. If you just look for `output`, it will be first seen at `: do N`, where `N` is the number of the step. But `output` is at `: output`. Then, you go to `: do`, it is also not there. But it is then at `:`, so the colon is not necessary!
+
+But what about initialization? You can do it with either `.` or `:`, right? Actually, not with `.`, because it would be set at `: do N`, whereas you want things to be at colon.
+
+```
+fizzbuzz @ do n - @ put : output ""
+                - @ if cond @ % - @ n
+                                - 3
+                       else @ push p output
+                                   v fizz
+                - @ if cond @ % - @ n
+                                - 5
+                       else @ push p output
+                                   v buzz
+                - @ output
+
+fizzbuzz @ do n - @ put : output ""
+                - @ loop do pair - @ if cond @ % - @ n
+                                                 - @ pair v
+                                        else @ push p output
+                                                    v @ pair k
+                         v fizz 3
+                           buzz 5
+                - @ output
+```
+
+OK, let's try using the one-step hook and see how much things break!
+
+I see that we're walking up the context path, and matching that against the entire query path. That's not the single hook logic at all. With the existing logic, let's say our query path is `list 3`. If we don't find a list with a 3, we will keep going up!
+
+```
+inside list 1 no
+            2 maybe
+           = yes
+       ref @ list 3
+list 3 yes
+```
+
+But with the new logic:
+
+```
+inside list 1 no
+            2 maybe
+           = ""
+       ref @ list 3
+list 3 yes
+```
+
+I still think this is much more clear. It also makes reference and call consistent, in that by the single hook, we don't know or care (yet) what's the location of the call and what's the message. Just look for the hook!
+
+How to implement this?
+- When you find the first match of the hook, stop the iteration.
+- Don't just return that path, also take all the paths with the same prefix.
+- Slice the query path out of those paths.
+- Whatever non-empty paths remain, that's what you need to return.
+
+I still need the dot mode to not walk up.
+
+Interesting corner case: when query path is empty, there's no hook. Bring everything. But mind the context path.
+
+Wow, that went far, all the way to sequence! All the non-sequence tests work with the get with a single hook. So I was already implicitly using that test.
 
 ### 2025-12-16
 
