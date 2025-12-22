@@ -571,6 +571,34 @@
 
                      - c @ wipe
 
+                     - c @ put v inside list 1 no
+                                             2 maybe
+                                        ref @ list 3
+                                 list 3 yes
+
+                     - c @ inside ref
+                       r = ""
+                         @ list 3
+                       tag "Get walks up with a single hook, doesn't find anything"
+
+                     - c @ put p inside list 3
+                               v ""
+
+                     - c @ inside ref
+                       r = ""
+                         @ list 3
+                       tag "Get walks up with a single hook, finds an empty text and stops there"
+
+                     - c @ put p inside list 3
+                               v yes
+
+                     - c @ inside ref
+                       r = yes
+                         @ list 3
+                       tag "Get walks up with a single hook, finds something"
+
+                     - c @ wipe
+
 - "GET WITH DOT" - c @ put v employee @ . price
                                       price 15
                              @ . price
@@ -1115,7 +1143,7 @@
                ref = ""
                    @ invalid 1
              tag "Invoke a sequence that is invalid (no message name, no step)"
-             note "Because there's nothing after the @ do, if we reference it (`@ invalid 1`) we won't get a definition, so there's no error either."
+             note "We do not get an error because `invalid` points to a hash, so if we get `invalid 1`, we get nothing at all."
 
            - c @ put p invalid
                      v @ do - 1
