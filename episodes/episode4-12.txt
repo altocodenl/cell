@@ -1,0 +1,15 @@
+Twelfth episode of season 4! I'm building a programming environment from scratch while recording myself. Trying out the single hook on get and put.
+
+Hello! Another short, silent episode.
+
+Let's try using the one-step hook and see how much things break!
+
+Just reading my last notes.
+
+Thinking about how to implement it...
+
+Wow, that went far, all the way to sequence!
+
+Remarkable.
+
+I'll be back later.

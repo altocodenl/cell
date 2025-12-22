@@ -460,6 +460,89 @@ view
 
 ## Development notes
 
+### 2025-12-21
+
+cell is for scientists and entrepreneurs! That is where I need to aim first. Why?
+- Need to build their own systems.
+- Pragmatic.
+- Semi-technical.
+- Need control and understanding over what they build.
+- They don't have much patience or time for dealing with the accidental complexity of programming tools.
+
+People in industry that resonate with scientists and entrepreneurs are also good initial users.
+
+From Fogg's Tiny Habits:
+- Help people do what they already want to do
+- Help people feel successful
+
+A basic version of cell could already:
+- Replace Postman for calling APIs and seeing results.
+- Having a DB and a FS to persist state.
+- A tool for making dashboards.
+- External AI integrations.
+
+Seen from the outside, from the pragmatic view of someone building something, a cell is for four things:
+- Holding data (both normal data and files/blobs).
+- Running logic to transform data.
+- Enforcing rules on data.
+- Creating views out of data.
+
+These are the big four.
+
+Now, what doesn't fit in the above?
+- Tests: they're not just rules, they are a combination of logic being run + rules on that. They could be their own fifth element.
+- APIs/entrypoints: ways to access the data from outside of the cell.
+- Access: perhaps these *can* be expresssed as rules! Or would it be too cumbersome?
+A la yegge, what?
+- logic
+- data
+- view
+- rule
+
+Perhaps I could call entrypoints as "surfaces".
+
+From the [Rue language](https://rue-lang.dev/) I got the idea of writing a fibonacci function:
+
+```
+fib @ do n @ if cond @ < - @ n
+                         - 1
+             do @ n
+             else @ + - @ fib @ _ - @ n
+                                  - 1
+                      - @ fib @ _ - @ n
+                                  - 2
+```
+
+- Must express minus as underscore, not so pretty, but otherwise it cannot be disambiguated.
+- Can pass a single implicit step to the sequence.
+- If I write it with commas, we can have a single line per fib call in the else
+
+```
+             else @ + - @ fib @ _ , @ n , 1
+                      - @ fib @ _ , @ n , 2
+```
+
+This is a matter of style, exactly like in natural (written or spoken) language.
+
+From The Art of the Metaobject Protocol:
+"The metaobject protocol, in contrast, is based on the idea that one can and should "open languages up," allowing users to adjust the design and implementation to suit their particular needs. In other words, users are encouraged to participate in the language design process."
+
+"In traditional object-oriented languages, the terminology used for a polymorphic operation is *message*. (...) The CLOS term for message is *generic function*"
+
+"the information needed to choose the best implementation strategy might be difficult or impossible for a compiler to extract from the program text, sinc e it depends on dynamic behavior, such as how many instances will be created, or how often their slots will be accessed. This is why efficiency is a challenge."
+redis did this very well in providing fixed time/space constraints for its calls. I wonder if it's possible/necessary that cell can get these runtime properties from having all of the information at runtime.
+
+"Rather than supplying the user with a fixed single point in the space of all language designs and implementations, we would instead support a region of possible designs within that overall space. This is the essence of the metaobject protocol approach."
+
+But what if, like Redis, the underlying blocks are universal enough that they can allow users to build everything with them? The space of the system would be determined by those base calls, and the user would choose from there. This is not metaobject, but rather, simply, calls.
+
+claude responds to the above with "cell's runtime omniscience". Made me laugh because it has a point. cell does seem to know everything about that cell because it doesn't throw away any information when compiling, interpreting or executing.
+
+"There are two critical enabling technologies: reflective techniques make it possible to open up a language's implementation without revealing unnecessary implementation details or compromising portability; and object-oriented techniques allow the resulting model of the language's implementation and behavior to be locally and incrementally adjusted."
+What if reflection is simply being able to see the source code in a tokenized way and act in consequence?
+
+Should I respond with an error in cell.get if you're trying to access a numeric key on a hash (not just on the final prefix step, but on any), or a text key on a list? Let's see if it is useful. For now, I want it to always work. But let's see in practice.
+
 ### 2025-12-20
 
 For functions that generate random quantities, like uuid: do we read their previous value in redraws? sometimes they should!
@@ -6161,9 +6244,9 @@ If the first element of `queryPath` is a dot, this has a special meaning: it mea
    if (dotMode) queryPath = queryPath.slice (1);
 ```
 
-We will try to find the `queryPath` at the deepest possible level in `contextPath`. The simplest case is when `contextPath` has length 0. In this case, we just go through the entire dataspace once and find any paths that start with the elements in `queryPath` (if `queryPath` is itself empty, we then match every single path in the dataspace!). These are the `matches` we get.
+We will try to find the first step of the `queryPath` at the longest (deepest) possible level in `contextPath`. This first step of `queryPath` is called the **hook**. The simplest case is when `contextPath` has length 0. In this case, we just go through the entire dataspace once and find any paths that start with the first step in `queryPath` (if `queryPath` is itself empty, we then match every single path in the dataspace!). These are the `matches` we get.
 
-If `contextPath` has more than length 0, we start by finding all the paths that match it. We then shave off the `contextPath` as prefix from each of the matched paths and we go through all of them to find what matches with `queryPath`.
+If `contextPath` has more than length 0, we start by finding all the paths that match it. We then shave off the `contextPath` as prefix from each of the matched paths and we go through all of them to find what matches the first step of `queryPath`. If there is no hook because `queryPath` is empty, we get everything that matches `contextPath`.
 
 In this way, the function walks "up" the context path, removing elements from its end, and stopping when it finds one or more paths that match the query.
 
@@ -6181,31 +6264,36 @@ We go through the dataspace and accumulate any paths that will match both the cu
       var matches = dale.fil (dataspace, undefined, function (path) {
 ```
 
-If our context path has elements and those elements don't match with the prefix of this path we're iterating, we skip this path.
+We define `prefix` as the `contextPath` plus the hook of the `queryPath`. If there's no hook (because `queryPath` is empty), this prefix will just be the context path.
 
 ```js
-         if (contextPath.length && ! teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return;
+      var prefix = contextPath.slice (0, k).concat (queryPath.slice (0, 1));
 ```
 
-We found a match for the context path! We remove its prefix.
+We go through the dataspace and stop the moment we find a path that has `prefix` as its prefix. Note we ignore paths that are shorter than prefix itself, because we slice each path on prefix's length, but not viceversa.
+
+If we don't get any matches, we `return` and the outer loop continues.
 
 ```js
-         path = path.slice (k);
+      if (! dale.stop (dataspace, true, function (path) {
+         return teishi.eq (prefix, path.slice (0, prefix.length));
+      })) return;
 ```
 
-If the path, minus the context prefix (which we sliced in the previous line), matches the query path, we return it. We only return paths for which there is a suffix after the query path.
+If we're here, our hook caught something. We now set `prefix` to context path plus query path (in full, not just the hook).
+
+```js
+      prefix = contextPath.slice (0, k).concat (queryPath);
+```
+
+We iterate the dataspace again and, for each path that matches the prefix, we remove the prefix from it and return what's left.
 
 This completes the inner loop.
 
 ```js
-         if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
+      return dale.fil (dataspace, undefined, function (path) {
+         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return path.slice (prefix.length);
       });
-```
-
-If we found matching paths for this context path, we return them and stop the outer loop.
-
-```js
-      if (matches.length > 0) return matches;
 ```
 
 We return the matches or an empty array (in case there were none). This closes the function.

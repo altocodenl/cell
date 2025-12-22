@@ -776,14 +776,17 @@ cell.get = function (queryPath, contextPath, get) {
 
    return dale.stopNot (dale.times (! dotMode ? contextPath.length + 1 : 1, contextPath.length, -1), undefined, function (k) {
 
-      var matches = dale.fil (dataspace, undefined, function (path) {
-         if (contextPath.length && ! teishi.eq (contextPath.slice (0, k), path.slice (0, k))) return;
-         path = path.slice (k);
+      var prefix = contextPath.slice (0, k).concat (queryPath.slice (0, 1));
 
-         if (teishi.eq (queryPath, path.slice (0, queryPath.length)) && path.length > queryPath.length) return path.slice (queryPath.length);
+      if (! dale.stop (dataspace, true, function (path) {
+         return teishi.eq (prefix, path.slice (0, prefix.length));
+      })) return;
+
+      prefix = contextPath.slice (0, k).concat (queryPath);
+
+      return dale.fil (dataspace, undefined, function (path) {
+         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return path.slice (prefix.length);
       });
-
-      if (matches.length > 0) return matches;
 
    }) || [];
 }
