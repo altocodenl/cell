@@ -395,6 +395,14 @@ Define types as validations. The requirements from the calls will bubble up on t
 
 ## Tour de cell
 
+### Terminology
+
+- path: a list of steps
+- prefix: the left part of one or more paths. N paths can share a prefix.
+- value (of a prefix): N paths that are to the right of one prefix, with the prefixes removed.
+- key (of a prefix): the last step of a prefix.
+- type (of a prefix): the type of the value of that prefix
+
 ### The editor
 
 - The *main*: a main window that contains *cells*: smaller windows that show either text (fourdata) or graphical components.
@@ -459,7 +467,7 @@ view
 
 ## Development notes
 
-### 2025-12-22
+### 2025-12-23
 
 This x4 of cell is really falling into place in my mind and gut: logic, data, rules, views. That's the quadrivium. The trivium would be access, cron and surface (endpoint). The editor is everywhere, it's part of the whole thing. The parts that run are really four too: language, db, service and editor, but each of them provides multiple things of the quadrivium and trivium.
 
@@ -488,6 +496,68 @@ Behavior vs implementation: interface vs logic; it shouldn't be any more than th
 "The most significant is that it is an interpreter rather than [sic] compiler-based implementation - that is, we have reduced complexity by neglecting performance."
 
 Classes work at the configuration, meta level. They strike me as similar to types. What you work with at runtime is instances of classes.
+
+We could also write a safe put, or even pass a safe flag to put, to get an error instead of a replacement when changing types.
+
+OK, designing new put:
+
+- Assumes that the paths are already internally consistent, which they are because they come through cell.call and are validated
+- Each hook on put has to find its own context path. Could be a bit tricky, but I think it makes sense. It'd be arbitrary to use the first hook as hook for all of the same ones that are at the same level.
+- So, find context path for each hook.
+- Add respective context paths for all of the paths.
+- For each path, for each step, check consistency with what exists. Lack of existence means you don't delete anything. A path that has the same prefix minus one and has a different last step can be replaced. Inconsistency means you remove wholesale a bunch of paths.
+- After removing inconsistent paths, simply add the new ones.
+- We don't need to validate the new dataspace because we remove inconsistencies rather than alert on them.
+- Sort.
+- Persist.
+
+- Another idea: reuse the `seen` to find the context path for each hook. But that would require us to do this also for the context path. And the intermediate steps too. So no, we need to find the context first, then do the seen.
+
+Tests to add tomorrow:
+
+```
+      - c @ put stereolab records 1 margerine
+                                  2 jaunty
+
+      - c @ put stereolab records 3 emperor
+                total 3
+
+      - c @
+        r stereolab records 1 margerine
+                            2 jaunty
+                            3 emperor
+          total 3
+        tag "Upserting into a list"
+
+      - c @ put stereolab records 1 mars
+
+      - c @ stereolab records 1
+        r mars
+        tag "Single replace inside a list"
+
+      - c @ put stereolab 1
+
+      - c @
+        r stereolab 1
+          total 3
+        tag "Replace hash with number"
+
+      - c @ wipe
+
+      - c @ put stereolab records 1 margerine
+                                  2 jaunty
+                                  3 emperor
+                total 3
+
+      - c @ put stereolab records yes!
+
+      - c @
+        r stereolab records yes!
+          total 3
+        tag "Replace list with text"
+
+      - c @ wipe
+```
 
 ### 2025-12-21
 

@@ -1,0 +1,3 @@
+Fourteenth episode of season 4! I'm building a programming environment from scratch while recording myself. The single hook for put works as well! We actually had to explicitly test for this, because we were implicitly already doing this in our heads. We take the bull by the horns and rewrite put and we do most of it and leave it unfinished.
+
+https://github.com/altocodenl/cell

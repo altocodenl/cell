@@ -791,6 +791,57 @@ cell.get = function (queryPath, contextPath, get) {
    }) || [];
 }
 
+cell.Put = function (paths, contextPath, get, put, updateDialog) {
+
+   var dataspace = get ();
+
+   var hooks = dale.obj (paths, function (path) {
+      return [path [0], []];
+   });
+
+   dale.go (hooks, function (v, hook) {
+      var context = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
+         var prefix = contextPath.slice (0, k).concat (hook);
+         if (! dale.stop (dataspace, true, function (path) {
+            return teishi.eq (prefix, path.slice (0, prefix.length));
+         })) return;
+         return prefix.slice (0, -1);
+      });
+      hooks [hook] = context || [];
+   });
+
+   paths = dale.go (paths, function (path) {
+      return hooks [path [0]].concat (path);
+   });
+
+   var seen = {};
+   dale.go (dataspace, function (path) {
+      if (hooks.indexOf (path [0]) === -1) return;
+      dale.go (path.slice (0, path.length - 1), function (step, k) {
+         var key = JSON.stringify (path.slice (0, k + 1));
+         if (seen [key]) return;
+
+         var textStep = type (path [k + 1]) === 'string';
+         var lastStep = k + 1 === path.length;
+         seen [key] = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
+      });
+   });
+
+
+
+
+   cell.sorter (dataspace);
+
+   put (dataspace);
+
+   dale.stop (dataspace, true, function (path) {
+      return cell.respond (path, get, put);
+   });
+
+   return [['ok']];
+
+}
+
 cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
