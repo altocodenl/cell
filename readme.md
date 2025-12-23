@@ -48,7 +48,6 @@ I'm currently recording myself while building cell. You can check out [the Youtu
    - Sequence + reworked cell.get/put (including cell.respond)
       - Change put to not use p or v
       - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
-         - Add test to test new behavior against old behavior
       - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
          - Understand the naive, from the top approach.
@@ -63,15 +62,15 @@ I'm currently recording myself while building cell. You can check out [the Youtu
    - Sum
    - Aggregate
    - Duplicates
-- @ check
-- @ api
-   - Register api calls
-   - Serve api calls
-   - Send api calls through the service
+- @ is
 - @ view
    - Serving the view
    - HTML generation
    - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
+- @ api
+   - Register api calls
+   - Serve api calls
+   - Send api calls through the service
 
 ### Publishing
 
@@ -459,6 +458,36 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-22
+
+This x4 of cell is really falling into place in my mind and gut: logic, data, rules, views. That's the quadrivium. The trivium would be access, cron and surface (endpoint). The editor is everywhere, it's part of the whole thing. The parts that run are really four too: language, db, service and editor, but each of them provides multiple things of the quadrivium and trivium.
+
+From The Art of the Metaobject Protocol:
+"First, the access must be at an appropriately high level of abstraction (...) so that users aren't saddled with gratuitous (and non-portable) details."
+But can't we design a general purpose system based on concrete things that have no unnecessary details?
+
+"It is important to note, howeveer, that self-referentiality is not essential to the basic notion of a metaobject protocol."
+
+"What reflection on its own doesn't provide, howeveer, is flexibility, incrementality, or ease of use. This is where object-oriented techniques come into their own."
+
+My summary of OOP as presented here:
+- A set of object types and operations on them (the protocol).
+- A default behavior (default classes/methods).
+- allow incremental adjustments from the default behavior (inheritance/specialization).
+
+"Because these objects represent fragments of a program, they are given the special name of *metaobjects*. Second, individual decisions about the behavior of the language are encoded in a protocol operating on these metaobjects - a *metaobject protocol*."
+
+"Most aspects of both its behavior and implementation remain unchanged, with just the instance representation strategy being adjusted."
+The methods are overriden on instances of the objects, so you can specialize the code where you need.
+
+Behavior vs implementation: interface vs logic; it shouldn't be any more than that.
+
+"We begin with a (simplified) CLOS *sans* metaobject protocol, and gradually derive one for it."
+
+"The most significant is that it is an interpreter rather than [sic] compiler-based implementation - that is, we have reduced complexity by neglecting performance."
+
+Classes work at the configuration, meta level. They strike me as similar to types. What you work with at runtime is instances of classes.
 
 ### 2025-12-21
 
@@ -6384,10 +6413,10 @@ To implement this walking, we are going to iterate `contextPath.length` times. W
       var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
 ```
 
-We take the context path, remove the last k elements (we start at 0 the first time around) and concatenate the left side to it. This is our `contextPathWithSuffix`.
+We take the context path, remove the last k elements (we start at 0 the first time around) and concatenate the first step of the left side (the hook) to it. This is our `contextPathWithSuffix`.
 
 ```js
-         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide);
+         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide.slice (0, 1));
 ```
 
 We find one or more paths that start with this context path with suffix.
