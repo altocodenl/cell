@@ -798,6 +798,42 @@
 
                           - c @ wipe
 
+                          - c @ put v inside list 1 no
+                                                  2 maybe
+                                      list 1 outer
+
+
+                          - c @ put p list 3
+                                    v yes
+                            context - inside
+                                    - list
+                                    - 1
+
+                          - c @
+                            r inside list 1 no
+                                          2 maybe
+                                          3 yes
+                              list 1 outer
+                            tag "Put walks up with a single hook, finds something"
+
+                          - c @ put p inside list 3
+                                    v ""
+
+                          - c @ put p list 3
+                                    v yes
+                            context - inside
+                                    - list
+                                    - 1
+
+                          - c @
+                            r inside list 1 no
+                                          2 maybe
+                                          3 yes
+                              list 1 outer
+                            tag "Put walks up with a single hook, finds an empty text and stops there"
+
+                          - c @ wipe
+
 - "PUT WITH DOT" - c @ put v ball 1
                              pit ball 2
 

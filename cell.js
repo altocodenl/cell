@@ -812,7 +812,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    if (leftSide [0] === '.') leftSide = contextPath.concat (leftSide.slice (1));
    else {
       var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
-         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide);
+         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide.slice (0, 1));
          var matches = dale.stop (dataspace, true, function (path) {
             return teishi.eq (contextPathWithSuffix, path.slice (0, contextPathWithSuffix.length));
          });
@@ -919,15 +919,18 @@ if (isNode && process.argv [2] === 'test') (function () {
             // test.context is only present for a few calls to cell.put
             if (test.context) {
                var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
-               var response = cell.put (call, test.context, get, put);
+               var response = cell.pathsToText (cell.put (call, test.context, get, put));
             }
             else {
                var response = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
             }
          }
 
-         // Some test steps have no assertions because they are just setting the ground for the next test. We don't make any assertions over those.
-         if (test.r === undefined) return;
+         // Some test steps have no assertions because they are just setting the ground for the next test. We don't make any assertions over those -- except for the case of @ put, where if there are no assertions on the response, we want it to return `ok`
+         if (test.r === undefined) {
+            if (test.c ['@'] && test.c ['@'].put) test.r = 'ok';
+            else return;
+         }
 
          // Remove the dialog or omit id and ms
          response = cell.pathsToText (dale.fil (cell.textToPaths (response), undefined, function (path) {
