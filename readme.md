@@ -2,11 +2,13 @@
 
 ## Why cell
 
-cell is made to let you quickly build and understand systems.
+cell is built around three ideas:
 
-Quickly building a system that you don't understand is a bad idea. It works well for small, throwaway projects, but not for systems you want to grow and keep around. Understanding is the basis of ownership, control, reliability, flow and joy. And ironically, the only way to retain speed after the first couple of weeks.
+1. Building data systems is like writing: a way to reach the world, an essential tool of thought and a way to produce work that transcends the author.
+2. Understanding is the key to building data systems: a system you understand is a reliable, easy to modify system.
+3. Understanding can be easier if we remove obstacles: most of what makes programming difficult is unnecessary.
 
-Our goal is to empower more humans to build their own [systems](https://github.com/altocodenl/todis).
+cell is a tool that makes building and understanding [data systems](https://github.com/altocodenl/todis) as easy as possible.
 
 ### AI can now code for us! Do we really need to understand what's going on?
 
@@ -20,9 +22,9 @@ For many, this initial speed quickly wears off; for those skilled programmers, t
 
 If you've been there, cell could be for you. And yes, cell integrates AI too.
 
-## How cell tackles complexity
+## How cell tackles the obstacles to understanding
 
-Complexity is what makes it hard to understand a system. There are many sources of complexity in existing programming languages and frameworks that can be completely avoided. Rather than slap an AI editor onto the same tools, cell reconsiders programming from first principles. In doing so, it removes the following sources of complexity:
+Complexity is what makes it hard to understand a system. There are many sources of complexity in existing programming languages and frameworks that can be completely avoided. Rather than slap an AI editor on top of the same tools, cell reconsiders programming from first principles. In doing so, it removes the following sources of complexity:
 
 1. Lack of a single, low-noise way to directly look at data.
 2. Fragmentation of data into multiple places.
@@ -46,8 +48,8 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 - Language
    - Sequence + reworked cell.get/put (including cell.respond)
-      - Change put to not use p or v
-      - Modify get and put to use just the first step of the path as hook, rather than looking for a match everywhere. I want to see how much this breaks my tests, to see if there are good countercases.
+      - Annotate cell.put
+      - Wipe: multipath, wipe in context (walking up)
       - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
       - Reimplement cell.respond fully understanding the algorithm, including the commas.
          - Understand the naive, from the top approach.
@@ -466,6 +468,239 @@ view
 ```
 
 ## Development notes
+
+### 2025-12-30
+
+=== Outline of a paper on cell:
+- The three foundational ideas:
+   - Building is like writing
+      - Global communication
+      - Tool of thought
+      - Creating artifacts that stand on their own.
+   - Understanding is the key to building
+      - Understanding as having a good representation of the system.
+      - Systems as representations.
+   - Understanding can be easier by removing the five obstacles
+      - Low-noise way to look at data: fourdata. Compare to yaml, json, csv. Relate to autopoiesis in that the paths don't point to the data, they are the data.
+      - Unified dataspace. Relate to the web.
+      - Call and response. Relate to autopoiesis.
+      - Five mechanisms for all logic: fivelogic
+      - Overcome separateness of time/space and user/system
+- Comparison of call and response with CSP and with actor model
+- Comparison with Turing Machine: how is it different if the TM encodes the configurations also on the tape?
+
+===
+
+It's quite deep that the context path is only what's to the left of the first @, and not what's to the left of the @ you're processing. The first @ already sets you in relative waters. Is this the correct behavior?
+
+claude:
+"The unique columnar advantage is:
+When your query touches 3 columns out of a 50-column table, you read 94% less data off disk. That's pure I/O win, regardless of filtering."
+claude:
+"The key insight is that paths are column selectors. When you have a collection of uniform structures and want to extract a specific field from all of them, you're doing exactly what columnar storage optimizes for."
+
+"That's genuinely elegant - you've eliminated the row vs column storage tradeoff by making paths the storage primitive."
+
+"in row-based storage, SELECT tells the database what to return, but the database still reads entire rows from disk."
+"The exception is covering indexes - if you have an index that includes just the revenue column, the database can read from that index instead. But now you're maintaining separate storage structures, which is what columnar databases do systematically."
+
+So, essentially, in cell everything is indexed then. If I'm storing paths independently and I can quickly access anything at value N, or anything with a prefix X, it's all reading from an index.
+
+https://www.arxiv.org/pdf/2512.09762
+"A path p is a possibly empty sequence of IDs denoting a path drilling into nested
+records and lists. Paths can access both values and types. We separate the IDs in a
+path with dots, and a single dot is the empty (top) path. A special element ID ∗ is
+used to access the element type of a list type."
+interesting echo.
+
+https://stonetools.ghost.io/hypercard-mac/
+"The first is the database functionality the program gives you for free. Open the Appointments or Addresses stacks, enter some information, and it will be available on next launch as searchable data. It's stored as a flat-file, nothing fancy, and it's easier than Superbase, which was already pretty easy.
+
+The second is that after entering new data into a stack, you don't have to save; HyperCard saves automatically. It's happens so transparently it almost tricks you into thinking all apps behave this way, but no, Atkinson specifically hated the concept of saving. He thought that if you type data into your computer and yank the power plug, your data should be as close to perfect as possible."
+
+"When you're back in present-day, wondering why a 20GB application can't afford the same flexibility as this 1MB dynamo, then you'll understand. "Why can't I change this? Why can't I make it mine?" Such questions will cut you in a dozen small ways every day, until you're nothing but scar tissue. Then you'll understand."
+
+"HyperCard has basic and advanced tools for creating the three primary elements which compose a card: text, graphics, and buttons. These elements can exist on both background and/or foreground layers as you wish, keeping in mind that foreground elements get first dibs on reacting to user actions."
+
+https://beyondloom.com/blog/sketchpad.html
+"I see HyperCard differently. It certainly had event-based programming wired up to interactive buttons and fields, but there was something evasively softer and more pliable about it as a medium. It broke down the hard distinctions we tend to take for granted between programs and documents, developers and users."
+
+Alan Kay, https://www.filfre.net/2016/09/the-freedom-to-associate/#comment-261229
+"Thus HyperCard had the *two* things that are needed, not just the hyperlinking for browsing, but the automatically indexed searching that is absolutely necessary when you have a data base of more than 100 or so items (i.e. browsing mainly works when you have a sense of where you are going, and you need search as the larger covering mechanism)."
+
+https://bits.logic.inc/p/2025-was-a-wild-decade
+"We can do things today, in December 2025, that were still mostly science fiction in January. That should terrify and excite you in equal measure."
+
+Overview of cell:
+- Language
+   - Storage: @ put
+   - Fivelogic: @, @ if, @ do, @ loop, @ catch
+   - Rule: @ rule
+   - View: @ view
+   - Other: @ access, @ cron
+- Service
+   - Host cell: normal data & files
+   - API/email inbound/outbound
+- DB
+   - Run the language in the DB: consistency, persistence
+   - Make queries fast.
+
+Fivelogic should actually be sixlogic, because put is also essential! It's what you cannot implement in terms of the others. No, it's sevenlogic, because you need to wipe.
+
+The main calls, ordered by length.
+
+```
+     @         @ do        @ if         @ put       @ loop       @ wipe     @ catch
+|---------| |--------| |-----------| |----------| |---------| |---------| |----------|
+ reference   sequence   conditional    storage     iteration     delete      error
+    (0)         (2)         (2)          (3)          (4)         (4)         (5)
+```
+
+A few things for @ rule:
+- It should be @ rule, not @ is. So that particle/wave (noun/verb) are the same word, like in `view`.
+- What if rules are in relative scope, so that any @ rule calls only take effect on that part of the dataspace? Then, you avoid 1) having to have globals; 2) having to call @ rule directly and stopping explicitly. (Heck, this could also work for @ access). @ put then looks at the rules in scope on that prefix.
+- Restating something I said earlier: when a rule is set, 1) if the existing data is not matching it, you'll see the errors on top of the rule call; 2) a put that brings new data that doesn't comply will not be let through and will be rejected with the relevant errors.
+- Are rules a DSL? How much do we save (a la Forth threaded code) compared to plain fivelogic?
+- Main checks are: type, eq (all types), match (text), range (number), length (list), keys (hash); has should be for multiple eq. Shorthand for nested structures? Maybe we can just use wildcards to jump over.
+- Still have @ rule as a call.
+- @ rule would "walk down" rather than up, the scope of the rule would affect paths that are inside of it, or perhaps at the same level.
+
+Concerning @ view:
+- Output is cell logic that is run directly on the view. This cell logic has two parts: 1) vfuns that respond with a representation of html; 2) responders that do things, these responders are really calls! If you want something static, it's just a vfun that doesn't read data, is just as is.
+
+Prefixes are locations.
+
+How would libraries work? It could start by being a cell that hosts some logic, and you simply bring it. You can reference it dynamically or you can bring it and then copy it to a static location. A curated set of libraries would be great.
+
+Rather than calling things "entities", we can just call them "types". A type is a set of rules over the elements of a list. If the elements conform, they belong to that type.
+
+TODO:
+- Sevenlogic
+- Rule
+- View
+
+I need to start definiing the non-fundamental calls (like push) to see if I can really do them. Off the top of my head, we also need type. We also need math and comparison.
+
+```
+fizzbuzz @ do n - @ put : output ""
+                - @ if cond @ % - @ n
+                                - 3
+                       else @ push to output
+                                   v fizz
+                - @ if cond @ % - @ n
+                                - 5
+                       else @ push to output
+                                   v buzz
+                - @ output
+```
+
+### 2025-12-29
+
+== Build and understand (talk & intro to cell)
+
+Today I will talk about three things:
+
+1. Building is like writing
+2. Understanding is the key to building
+3. Understanding can be easier if we remove five obstacles
+
+=== Building is like writing
+
+- By "build", I mean writing data systems.
+- What are data (or info) systems? They are representations of the world. Very powerful: world wide reach, allows you to organize with computers.
+- Building is as powerful as writing. Written language transcends time and space. And it becomes its own thing, it's own identity, something you refer to. Beyond the authors. The same happens with computer systems.
+- Building: writing + computers.
+- Why write? To reach others; and to think clearly.
+- The same reasons apply to building: to reach others, and to think more clearly.
+- Reading is great, but writing is better. Same with data systems: tapping (using digital systems) is good, building is better.
+
+=== Understanding is the key to building
+
+- Building is unlike writing in that you can build things without understanding them.
+- The central problem in building is the difficulty in understanding what you're building.
+- What is understanding? It is to have a good representation of the system in your head. Not just memorize, but actually know the relationships of the parts of the system.
+- AI aggravates this problem: it builds for you without it understanding what it builds, nor you.
+- Main contention: understanding is the key to a good system: reliability and long-term speed.
+- Understanding is building a representation of the system in your head (which is funny, since a data system is itself a representation).
+- Reliability: how much you can trust the system. Long-term speed: determines how nimbly you can change the system in the future. Both these properties determine how long until you decide to throw the old system away and build a new one. Longevity.
+- A system is reliable only in proportion to how much its builders understand it.
+
+=== Understanding can be easier
+
+- Building will never be easier than writing. But it can be only as hard as writing.
+- Currently, building is much harder than writing. The reason: obstacles to understanding the system.
+- Five obstacles: bad data representation, fragmentation of the data, separation of calculation and result, multiplicity of logical forms, separateness of interface.
+- By removing these obstacles, understanding becomes straightforward.
+
+====
+
+Instead of
+1. Why build
+2. Why understand
+
+Do:
+1. Building is as powerful as writing
+2. Understanding is the key to building
+3. Remove the obstacles to understanding what you build
+
+https://docs.hyperclay.com/docs/docs-tldr-paste-in-llm/
+Very interesting concept:
+- Self-modifying HTML apps.
+- Only adds persistence.
+- Does rely on some libraries to make the JS manipulation easier.
+
+Definitely interesting. Why I think cell is more powerful:
+- Go beyond the low-levelness of HTML & JS rerendering.
+- Be able to expose an API.
+- Go beyond admin vs read-only (although that distinction is already great).
+
+"Modern web development has become increasingly complex. What started as simple HTML pages now requires extensive toolchains, multiple programming languages, and distributed systems knowledge. Hyperclay returns to the original vision of the web—a place where anyone can create and share interactive content. It’s built on the belief that many applications don’t need industrial-scale infrastructure; they need simplicity and directness."
+
+"By that point, I had built about 30 small web projects and come across the same problem over and over again: I could build useful frontend apps in hours, but making them persistent took months (user accounts, database, API routes, templating, state management, file handling, deployment, hosting)."
+
+"I took a 4 year detour down the web-stack-framework-making-rabbit-hole because I thought JSON + HTML made a great combo, but I’ve since come around to the idea that pure HTML is a much more pleasurable stack to work with.
+
+I take strong inspiration from Coda, Notion, Val.town, mmm.page, and LLM artifacts.
+
+I think we’re entering a new era of personal, malleable computing where browsing the web feels more like interacting with real objects you can mold, and less like viewing static data locked in a UI you have no control over."
+
+https://jrcpl.us/contrib/2025/Scrappy
+"We wanted to explore a wider view of programming, beyond the form of writing code in text files. That feels outdated, even inhumane. At the same time, visual programming, typically in the form of blocks or nodes-and-wires, doesn’t scale well. We both believed that logical ideas are still best expressed in the form of code, but we wanted to reduce the amount of coding necessary. Alan Kay put it best: “simple things should be easy; complex things should be possible.”"
+"We did decide to focus on the niche variously known as “end-user programming”, “small computing”, “casual programming”, “home-cooked software”, “personal software”, and “software for one”. This is in contrast to typical software development frameworks and “no-code” development platforms which cater to professionals working on industrial-strength apps and websites. Another way of putting it is that we wanted to target that gap between going shopping for apps and having to hire someone to build bespoke solutions — or becoming a skilled programmer yourself."
+
+"In terms of interactive media authoring, the biggest success after HyperCard was arguably Adobe Flash. Like HyperCard, Flash provided a visual environment that enabled non-programmers to create interactive experiences. It had a scripting language called ActionScript, which was influenced by HyperCard’s own scripting language. Flash came to power everything from simple animations to complex games on the web in the late 1990s and 2000s. It worked across browsers and platforms, which is something HyperCard never achieved beyond the Apple ecosystem. But Flash suffered a similar fate, as it was never designed for mobile devices and touchscreens, and web technologies steadily became more capable of delivering rich interactive media."
+
+"A few weeks later, ACM SIGPLAN (Special Interest Group on Programming Languages) held its SPLASH conference in California. We didn’t attend, but there was a very relevant keynote talk by Jonathan Edwards . He talked about “substrates”, namely Smalltalk, Lisp, and (yes!) HyperCard, in contrast to the tall “stack” of software layers used in typical modern-day software engineering projects. Surprisingly, he outlined some of the same exact design goals as our little project, the one that we started months earlier: keeping data persistent, being able to manipulate data and code graphically, unifying the concepts of “programming = using”. Needless to say, we started saying “substrate” a lot more."
+
+"In his talk, Jonathan Edwards suggests that we focus on the gap between spreadsheets and “stack programming”. This is the same gap that we identified early in our project. Perhaps that’s the ultimate killer app of substrates: to serve the long tail that’s not otherwise being served. HyperCard clearly served the long tail well, although I think that’s partially because people didn’t have real alternatives during that time. Sometimes we forget how life was like in that era. Hardware was slow, operating systems crashed, and compilers cost money. There was no Google, Stack Overflow, or GitHub Copilot; there were books and CD-ROMs of technical documentation, often well-written but expensive and rare. For a normal person in the late 1980s and early 1990s, HyperCard was like an oasis in a desert. Today, there are more, different solutions out there that cater to the long tail."
+
+You only need dot on initialization of the variable, not afterwards. Same with :. You could technically just do fine with :, but that assumes you're always inside a sequence. When are you not? Inside a cond, for example. Or if a put is suddenly inside somewhere. My gut tells me we need both : and .
+
+### 2025-12-27
+
+We could have multiple dots on put? Tes, we could. So dot mode is really per hook.
+
+The core problem I have understanding cell.respond is that I'm mixing absolute (contextPath) and relative (targetPath) paths. I think I need to set it all in absolute terms. Resolve things relatively, but then operate absolutely.
+
+### 2025-12-24
+
+Still with the rewrite of cell.put.
+
+Would it make sense to build the `seen` of what we're putting? It is usually less than what is there already in the dataspace. Then you sift through the dataspace and remove what clashes with that.
+
+I'm thinking of the tricky cases:
+- A path that is replaced with almost the exact same path except the last step.
+- A long path that is replaced with a short path that is a prefix of it.
+
+The second case would give you a type clash at the last element (well, next to last, since we get the types of proper prefixes). So that's taken care of. The only difficult case is the first, where types are perfectly consistent, there you need to look at the value. In that case, instead of looking at values, if we see that it is the last step and there's a seen, we also remove it since it will be replaced by the new types.
+
+OK, let's rewrite the tests!
+
+An interesting consequence is that there's no invalid message you can pass to put. If it is already valid fourdata, there's nothing that can come after the put that would be considered invalid.
+
+I should really call "call" message in the context of the dialog? No, because the message is what comes to the right of the location. Call = location + message.
+
+We're going from seven calls to cell.put to one in the refactor. This should definitely reduce the performance hit of cell.call.
 
 ### 2025-12-23
 
@@ -5817,19 +6052,21 @@ To do this, we first take the prefix of the path, which is the target path witho
    var prefix = targetPath.slice (0, -1).concat (['@', valuePath [0]]);
 ```
 
-We then get all the paths and see what's the position of this path in all of them. This is currently extremely inefficient, but when we decide to improve `get`, we can also do this in a more efficient way.
+We then get the entire dataspace and see what's the position of this path in all of them. This is currently extremely inefficient, but when we decide to improve `get`, we can also do this in a more efficient way.
 
 ```js
-   var paths = get ();
-   var index = dale.stopNot (paths, undefined, function (v, k) {
+   var dataspace = get ();
+   var index = dale.stopNot (dataspace, undefined, function (v, k) {
       if (teishi.eq (path, v)) return k;
    });
 ```
 
 We only need to check if the previous path also matches this prefix. If there's no previous path, or if the previous path has a length smaller than that of the prefix, or if its prefix doesn't match the prefix we have here, then this is the first path for this call.
 
+Actually, we shouldn't match the last step of the prefix: on a certain prefix that ends with a call (`@`), there should be only one call. If there are different calls, we'll catch that with a validation later. For now, we want to make sure that this path is the first one to have this prefix minus the last step.
+
 ```js
-   var firstPath = index === 0 || paths [index - 1].length < prefix.length || ! teishi.eq (paths [index - 1].slice (0, prefix.length), prefix);
+   var firstPath = index === 0 || dataspace [index - 1].length < prefix.length || ! teishi.eq (dataspace [index - 1].slice (0, prefix.length - 1), prefix.slice (0, -1));
 ```
 
 If this is not the first path for this call, we return and do nothing else, to avoid unnecessary execution.
@@ -5838,31 +6075,58 @@ If this is not the first path for this call, we return and do nothing else, to a
    if (! firstPath) return;
 ```
 
+We now detect if there are multiple calls with this prefix minus the last step. We iterate the dataspace:
+
+```js
+   var multipleCalls = dale.stopNot (dataspace.slice (index + 1), false, function (p) {
+```
+
+If this path of the dataspace doesn't match the entire prefix minus the last step, it's irrelevant: we continue iterating.
+
+```js
+      if (! teishi.eq (path.slice (0, rightmostAt + 1), p.slice (0, rightmostAt + 1))) return;
+```
+
+If it does match, it can either be a path that's part of the path we're responding to; or it can be a distinct, illegal call on this same prefix. If the latter is the case, we return `true`.
+
+```js
+      if (p [rightmostAt + 1] !== path [rightmostAt + 1]) return true;
+   });
+```
+
 We get the previous value (the value at `targetPath`). A subtle and important detail: as context path, we pass `contextPath`, which is everything on this path that is not a reference.
 
 ```js
-   var previousValue = cell.get (targetPath, contextPath, get);
+   var currentValue = cell.get (targetPath, contextPath, get);
 ```
 
-We will now discover what the `currentValue` (that is, a list of paths that will have the prefix of `targetPath`), should be.
+We will now discover what the `newValue` (that is, a list of paths that will have the prefix of `targetPath`), should be.
 
-We first deal with the case where there's an `if` at the beginning of `valuePath`. We do so by invoking `cell.if`. To this function, we pass the `prefix` (that is, the `targetPath`, minus the `=` at its end, plus a `@ if`). We also pass `contextPath`.
-
-`cell.if` will return a list of paths that we store in `currentValue`.
+We first deal with the case where there are multiple calls with the same prefix: the response in this case will be an error.
 
 ```js
-   if (valuePath [0] === 'if') {
-      var currentValue = cell.if (prefix, contextPath, get);
+   if (multipleCalls) {
+      var newValue = [['error', 'Only one call per prefix is allowed']];
    }
 ```
 
-If there's a `do` at the beginning of `valuePath`, this is a sequence definition. We then invoke `cell.do` and save the paths returned by it in `currentValue`.
+Next, we deal with the case where there's an `if` at the beginning of `valuePath`. We do so by invoking `cell.if`. To this function, we pass the `prefix` (that is, the `targetPath`, minus the `=` at its end, plus a `@ if`). We also pass `contextPath`.
+
+`cell.if` will return a list of paths that we store in `newValue`.
+
+```js
+   else if (valuePath [0] === 'if') {
+      var newValue = cell.if (prefix, contextPath, get);
+   }
+```
+
+If there's a `do` at the beginning of `valuePath`, this is a sequence definition. We then invoke `cell.do` and save the paths returned by it in `newValue`.
 
 As for the arguments we pass to `cell.do`, we pass a `define` text to let it know this is a definition (not an execution). We also pass the `prefix` (like we did in the case of `cell.if`) except that it would be instead `foo @ do`. We also pass a `null` that is a placeholder for an argument we will only need when *executing* a call.
 
 ```js
    else if (valuePath [0] === 'do') {
-      var currentValue = cell.do ('define', prefix, contextPath, null, get);
+      var newValue = cell.do ('define', prefix, contextPath, null, get);
    }
 ```
 
@@ -5870,19 +6134,19 @@ Otherwise, we just call `cell.get` directly.
 
 ```js
    else {
-      var currentValue = cell.get (valuePath, contextPath, get);
+      var newValue = cell.get (valuePath, contextPath, get);
 ```
 
 If we find that the current value is a call that has not been responded to yet, we will ignore its current value. How would we know this? If it is a call (because it starts with `@`) and it doesn't have an `=` as the first step of the first path, we know it hasn't been responded to yet. This is necessary when we're trying to respond to a call to a call, and the inner call hasn't been responded to yet. We have a test for this with the tag "Make a reference to a reference in order ba//dc//cb".
 
 ```js
-      if (currentValue [0] && currentValue [0] [0] === '@') return;
+      if (newValue [0] && newValue [0] [0] === '@') return;
 ```
 
 Now for the interesting bit. If we get no paths from our call to `cell.get`, there could be a sequence call in the `valuePath`. So we are going to figure out if that's the case.
 
 ```js
-      if (currentValue.length === 0) {
+      if (newValue.length === 0) {
 ```
 
 Imagine that our `valuePath` is something like this: `bar 10`. Imagine that `bar` is a sequence, defined elsewhere, that takes a single number as its message. This could be a sequence call!
@@ -5915,7 +6179,7 @@ We also need to collect all the paths inside the message, which could be many. F
 
 ```js
             call.message = [];
-            dale.stopNot (paths.slice (index), true, function (v) {
+            dale.stopNot (dataspace.slice (index), true, function (v) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return call.message.push (v.slice (prefix.length));
             });
@@ -5924,7 +6188,7 @@ We also need to collect all the paths inside the message, which could be many. F
 OK, now we're ready. `cell.do` will return a set of paths that we will set on the `targetPath`. It will also directly set the expansion of `targetPath`, but it won't return it. We will cover that when we annotate `cell.do`.
 
 ```js
-            currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+            newValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
          }
 ```
 
@@ -5933,17 +6197,17 @@ If there's no call, we check to see if this is a native call. We get the message
 ```js
          else {
             var message = [];
-            dale.stop (paths.slice (index), undefined, function (v) {
+            dale.stop (dataspace.slice (index), undefined, function (v) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
             });
 ```
 
-Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `currentValue`.
+Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `newValue`.
 
 ```js
             var nativeResponse = cell.native (valuePath [0], message);
-            if (nativeResponse !== false) currentValue = nativeResponse;
+            if (nativeResponse !== false) newValue = nativeResponse;
          }
 ```
 
@@ -5954,37 +6218,24 @@ This concludes the case of neither `if` or `do`.
    }
 ```
 
-By now, we have a `currentValue`. If we got no paths in `currentValue`, we set it to a single path with a single empty text. This will allow us to have paths like `foo = ""`, which is more illustrative (and correct) thatn `foo =`.
+By now, we have a `newValue`. If we got no paths in `newValue`, we set it to a single path with a single empty text. This will allow us to have paths like `foo = ""`, which is more illustrative (and correct) thatn `foo =`.
 
 ```js
-   if (currentValue.length === 0) currentValue = [['']];
+   if (newValue.length === 0) newValue = [['']];
 ```
 
 If the previous value and the current value are the same, we don't have to do anything, so we return.
 
 ```js
-   if (teishi.eq (previousValue, currentValue)) return;
+   if (teishi.eq (currentValue, newValue)) return;
 ```
 
-If we're here, we will update the dataspace. We create `pathsToPut`, with the paths that we will pass to `cell.put`.
+If we're here, we will update the dataspace. We do so by taking all the paths in `newValue`, prepending them with `targetPath` and passing them to `cell.put`. Note we pass an empty context path to put, since the "where" is already contained in the target path.
 
 ```js
-   var pathsToPut = [['p'].concat (targetPath)];
-```
-
-We iterate the paths in `currentValue`, prepend them with `v` and add them to `pathsToPush`.
-
-
-```js
-   dale.go (currentValue, function (path) {
-      pathsToPut.push (['v'].concat (path));
-   });
-```
-
-We call `cell.put` with `pathsToPut` as `paths` and an empty context path.
-
-```js
-   cell.put (pathsToPut, [], get, put);
+   cell.put (dale.go (newValue, function (path) {
+      return targetPath.concat (path);
+   }), [], get, put);
 ```
 
 We then return `true` to stop the iteration. What iteration, you may ask? Well, `cell.put` is calling `cell.respond` on each of the paths of the dataspace, one at a time. When one of these calls to `cell.respond` triggers a call to `cell.put`, we don't want the outer call to `cell.put` redoing all the work; we'll just leave that to the inner call to `cell.put`. Returning `true` is a way to stop the outer loop. This is only done for efficiency purposes.
@@ -6096,7 +6347,7 @@ We get the name of the message. If it's not text, we return an error.
 
 ```js
    var messageName = definition [0] [0];
-   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a name for its message.']];
+   if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a textual name for its message.']];
 ```
 
 We forbid `seq` to be the name of the message. We already are going to use `seq` to show the expansion of each step of the sequence, and we want to avoid overwriting it.
@@ -6221,9 +6472,9 @@ If they are not the same, that can be because of two reasons:
 In both cases, the required action is the same: we will then set `:` to the new message. We do this through a direct call to `cell.put`. Note we use the dot to indicate that this has to be done right here, instead of looking for a `:` up the chain if it doesn't exist. We also pass the `contextPath`.
 
 ```js
-      cell.put ([['p', '.', ':']].concat (dale.go (message, function (v) {
-         return ['v', messageName].concat (v);
-      })), contextPath, get, put);
+      cell.put (dale.go (message, function (v) {
+         return ['.', ':', messageName].concat (v);
+      }), contextPath, get, put);
 ```
 
 We then return `output` (which will be a single path with an empty text) and close the case where the message has changed.
@@ -6267,14 +6518,12 @@ We also get the current step from the definition, slicing the number from the fr
       });
 ```
 
-As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`. Note the dot, which creates the value where it's needed if it doesn't exist already.
+As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
 
 ```js
-      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
-         ['p', '.', ':', 'seq', stepNumber],
-      ].concat (dale.go (currentStep, function (v) {
-         return ['v'].concat (v);
-      })), contextPath, get, put);
+      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put (dale.go (currentStep, function (v) {
+         return [':', 'seq', stepNumber].concat (v);
+      }), contextPath, get, put);
 ```
 
 Note that in the body of the conditional above, we are returning the result of `cell.put`, which will stop the loop early because it's not `undefined`.
@@ -6303,7 +6552,6 @@ If that existing value is a stopping value (a hash with a key error or stop), or
 
 ```js
       if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === sequenceLength) {
-         // We have a stopping value!
          output = existingValue;
          return true;
       }
@@ -6415,46 +6663,15 @@ We return the matches or an empty array (in case there were none). This closes t
 cell.put = function (paths, contextPath, get, put, updateDialog) {
 ```
 
-We validate the `paths` in a very lazy way: we convert them to JS. If we don't get a hash (object) with keys `p` (optional) and `v` (mandatory), we return an error. `p` is the path where we want to write, whereas `v` is the value that we will write to `p`. In more traditional terms, `p` is the left side of the assignment and `v` is the right side of the assignment. I guess that `put` really does is to provide `assignment`.
+We start by validating that these paths are not setting, at the outermost level, anything that's not a hash. The dataspace itself, at its outermost level, has to be a hash because it contains keys such as `dialog`, which imply that the entire dataspace is a hash.
 
-`p` can be absent, in which case we'll default to an empty path. This allows you to write multiple values at the top level.
-
-```js
-   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
-   if (! teishi.eq (topLevelKeys, ['p', 'v']) && ! teishi.eq (topLevelKeys, ['v'])) return [['error', 'A put call has to be a hash with a value (`v`) and an optional path (`p`).']];
-```
-
-We initialize two arrays, one for the "left side" of the assignment (the path that is inside the key `p`) and one for the "right side" (the values (paths) that will go on this path).
+If the user tries to replace the entire dataspace with something that is not a hash, we'll respond with an error and be done.
 
 ```js
-   var leftSide = [], rightSide = [];
+   if (paths.length && paths [0].length === 1 || type (paths [0] [0]) === 'integer') return [['error', 'Cannot set entire dataspace to something that is not a hash']];
 ```
 
-We iterate the paths. If the first element of one of these paths is `p`, we take out its first element (`p`) and push the rest as a new path onto `leftSide`. Otherwise, we also take out its first element and push it onto `rightSide`.
-
-```js
-   dale.go (paths, function (path) {
-      (path [0] === 'p' ? leftSide : rightSide).push (path.slice (1));
-   });
-```
-
-If there's more than one path in `leftSide`, we return an error. Inside a `put` call, we can only set one path at a time.
-
-```js
-   if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
-```
-
-We take the sole path inside `leftSide` and set `leftSide` to it. If there's no `leftSide` because there was no `p`, we initialize it to an empty list.
-
-```js
-   leftSide = leftSide [0] || [];
-```
-
-We forbid overwriting `dialog` unless the `updateDialog` flag is passed.
-
-```js
-   if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
-```
+Now for an interesting design decision: we assume that `paths` is already validated. All that we require from `paths` is that it is an internally consistent set of paths, that is, a set of paths that you could put anywhere in the dataspace (except perhaps for the toplevel). Since the calls to `cell.put` come from either `cell.call` (which validates its input when parsing it) or from `cell.respond` and `cell.do` (which should have no errors), we will not validate the paths.
 
 We get the entire dataspace onto memory. Isn't inefficiency fun?
 
@@ -6462,91 +6679,17 @@ We get the entire dataspace onto memory. Isn't inefficiency fun?
    var dataspace = get ();
 ```
 
-As with `cell.get`, if the first step of `leftSide` is a dot, we will be in "dot mode", which is a mode that says we want to set things in the context we have instead of "walking up". In this case, we will set `leftSide` to be the context path plus left side, but removing the dot at the beginning of left side.
+TODO EXPLAIN:
+- Multiple hooks.
+- It's an upsert if there are no type conflicts, otherwise, the conflicting existing structure is removed.
+- We calculate context paths first based on the existing data.
+- Then we get the types for every prefix on every path (with those paths already having the proper context path).
+- Then we go through the entire dataspace and compare the existing paths with the new ones, and remove the old existing paths.
 
-```js
-   if (leftSide [0] === '.') leftSide = contextPath.concat (leftSide.slice (1));
-```
-
-Otherwise, we are now going to find a context path for which we get a match on `leftSide`. If `contextPath` is empty, this context path will also be empty. The interesting case is that for which `contextPath` is not empty.
-
-This is best explained with an example. Let's say that `contextPath` is `['foo']`. And that `leftSide` is `['bar']`. If we find a `bar` inside `foo` (and we know we found one if we get one or more paths with that prefix), then the context path will be `['foo']`. Therefore, we will update the `bar` inside `foo`.
-
-Now let's assume that there is no `bar` in `foo`. Then, if we get no matching paths inside `foo`, we will peel away the last element of the context path and get `[]`. Then, we'll set `bar` onto the general dataspace, without a prefix.
-
-This peeling away is done one by one. This is what I refer to as "walking" up.
-
-To implement this walking, we are going to iterate `contextPath.length` times. We will stop the iteration if we find that any prefix of `contextPath` gives us a match.
-
-```js
-   else {
-      var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
-```
-
-We take the context path, remove the last k elements (we start at 0 the first time around) and concatenate the first step of the left side (the hook) to it. This is our `contextPathWithSuffix`.
-
-```js
-         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide.slice (0, 1));
-```
-
-We find one or more paths that start with this context path with suffix.
-
-
-```js
-         var matches = dale.stop (dataspace, true, function (path) {
-            return teishi.eq (contextPathWithSuffix, path.slice (0, contextPathWithSuffix.length));
-         });
-```
-
-If we found a match, this means that this context path plus the left side already exists. We now have the context path we will use, therefore we will return it.
-
-```js
-         if (matches.length) return contextPath.slice (0, k);
-      });
-```
-
-If we found a context path that gets matches, then we will prepend the `leftSide` wtih it. Otherwise, we'll just put leave `leftSide` as is and put onto the general dataspace.
-
-```js
-      if (contextPathMatch !== undefined) leftSide = contextPathMatch.concat (leftSide);
-    }
-```
-
-By now, `leftSide` has the absolute path where we want to set the value. To do this, we are going to re-create the dataspace by iterating through it. We first filter out any paths that start with `leftSide`.
-
-We make an exception if `leftSide` is empty. In that case, we leave the paths as they exist. If we generate any inconsistencies, we'll detect them later when validating.
-
-```js
-   if (leftSide.length) dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (leftSide.length && teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
-      return path;
-   });
-```
-
-We will then push all the paths in `rightSide` to dataspace. However, before doing this, we will prepend `leftSide` to each of these `rightSide` paths.
-
-```js
-   dataspace = dataspace.concat (dale.go (rightSide, function (path) {
-      return leftSide.concat (path);
-   }));
-```
-
-Now, the dataspace is updated. We sort it, then validate it.
+Now, the dataspace variable is updated. We sort it, then persist the changes.
 
 ```js
    cell.sorter (dataspace);
-   var error = cell.validator (dataspace);
-```
-
-If we got an error, we will return that error. You might ask: what error could happen here? The one type of error that could happen is setting a certain path to a type X when it is already of a type Y (and you haven't fully re-setted the entire thing).
-
-```js
-   if (error.length) return error;
-```
-
-If we're here, then we are ready to persist these changes. We call `put` with the new `dataspace`.
-
-```js
    put (dataspace);
 ```
 

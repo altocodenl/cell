@@ -373,36 +373,16 @@ cell.call = function (message, from, to, hide, get, put) {
       var dialog = cell.get (['dialog'], [], get, put);
       var length = dialog.length ? teishi.last (dialog) [0] : 0;
 
-      // TODO: refactor with push and multiput
       cell.put ([
-         ['p', 'dialog', length + 1, 'from'],
-         ['v', from],
-      ], [], get, put, true);
-      cell.put ([
-         ['p', 'dialog', length + 1, 'to'],
-         ['v', to],
-      ], [], get, put, true);
-      cell.put ([
-         ['p', 'dialog', length + 1, 'c'],
-         ['v', message],
-      ], [], get, put, true);
-      if (response.length) cell.put ([
-         ['p', 'dialog', length + 1, 'r'],
-         ...dale.go (message === '@' ? [['[OMITTED]']] : response, function (v) {
-            return ['v', ...v];
+         ['dialog', length + 1, 'from', from],
+         ['dialog', length + 1, 'to', to],
+         ['dialog', length + 1, 'c', message],
+         ...dale.go (message === '@' ? [['dialog', length + 1, 'r', '[OMITTED]']] : response, function (path) {
+            return ['dialog', length + 1, 'r', ...path];
          }),
-      ], [], get, put, true);
-      cell.put ([
-         ['p', 'dialog', length + 1, 'id'],
-         ['v', callId],
-      ], [], get, put, true);
-      if (hide) cell.put ([
-         ['p', 'dialog', length + 1, 'hide'],
-         ['v', 1],
-      ], [], get, put, true);
-      cell.put ([
-         ['p', 'dialog', length + 1, 'ms'],
-         ['v', new Date ().getTime () - startTime.getTime ()],
+         ['dialog', length + 1, 'id', callId],
+         ['dialog', length + 1, 'hide', 1],
+         ['dialog', length + 1, 'ms', new Date ().getTime () - startTime.getTime ()],
       ], [], get, put, true);
 
       return cell.pathsToText (response);
@@ -489,27 +469,35 @@ cell.respond = function (path, get, put) {
    var valuePath   = dale.fil (path.slice (rightmostAt + 1), '=', function (v) {return v});
 
    var prefix = targetPath.slice (0, -1).concat (['@', valuePath [0]]);
-   var paths = get ();
-   var index = dale.stopNot (paths, undefined, function (v, k) {
+   var dataspace = get ();
+   var index = dale.stopNot (dataspace, undefined, function (v, k) {
       if (teishi.eq (path, v)) return k;
    });
-   var firstPath = index === 0 || paths [index - 1].length < prefix.length || ! teishi.eq (paths [index - 1].slice (0, prefix.length), prefix);
+   var firstPath = index === 0 || dataspace [index - 1].length < prefix.length || ! teishi.eq (dataspace [index - 1].slice (0, prefix.length - 1), prefix.slice (0, -1));
    if (! firstPath) return;
 
-   var previousValue = cell.get (targetPath, contextPath, get);
+   var multipleCalls = dale.stopNot (dataspace.slice (index + 1), false, function (p) {
+      if (! teishi.eq (path.slice (0, rightmostAt + 1), p.slice (0, rightmostAt + 1))) return;
+      if (p [rightmostAt + 1] !== path [rightmostAt + 1]) return true;
+   });
 
-   if (valuePath [0] === 'if') {
-      var currentValue = cell.if (prefix, contextPath, get);
+   var currentValue = cell.get (targetPath, contextPath, get);
+
+   if (multipleCalls) {
+      var newValue = [['error', 'Only one call per prefix is allowed']];
+   }
+   else if (valuePath [0] === 'if') {
+      var newValue = cell.if (prefix, contextPath, get);
    }
    else if (valuePath [0] === 'do') {
-      var currentValue = cell.do ('define', prefix, contextPath, null, get);
+      var newValue = cell.do ('define', prefix, contextPath, null, get);
    }
    else {
-      var currentValue = cell.get (valuePath, contextPath, get);
+      var newValue = cell.get (valuePath, contextPath, get);
 
-      if (currentValue [0] && currentValue [0] [0] === '@') return;
+      if (newValue [0] && newValue [0] [0] === '@') return;
 
-      if (currentValue.length === 0) {
+      if (newValue.length === 0) {
          var call = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
             var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
             if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
@@ -519,35 +507,32 @@ cell.respond = function (path, get, put) {
             if (call.definitionPath.length > 3) prefix = prefix.concat (call.definitionPath.slice (1).slice (0, -2));
 
             call.message = [];
-            dale.stop (paths.slice (index), undefined, function (v) {
+            dale.stop (dataspace.slice (index), undefined, function (v) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return call.message.push (v.slice (prefix.length));
             });
-            currentValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
+            newValue = cell.do ('execute', call.definitionPath, contextPath, call.message, get, put);
          }
          else {
             var message = [];
-            dale.stop (paths.slice (index), undefined, function (v) {
+            dale.stop (dataspace.slice (index), undefined, function (v) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
             });
             var nativeResponse = cell.native (valuePath [0], message);
-            if (nativeResponse !== false) currentValue = nativeResponse;
+            if (nativeResponse !== false) newValue = nativeResponse;
          }
       }
    }
 
-   if (currentValue.length === 0) currentValue = [['']];
+   if (newValue.length === 0) newValue = [['']];
 
-   if (teishi.eq (previousValue, currentValue)) return;
+   if (teishi.eq (currentValue, newValue)) return;
 
-   var pathsToPut = [['p'].concat (targetPath)];
+   cell.put (dale.go (newValue, function (path) {
+      return targetPath.concat (path);
+   }), [], get, put);
 
-   dale.go (currentValue, function (path) {
-      pathsToPut.push (['v'].concat (path));
-   });
-
-   cell.put (pathsToPut, [], get, put);
    return true;
 }
 
@@ -573,10 +558,9 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    if (definition.length === 0) return [['error', 'The definition of a sequence must contain a message name and at least one step.']];
 
    var messageName = definition [0] [0];
-
    if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a textual name for its message.']];
 
-   if (messageName === 'seq') return [['error', 'The name of the message cannot be `seq`.']];
+   if (messageName === 'do') return [['error', 'The name of the message cannot be `do`.']];
 
    if (dale.keys (cell.pathsToJS (definition)).length !== 1) return [['error', 'The definition of a sequence can only contain a single name for its message.']];
 
@@ -605,17 +589,15 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    var previousExpansion = cell.get (contextPath.concat (':'), [], get);
    var previousMessage = dale.fil (previousExpansion, undefined, function (path) {
-      if (path [0] !== 'seq') return path;
+      if (path [0] !== 'do') return path;
    });
-
-   //var message = cell.get (messagePath, contextPath, get);
 
    if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
-      cell.put ([['p', '.', ':']].concat (dale.go (message, function (v) {
-         return ['v', messageName].concat (v);
-      })), contextPath, get, put);
+      cell.put (dale.go (message, function (v) {
+         return ['.', ':', messageName].concat (v);
+      }), contextPath, get, put);
 
       return output;
    }
@@ -625,19 +607,17 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 
-      var previousStep = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+      var previousStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
 
       var currentStep = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 
-      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put ([
-         ['p', '.', ':', 'seq', stepNumber],
-      ].concat (dale.go (currentStep, function (v) {
-         return ['v'].concat (v);
-      })), contextPath, get, put);
+      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put (dale.go (currentStep, function (v) {
+         return [':', 'do', stepNumber].concat (v);
+      }), contextPath, get, put);
 
-      var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
+      var existingValuePath = contextPath.concat ([':', 'do', stepNumber]);
       if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
       var existingValue = cell.get (existingValuePath, [], get);
 
@@ -791,17 +771,22 @@ cell.get = function (queryPath, contextPath, get) {
    }) || [];
 }
 
-cell.Put = function (paths, contextPath, get, put, updateDialog) {
+cell.put = function (paths, contextPath, get, put, updateDialog) {
+
+   if (paths.length && paths [0].length === 1 || type (paths [0] [0]) === 'integer') return [['error', 'Cannot set entire dataspace to something that is not a hash']];
 
    var dataspace = get ();
 
+   // The object deduplicates paths with the same hooks.
    var hooks = dale.obj (paths, function (path) {
-      return [path [0], []];
+      var dotMode = path [0] === '.';
+      return [JSON.stringify (path [dotMode ? 1 : 0]), dotMode];
    });
 
-   dale.go (hooks, function (v, hook) {
+   dale.go (hooks, function (dotMode, hook) {
+      if (dotMode) return hooks [hook] = contextPath;
       var context = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
-         var prefix = contextPath.slice (0, k).concat (hook);
+         var prefix = contextPath.slice (0, k).concat (JSON.parse (hook));
          if (! dale.stop (dataspace, true, function (path) {
             return teishi.eq (prefix, path.slice (0, prefix.length));
          })) return;
@@ -810,82 +795,43 @@ cell.Put = function (paths, contextPath, get, put, updateDialog) {
       hooks [hook] = context || [];
    });
 
+   var error;
    paths = dale.go (paths, function (path) {
-      return hooks [path [0]].concat (path);
+      var dotMode = path [0] === '.';
+      path = hooks [JSON.stringify (path [dotMode ? 1 : 0])].concat (dotMode ? path.slice (1) : path);
+      if (! updateDialog && path [0] === 'dialog') error = [['error', 'A dialog cannot be supressed by force.']];
+      else return path;
    });
+   if (error) return error;
 
    var seen = {};
-   dale.go (dataspace, function (path) {
-      if (hooks.indexOf (path [0]) === -1) return;
+   dale.go (paths, function (path) {
       dale.go (path.slice (0, path.length - 1), function (step, k) {
          var key = JSON.stringify (path.slice (0, k + 1));
          if (seen [key]) return;
 
          var textStep = type (path [k + 1]) === 'string';
-         var lastStep = k + 1 === path.length;
+         var lastStep = k + 2 === path.length;
          seen [key] = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
       });
    });
 
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+      if (hooks [JSON.stringify (path [0])] === -1) return path;
+      var remove = dale.stop (path.slice (0, path.length - 1), true, function (step, k) {
+         var key = JSON.stringify (path.slice (0, k + 1));
+         if (! seen [key]) return;
 
+         var textStep = type (path [k + 1]) === 'string';
+         var lastStep = k + 2 === path.length;
+         var t = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
 
-
-   cell.sorter (dataspace);
-
-   put (dataspace);
-
-   dale.stop (dataspace, true, function (path) {
-      return cell.respond (path, get, put);
-   });
-
-   return [['ok']];
-
-}
-
-cell.put = function (paths, contextPath, get, put, updateDialog) {
-
-   var topLevelKeys = dale.keys (cell.pathsToJS (paths)).sort ();
-   if (! teishi.eq (topLevelKeys, ['p', 'v']) && ! teishi.eq (topLevelKeys, ['v'])) return [['error', 'A put call has to be a hash with a value (`v`) and an optional path (`p`).']];
-
-   var leftSide = [], rightSide = [];
-   dale.go (paths, function (path) {
-      (path [0] === 'p' ? leftSide : rightSide).push (path.slice (1));
-   });
-
-   if (leftSide.length > 1) return [['error', 'Only one path can be put at the same time, but received multiple paths: ' + dale.go (leftSide, function (v) {return cell.pathsToText ([v])}).join (', ')]];
-
-   leftSide = leftSide [0] || [];
-
-   if (leftSide [0] === 'dialog' && ! updateDialog) return [['error', 'A dialog cannot be supressed by force.']];
-
-   var dataspace = get ();
-
-   if (leftSide [0] === '.') leftSide = contextPath.concat (leftSide.slice (1));
-   else {
-      var contextPathMatch = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
-         var contextPathWithSuffix = contextPath.slice (0, k).concat (leftSide.slice (0, 1));
-         var matches = dale.stop (dataspace, true, function (path) {
-            return teishi.eq (contextPathWithSuffix, path.slice (0, contextPathWithSuffix.length));
-         });
-         if (matches) return contextPath.slice (0, k);
+         if (seen [key] !== t || lastStep) return true;
       });
-
-      if (contextPathMatch !== undefined) leftSide = contextPathMatch.concat (leftSide);
-   }
-
-   if (leftSide.length) dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (leftSide.length && teishi.eq (leftSide, path.slice (0, leftSide.length))) return;
-      return path;
-   });
-   dataspace = dataspace.concat (dale.go (rightSide, function (path) {
-      return leftSide.concat (path);
-   }));
+      if (! remove) return path;
+   }).concat (paths);
 
    cell.sorter (dataspace);
-
-   var error = cell.validator (dataspace);
-   if (error.length) return error;
-
    put (dataspace);
 
    dale.stop (dataspace, true, function (path) {

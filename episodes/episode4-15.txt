@@ -1,0 +1,42 @@
+Fifteenth episode of season 4! I'm building a programming environment from scratch while recording myself. Almost done rewriting @ put. It looks great.
+
+https://github.com/altocodenl/cell
+
+Hi! Merry xmas! Silent episode today.
+
+We were rewriting cell.put. Trying to resume.
+
+OK, here it goes.
+
+I don't understand where these recursive calls are coming from.
+
+Why don't we reach the exception??
+
+I need to fix the calls to put from cell.call. But still, there's at least one error left inside cell.put.
+
+I need to tough it and go back to the previous invocation, which was generating something weird. Because it shouldn't have mattered.
+
+This is already malformed!
+
+```
+p dialog 1 from
+           to
+```
+
+It should have 1 and 2, not just 1.
+
+The error is in the hooks. I should get the keys. And I should also distinguish text from number there too.
+
+OK, I think we fixed it.
+
+Wow, it worked!!
+
+Whoops...
+
+Don't know why the hide 1 wasn't returned before. I'm going to let that one pass, because it should have been there in the first place.
+
+This is a good change of behavior, so I'll change the test.
+
+It's really working!
+
+I forgot about the dot. I'll add it next time. But fantastic progress! See you next time.

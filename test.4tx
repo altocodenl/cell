@@ -371,33 +371,6 @@
                   r "{/"bar/": [/"jip/", /"joo/"], /"jup/": /"yea/", /"soda/": /"wey/"}"
                   tag "Four paths into JSON"
 
-- "PUT VALIDATION" - c @ put foo bar 1
-                                 jip 2
-                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
-                     tag "Invalid put with direct values"
-
-                   - c @ put 1 foo
-                             2 bar
-                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
-                     tag "Invalid put with numeric keys"
-
-                   - c @ put k foo
-                             v bar
-                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
-                     tag "Invalid put with wrong key names"
-
-                   - c @ put p foo
-                             v bar
-                             x jip
-                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
-                     tag "Invalid put with extra key x"
-
-                   - c @ put p foo
-                             v bar
-                             x jip
-                     r error "A put call has to be a hash with a value (`v`) and an optional path (`p`)."
-                     tag "Invalid put with extra key x (duplicate)"
-
 - "GET & PUT" - c @
                 r ""
                 tag "Get everything when the dataspace is empty"
@@ -406,15 +379,13 @@
                 r ""
                 tag "Get one prefix when the dataspace is empty"
 
-              - c @ put p party
-                        v list 1 Jan
-                               2 Jip
-                          open 1
+              - c @ put party list 1 Jan
+                                   2 Jip
+                              open 1
                 r ok
                 tag "Create a hash with three paths"
 
-              - c @ put p serious
-                        v business
+              - c @ put serious business
                 r ok
                 tag "Create another hash"
 
@@ -460,8 +431,7 @@
                 r ""
                 tag "Get the entire last path and obtain nothing"
 
-              - c @ put p party
-                        v 1
+              - c @ put party 1
                 tag "Overwrite prefix with multiple paths"
 
               - c @
@@ -469,10 +439,9 @@
                   serious business
                 tag "Get everything after overwriting prefix with multiple paths"
 
-              - c @ put p party
-                        v list 1 Jan
-                               2 Jip
-                          open 1
+              - c @ put party list 1 Jan
+                                   2 Jip
+                              open 1
                 tag "Restore party"
 
 - WIPE - c @ wipe serious
@@ -510,10 +479,9 @@
          r ""
          tag "Get everything after wipe and obtain nothing"
 
-       - c @ put p nested
-                 v 1 list 1 Jan
-                          2 Jip
-                   2 open
+       - c @ put nested 1 list 1 Jan
+                               2 Jip
+                        2 open
          tag "Setting a nested list"
 
        - c @ wipe nested 1 list 1
@@ -527,9 +495,9 @@
        - c @ wipe
          tag "Wipe everything"
 
-- "GET WITH CONTEXT" - c @ put v employee price 15
-                                 friend price 20
-                                 price 30
+- "GET WITH CONTEXT" - c @ put employee price 15
+                               friend price 20
+                               price 30
                        tag "Initialize the three prices"
 
                      - c @
@@ -542,8 +510,7 @@
                        r 30
                        tag "Get outermost price"
 
-                     - c @ put p employee gets
-                               v @ price
+                     - c @ put employee gets @ price
                        tag "Set reference to employee price"
 
                      - c @ employee gets
@@ -551,8 +518,7 @@
                          @ price
                        tag "Get employee price"
 
-                     - c @ put p friend gets
-                               v @ price
+                     - c @ put friend gets @ price
                        tag "Set reference to friend price"
 
                      - c @ friend gets
@@ -560,8 +526,7 @@
                          @ price
                        tag "Get friend price"
 
-                     - c @ put p outside gets
-                               v @ price
+                     - c @ put outside gets @ price
                        tag "Set reference to outside price"
 
                      - c @ outside gets
@@ -571,26 +536,24 @@
 
                      - c @ wipe
 
-                     - c @ put v inside list 1 no
-                                             2 maybe
-                                        ref @ list 3
-                                 list 3 yes
+                     - c @ put inside list 1 no
+                                           2 maybe
+                                      ref @ list 3
+                               list 3 yes
 
                      - c @ inside ref
                        r = ""
                          @ list 3
                        tag "Get walks up with a single hook, doesn't find anything"
 
-                     - c @ put p inside list 3
-                               v ""
+                     - c @ put inside list 3 ""
 
                      - c @ inside ref
                        r = ""
                          @ list 3
                        tag "Get walks up with a single hook, finds an empty text and stops there"
 
-                     - c @ put p inside list 3
-                               v yes
+                     - c @ put inside list 3 yes
 
                      - c @ inside ref
                        r = yes
@@ -599,11 +562,11 @@
 
                      - c @ wipe
 
-- "GET WITH DOT" - c @ put v employee @ . price
-                                      price 15
-                             @ . price
-                             price 30
-                             z @ . price
+- "GET WITH DOT" - c @ put employee @ . price
+                                    price 15
+                           @ . price
+                           price 30
+                           z @ . price
                    tag "Set two prices and three dot references"
 
                  - c @
@@ -620,16 +583,18 @@
 
                  - c @ wipe
 
-- PUT - c @ put v key value
+- PUT - c @ put key value
       - c @
         r dialog 1 c "@ wipe"
                    from user
+                   hide 1
                    id <OMITTED>
                    ms <OMITTED>
                    r ok
                    to cell
-                 2 c "@ put v key value"
+                 2 c "@ put key value"
                    from user
+                   hide 1
                    id <OMITTED>
                    ms <OMITTED>
                    r ok
@@ -639,18 +604,18 @@
         tag "Get dataspace including dialog"
 
       - c @ wipe
-      - c @ put p key
-                v value
+      - c @ put key value
       - c @
         r dialog 1 c "@ wipe"
                    from user
+                   hide 1
                    id <OMITTED>
                    ms <OMITTED>
                    r ok
                    to cell
-                 2 c "@ put p key
-                            v value"
+                 2 c "@ put key value"
                    from user
+                   hide 1
                    id <OMITTED>
                    ms <OMITTED>
                    r ok
@@ -661,51 +626,58 @@
 
       - c @ wipe
 
-      - c @ put v data list - a
-                            - b
+      - c @ put data list - a
+                          - b
 
-      - c @ put p data
-                v just one path
+      - c @ put data just this path
 
       - c @ data
-        r just one path
-        tag "Overwrite prefix with multiple paths with one single path"
+        r just this path
+          list 1 a
+               2 b
+        tag "Add another path to a partially overlapping prefix"
 
-      - c @ put p data
-                v simple
+      - c @ put data simple
 
       - c @ data
         r simple
         tag "Overwrite long path with a short one"
 
-      - c @ put p data
-                v hash 1
+      - c @ put data hash 1
 
-      - c @ put p data 2
-                v 3
-        r error "The path `data hash 1` is setting a hash but there is already a list at path `data`"
-        tag "Attempt to add a list path to a hash"
-
-      - c @ put p data more
-                v 3
+      - c @ put data 2 3
 
       - c @ data
-        r hash 1
-          more 3
-        tag "Add another path to a hash prefix"
+        r 2 3
+        tag "Replace a hash with a list"
+
+      - c @ put data more 3
+
+      - c @ data
+        r more 3
+        tag "Replace a list with a list"
 
       - c @ wipe
 
-      - c @ put p foo
-                v ""
-        r ok
+      - c @ put 1
+        r error "Cannot set entire dataspace to something that is not a hash"
+        tag "Cannot overwrite entire dataspace with number"
+
+      - c @ put foo
+        r error "Cannot set entire dataspace to something that is not a hash"
+        tag "Cannot overwrite entire dataspace with text"
+
+      - c @ put 1 list
+        r error "Cannot set entire dataspace to something that is not a hash"
+        tag "Cannot overwrite entire dataspace with list"
+
+      - c @ put foo ""
 
       - c @
         r foo ""
         tag "Empty text is set and retrieved"
 
-      - c @ put p ""
-                v bar
+      - c @ put "" bar
 
       - c @
         r foo ""
@@ -717,44 +689,36 @@
         tag "Get value from path that has an empty text"
 
       - c @ wipe
-      - c @ put v list 1 a
-                       2 b
 
-      - c @ put p list foo
-                v bar
-        r error "The path `list foo bar` is setting a hash but there is already a list at path `list`"
-        tag "Attempt to add a hash path to a list"
+      - c @ put hash one thing
 
-      - c @ wipe
-
-      - c @ put v hash one thing
-
-      - c @ put p hash "
-                              bar"
-                v yes
+      - c @ put hash "
+                            bar" yes
       - c @ hash
         r one thing
           "
                  bar" yes
         tag "Retrieve a value with a path with a step that is multiline text"
 
-      - c @ put p dialog
-                v 1
+      - c @ put dialog 1
         r error "A dialog cannot be supressed by force."
         tag "Forbid putting to the dialog"
 
-      - c @ put p foo bar jip
-                      oh yeah
-                v 1
-        r error "Only one path can be put at the same time, but received multiple paths: foo bar jip, foo oh yeah"
-        tag "Forbid putting multiple paths at the same time"
+      - c @ wipe
+
+      - c @ put foo bar jip 1
+                oh yeah 1
+
+      - c @
+        r foo bar jip 1
+          oh yeah 1
+        tag "Allow putting multiple paths at the same time"
 
       - c @ wipe
 
-- "PUT WITH CONTEXT PATH" - c @ put v hook something
+- "PUT WITH CONTEXT PATH" - c @ put hook something
 
-                          - c @ put p value
-                                    v 1
+                          - c @ put value 1
                             context - foo
 
                           - c @
@@ -763,17 +727,15 @@
                             tag "Context path does not make a difference if there is no hook"
 
                           - c @ wipe
-                          - c @ put v hook value 0
-                          - c @ put p value
-                                    v 1
+                          - c @ put hook value 0
+                                    value 1
 
                           - c @
                             r hook value 0
                               value 1
                             tag "Hook without context is irrelevant"
 
-                          - c @ put p value
-                                    v 2
+                          - c @ put value 2
                             context - hook
 
                           - c @
@@ -783,11 +745,10 @@
 
                           - c @ wipe
 
-                          - c @ put v mothership count 1
-                                                 deeper context
+                          - c @ put mothership count 1
+                                               deeper context
 
-                          - c @ put p count
-                                    v 2
+                          - c @ put count 2
                             context - mothership
                                     - deeper
                                     - context
@@ -798,13 +759,12 @@
 
                           - c @ wipe
 
-                          - c @ put v inside list 1 no
-                                                  2 maybe
-                                      list 1 outer
+                          - c @ put inside list 1 no
+                                                2 maybe
+                                    list 1 outer
 
 
-                          - c @ put p list 3
-                                    v yes
+                          - c @ put list 3 yes
                             context - inside
                                     - list
                                     - 1
@@ -816,11 +776,9 @@
                               list 1 outer
                             tag "Put walks up with a single hook, finds something"
 
-                          - c @ put p inside list 3
-                                    v ""
+                          - c @ put inside list 3 ""
 
-                          - c @ put p list 3
-                                    v yes
+                          - c @ put list 3 yes
                             context - inside
                                     - list
                                     - 1
@@ -834,19 +792,17 @@
 
                           - c @ wipe
 
-- "PUT WITH DOT" - c @ put v ball 1
-                             pit ball 2
+- "PUT WITH DOT" - c @ put ball 1
+                           pit ball 2
 
-                 - c @ put p . ball
-                           v 3
+                 - c @ put . ball 3
 
                  - c @
                    r ball 3
                      pit ball 2
                    tag "Use dot without context"
 
-                 - c @ put p . ball
-                           v 4
+                 - c @ put . ball 4
                    context - completely
                            - different
 
@@ -856,8 +812,7 @@
                      pit ball 2
                    tag "Use dot with non-existing context, creates the context"
 
-                 - c @ put p . ball
-                           v 5
+                 - c @ put . ball 5
                    context - pit
 
                  - c @
@@ -868,8 +823,8 @@
 
 - RESPOND - c @ wipe
 
-          - c @ put v foo 10
-                      reffoo @ foo
+          - c @ put foo 10
+                    reffoo @ foo
             r ok
             tag "Set a reference to foo"
 
@@ -879,8 +834,7 @@
                      @ foo
             tag "Get the reference to foo"
 
-          - c @ put p foo
-                    v 20
+          - c @ put foo 20
             tag "Update foo"
 
           - c @
@@ -889,8 +843,7 @@
                      @ foo
             tag "Check that the reference to foo has an updated value"
 
-          - c @ put p reffoo =
-                    v 30
+          - c @ put reffoo = 30
             tag "Overwrite the = key of the reference"
 
           - c @
@@ -899,8 +852,7 @@
                      @ foo
             tag "Check that overwriting the result made no difference"
 
-          - c @ put p a
-                    v @ nonesuch
+          - c @ put a @ nonesuch
 
           - c @ a
             r = ""
@@ -909,9 +861,9 @@
 
           - c @ wipe
 
-          - c @ put v counter 1
-                      indirect @ users @ counter
-                      users 1 jip
+          - c @ put counter 1
+                    indirect @ users @ counter
+                    users 1 jip
 
           - c @
             r counter 1
@@ -922,9 +874,9 @@
             tag "Use a reference to reference a certain element of a list (two references side by side)"
 
           - c @ wipe
-          - c @ put v aqualung great
-                      indirect @ score @ aqualung
-                      score great 100
+          - c @ put aqualung great
+                    indirect @ score @ aqualung
+                    score great 100
 
           - c @
             r aqualung great
@@ -935,9 +887,9 @@
             tag "Use a reference to reference a certain element of a hash (two references side by side)"
 
           - c @ wipe
-          - c @ put v closet sock
-                      house @ room
-                      room @ closet
+          - c @ put closet sock
+                    house @ room
+                    room @ closet
 
           - c @
             r closet sock
@@ -949,8 +901,8 @@
             tag "Make a reference to a reference in order ba//dc//cb"
 
           - c @ wipe
-          - c @ put v foo bar
-                      joo @ jip
+          - c @ put foo bar
+                    joo @ jip
 
           - c @
             r foo bar
@@ -958,7 +910,7 @@
                   @ jip
             tag "Make a reference to a reference in order ba//cb//dc, step one"
 
-          - c @ put v jip @ foo
+          - c @ put jip @ foo
 
           - c @
             r foo bar
@@ -970,10 +922,10 @@
             tag "Make a reference to a reference in order ba//cb//dc, step two"
 
           - c @ wipe
-          - c @ put v location trompe 1
-                      pixies trompe 1 "alec eiffel"
-                                    2 mons
-                      song @ pixies @ location
+          - c @ put location trompe 1
+                    pixies trompe 1 "alec eiffel"
+                                  2 mons
+                    song @ pixies @ location
 
           - c @ song
             r = "alec eiffel"
@@ -982,11 +934,11 @@
             tag "Two references side by side, the right one resolving to a one-line hash"
 
           - c @ wipe
-          - c @ put v list 1 place
-                           2 without
-                           3 a
-                           4 postcard
-                      ref @ list
+          - c @ put list 1 place
+                         2 without
+                         3 a
+                         4 postcard
+                    ref @ list
 
           - c @ ref
             r = 1 place
@@ -996,8 +948,7 @@
               @ list
             tag "Reference a list"
 
-          - c @ put p list
-                    v REDACTED
+          - c @ put list REDACTED
 
           - c @
             r list REDACTED
@@ -1006,9 +957,9 @@
             tag "Overwrite referenced list by text"
 
           - c @ wipe
-          - c @ put v main stores 2
-                           total @ widgets
-                      widgets 10
+          - c @ put main stores 2
+                         total @ widgets
+                    widgets 10
 
           - c @
             r main stores 2
@@ -1018,11 +969,11 @@
             tag "Reference inside a hash"
 
           - c @ wipe
-          - c @ put v ned 1 a A C
-                          2 b B D
-                      quinella 1 a
-                               2 b
-                      ref @ ned @ quinella
+          - c @ put ned 1 a A C
+                        2 b B D
+                    quinella 1 a
+                             2 b
+                    ref @ ned @ quinella
 
           - c @ ref
             r = A C
@@ -1043,10 +994,9 @@
 
           - c @ wipe
 
-- CONDITIONAL - c @ put p result
-                        v @ if cond @ count
-                               do yes!
-                               finally no!
+- CONDITIONAL - c @ put result @ if cond @ count
+                                    do yes!
+                                    finally no!
               - c @
                 r result = error "An if call has to be a hash with keys `cond`, `do` and `else`."
                          @ if cond = ""
@@ -1057,9 +1007,8 @@
 
               - c @ wipe
 
-              - c @ put p result
-                        v @ if do yes!
-                               else no!
+              - c @ put result @ if do yes!
+                                    else no!
 
               - c @
                 r result = error "An if call has to contain a `cond` key."
@@ -1069,10 +1018,10 @@
 
               - c @ wipe
 
-              - c @ put v count 1
-                          result @ if cond @ count
-                                      do yes!
-                                      else no!
+              - c @ put count 1
+                        result @ if cond @ count
+                                    do yes!
+                                    else no!
 
               - c @
                 r count 1
@@ -1083,8 +1032,7 @@
                               else no!
                 tag "If with truthy cond"
 
-              - c @ put p count
-                        v 0
+              - c @ put count 0
 
               - c @
                 r count 0
@@ -1095,9 +1043,9 @@
                               else no!
                 tag "If with falsy cond"
 
-              - c @ put p result
-                        v @ if cond @ count
-                               else no!
+              - c @ wipe result @ if
+              - c @ put result @ if cond @ count
+                                    else no!
 
               - c @
                 r count 0
@@ -1107,8 +1055,7 @@
                               else no!
                 tag "If with falsy cond and no do"
 
-              - c @ put p count
-                        v 1
+              - c @ put count 1
 
               - c @
                 r count 1
@@ -1120,10 +1067,10 @@
 
               - c @ wipe
 
-              - c @ put v count 0
-                          inner count 1
-                                result @ if cond @ count
-                                            else no!
+              - c @ put count 0
+                        inner count 1
+                              result @ if cond @ count
+                                          else no!
 
               - c @
                 r count 0
@@ -1136,10 +1083,10 @@
 
               - c @ wipe
 
-              - c @ put v count 1
-                          result @ if cond @ count
-                                      do foo 2
-                                         bar 1
+              - c @ put count 1
+                        result @ if cond @ count
+                                    do foo 2
+                                       bar 1
 
               - c @
                 r count 1
@@ -1153,10 +1100,10 @@
 
               - c @ wipe
 
-              - c @ put v count 1
-                          result @ if cond @ count
-                                      do 2 foo
-                                         1 bar
+              - c @ put count 1
+                        result @ if cond @ count
+                                    do 2 foo
+                                       1 bar
 
               - c @
                 r count 1
@@ -1170,8 +1117,8 @@
 
               - c @ wipe
 
-- SEQUENCE - c @ put v invalid @ do
-                       ref @ invalid 1
+- SEQUENCE - c @ put invalid @ do
+                     ref @ invalid 1
 
            - c @
              r invalid = error "The definition of a sequence must contain a message name and at least one step."
@@ -1181,8 +1128,7 @@
              tag "Invoke a sequence that is invalid (no message name, no step)"
              note "We do not get an error because `invalid` points to a hash, so if we get `invalid 1`, we get nothing at all."
 
-           - c @ put p invalid
-                     v @ do - 1
+           - c @ put invalid @ do - 1
 
            - c @
              r invalid = error "The definition of a sequence must contain a textual name for its message."
@@ -1191,19 +1137,18 @@
                    @ invalid 1
              tag "Invoke a sequence that is invalid (no message name)"
 
-           - c @ put p invalid
-                     v @ do seq - 1
+           - c @ put invalid @ do do - 1
 
            - c @
-             r invalid = error "The name of the message cannot be `seq`."
-                       @ do seq 1 1
-               ref = error "The name of the message cannot be `seq`."
+             r invalid = error "The name of the message cannot be `do`."
+                       @ do do 1 1
+               ref = error "The name of the message cannot be `do`."
                    @ invalid 1
              tag "Invoke a sequence that is invalid (invalid message name)"
 
-           - c @ put p invalid
-                     v @ do one - thing
-                            another - thing
+           - c @ wipe invalid
+           - c @ put invalid @ do one - thing
+                                  another - thing
 
            - c @
              r invalid = error "The definition of a sequence can only contain a single name for its message."
@@ -1214,8 +1159,9 @@
              tag "Invoke a sequence that is invalid (multiple message names)"
 
 
-           - c @ put p invalid
-                     v @ do this 2 thing
+           - c @ wipe invalid
+
+           - c @ put invalid @ do this 2 thing
 
            - c @
              r invalid = error "The definition of a sequence must start with step number 1."
@@ -1224,9 +1170,10 @@
                    @ invalid 1
              tag "Invoke a sequence that is invalid (sequence doesn't start at 1)"
 
-           - c @ put p invalid
-                     v @ do this 1 thing
-                                 3 please
+           - c @ wipe invalid
+
+           - c @ put invalid @ do this 1 thing
+                                       3 please
 
            - c @
              r invalid = error "The definition of a sequence cannot have non-consecutive steps."
@@ -1237,34 +1184,45 @@
              tag "Invoke a sequence that is invalid (sequence skips one step)"
 
            - c @ wipe
-           - c @ put v eleven @ plus1 10
-                       plus1 @ do int - @ + - @ int
-                                            - 1
+
+           - c @ put multilove @ a thing
+                                 something else
+
+           - c @
+             r multilove = error "Only one call per prefix is allowed"
+                         @ a thing
+                           something else
+             tag "Only one call allowed per prefix"
+
+           - c @ wipe
+
+           - c @ put eleven @ plus1 10
+                     plus1 @ do int - @ + - @ int
+                                          - 1
 
            - c @
              r eleven = 11
                       : int 10
-                        seq - = 11
-                              @ + - = 10
-                                    @ int
-                                  - 1
+                        do - = 11
+                             @ + - = 10
+                                   @ int
+                                 - 1
                       @ plus1 10
                plus1 = int 1
                      @ do int - @ + - @ int
                                     - 1
              tag "Valid sum: ten plus one"
 
-           - c @ put p plus1
-                     v @ do int - @ + - @ int
-                                      - 2
+           - c @ put plus1 @ do int - @ + - @ int
+                                          - 2
 
            - c @
              r eleven = 12
                       : int 10
-                        seq - = 12
-                              @ + - = 10
-                                    @ int
-                                  - 2
+                        do - = 12
+                             @ + - = 10
+                                   @ int
+                                 - 2
                       @ plus1 10
                plus1 = int 1
                      @ do int - @ + - @ int
@@ -1273,17 +1231,17 @@
 
            - c @ wipe
 
-           - c @ put v eleven @ nested plus1 10
-                       nested plus1 @ do int - @ + - @ int
-                                                   - 1
+           - c @ put eleven @ nested plus1 10
+                     nested plus1 @ do int - @ + - @ int
+                                                 - 1
 
            - c @
              r eleven = 11
                       : int 10
-                        seq 1 = 11
-                              @ + - = 10
-                                    @ int
-                                  - 1
+                        do 1 = 11
+                             @ + - = 10
+                                   @ int
+                                 - 1
                       @ nested plus1 10
                nested plus1 = int 1
                             @ do int 1 @ + - @ int
@@ -1292,56 +1250,51 @@
 
            - c @ wipe
 
-           - c @ put v call @ def bar 1
-                                  foo 2
-                       def @ do message 1 @ message
+           - c @ put call @ def bar 1
+                                foo 2
+                     def @ do message 1 @ message
 
            - c @
              r call = bar 1
                       foo 2
                     : message bar 1
                               foo 2
-                      seq 1 = bar 1
-                              foo 2
-                            @ message
+                      do 1 = bar 1
+                             foo 2
+                           @ message
                     @ def bar 1
                           foo 2
                def = message 1
                    @ do message 1 @ message
              tag "Call a sequence with a message that is a hash"
 
-           - c @ put p call
-                     v @ do n - @ if cond 1
-                                     do nosuchcall bar
-           - c @ put p fizzbuzz
-                     v @ do n - @ put p : output
-                                        v ""
-                              - @ if cond @ % - @ n
-                                              - 3
-                                     else @ push p output
-                                                 v fizz
-                              - @ if cond @ % - @ n
-                                              - 5
-                                     else @ push p output
-                                                 v buzz
-                              - @ output
+           - c @ put call @ do n - @ if cond 1
+                                        do nosuchcall bar
+
+           - c @ put fizzbuzz @ do n - @ put : output ""
+                                     - @ if cond @ % - @ n
+                                                     - 3
+                                            else @ push output fizz
+                                     - @ if cond @ % - @ n
+                                                     - 5
+                                            else @ push output buzz
+                                     - @ output
              tag "Define fizzbuzz"
 
-           - c @ put p "fizzbuzz 15"
-                     v @ !izzbuzz 15
+           - c @ put "fizzbuzz 15" @ !izzbuzz 15
              tag "Fizzbuzz 15"
 
            - c @ wipe
-           - c @ put v eleven @ plus1 10
-                       plus1 @ do int - @ + - @ int
-                                            - 1
+           - c @ put eleven @ plus1 10
+                     plus1 @ do int - @ + - @ int
+                                          - 1
            - c @
              r eleven = 11
                       : int 10
-                        seq - = 11
-                              @ + - = 10
-                                    @ int
-                                  - 1
+                        do - = 11
+                             @ + - = 10
+                                   @ int
+                                 - 1
                       @ plus1 10
                plus1 = int 1
                      @ do int - @ + - @ int
@@ -1349,4 +1302,3 @@
              tag "Valid sum"
 
            - c @ wipe
-

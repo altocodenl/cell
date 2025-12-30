@@ -1,0 +1,3 @@
+Eighteenth episode of season 4! I'm building a programming environment from scratch while recording myself. Don't have the brain to annotate all the code, but thankfully enough brain to get it all working again! Next up is a short polish of wipe and then we're really ready to tackle cell.respond, and, more generally, the remaining parts of fivelogic (or is it sevenlogic?).
+
+https://github.com/altocodenl/cell

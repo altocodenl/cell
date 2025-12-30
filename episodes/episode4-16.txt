@@ -1,0 +1,9 @@
+Sixteenth episode of season 4! I'm building a programming environment from scratch while recording myself. A couple more tests, a couple more bugs and we'll be there with the new put. Dot mode is working.
+
+https://github.com/altocodenl/cell
+
+Hi! Let's continue for a bit.
+
+Yeah, we need to add back the dot mode.
+
+I think it's working now.

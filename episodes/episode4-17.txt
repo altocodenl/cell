@@ -1,0 +1,3 @@
+Seventeenth episode of season 4! I'm building a programming environment from scratch while recording myself. Struggling to get the new put to work. Found two corner cases to prevent.
+
+https://github.com/altocodenl/cell
