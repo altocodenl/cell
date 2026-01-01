@@ -1,0 +1,21 @@
+Nineteenth episode of season 4! I'm building a programming environment from scratch while recording myself. Not planned, but we got our diff in put and it looks great. We also are making progress in understanding the alien technology from season 2/3 which powers cell.respond.
+
+Hi! Happy 2026! Silent episode today.
+
+Where were we?
+
+Hmmm, we could actually make put respond with a diff. That could be interesting.
+
+Going through the todo list, unifying stuff.
+
+Hi again! I was going for ten minutes straight without realizing I wasn't recording. Oh well...
+
+Silent episode today.
+
+Hah! I cannot use - for diffs! Because it will be interpreted as a list element. Didn't see that one coming.
+
+Wow, I just made it half as fast again! But I like the diffs.
+
+I'm going to stop here. But this is going somewhere. Slow, but going somewhere.
+
+Thanks for watching!

@@ -47,24 +47,46 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 ### Demo
 
 - Language
-   - Sequence + reworked cell.get/put (including cell.respond)
-      - Annotate cell.put
-      - Wipe: multipath, wipe in context (walking up)
-      - Fully define fizzbuzz (single fizzbuzz) and html generation/validation, make sure that get and put with single hook work with it.
-      - Reimplement cell.respond fully understanding the algorithm, including the commas.
-         - Understand the naive, from the top approach.
-         - Add dependents/dependencies to only recalculate what's necessary.
-      - Be able to pass sequences to do/else in cell.if; do we need an expansion? If we don't, can we also not need an expansion (:) on cell.do and cell.loop, when we pass lambdas to them?
-   - Loop
-   - Implement fizzbuzz & html validation/generation
-   - Single entrypoint at cell.call
+   - @ put
+      - Annotate
+   - @ wipe
+      - multipath
+      - wipe in context (walking up)?
+   - cell.respond
+      - Understand the naive, from the top approach.
+      - Add dependents/dependencies to only recalculate what's necessary.
+   - @ if
+      - Pass lambdas in do/else
+   - @ do
+      - fizzbuzz (single return fizzbuzz)
+      - html generation/validation
+      - allow for multiple args (destructuring of lists or hashes) and no args (the sequence just there)
+      - test two step calls
+      - test stop
+      - test nested calls
+      - test recursive calls
+      - test descending funarg (pass function)
+      - test ascending funarg (return function)
+      - Loop
+      - Implement fizzbuzz & html validation/generation
+   - cell.call
+      - Single entrypoint
+      - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+   - @ catch
 - Upload: upload that stores the file in the dataspace, as well as the data
-- Data handling
-   - Count
-   - Sum
-   - Aggregate
-   - Duplicates
-- @ is
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+- cell.native
+   - count
+   - sum
+   - duplicates
+   - push/lepush (left push)
+   - pop, lepop
+- @ rule
+   - type
+   - equality
+   - range (for numbers): >, <, >=, <=
+   - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
+   - any other logic, really, the full language is there
 - @ view
    - Serving the view
    - HTML generation
@@ -207,58 +229,12 @@ TODO
 
 ### Language
 
-- Text to paths [DONE]
-   - Dedash
-   - Sort
-   - Validate
-- Paths to text [DONE]
-- JS to paths & paths to JS [DONE]
-- Reference (cell.get) [DONE]
-- Storage (cell.put) [DONE]
-   - [TODO] Experiment with put without v: just assume it is v. Also put without v, assume it is "". This is for initialization. And always return the old value and the new value. If the old value was nothing (not even an empty text), just return one value? No, because it could be ambiguous with some lists. Return a list with one item. So we have a diff. Or better: from and to.
-   - [TODO] Give back a diff of paths instead of "ok"
-   - [TODO] Make v without p also overwrite things that are there
-- Entrypoint (cell.call) -- must rework.
-   - Have an unified interface through cell.call.
-   - Make cell.call return text, not paths. This would also improve the tests readability, perhaps.
-- Rewrite all the existing tests and add new ones for anything untested.
-- Sequence (cell.do)
-   - Figure out how the expansion looks
-   - Rework sequence so that it puts the expansions on each step, rather than on :. Use : only for common variables of the expansion, like the message.
-   - Check if when redefining a sequence, and the redefinition has less steps than the original one, the extra steps of the previous expansion are also removed.
-   - Allow early response with `response`
-   - allow for multiple args (destructuring of lists) and no args (the sequence just there)
-   - test fizzbuzz (http://localhost:2315/#/river-chair-phone)
-   - test two step calls
-   - test stop
-   - test nested calls
-   - test recursive calls
-   - test descending funarg (pass function)
-   - test ascending funarg (return function)
-- Loops (cell.loop)
-- Upload
-   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
-   - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
-- Native calls
-   - Allow single paths with multiple values for native calls for shorter notation.
-   - add validations
-   - allow + for text, + - for lists/hashes (for lists, by value, for hashes, by key), % for intersection.
-   - test each of them, also with multiple arguments
-- More calls: edit, push, lepush (left add), pop, lepop
-- error (catch)
 - search (general call to get matching paths)
 - replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
 - wall (block walking up, but not down)
-- check: validation function
-   - type
-   - equality
-   - range (for numbers): >, <, >=, <=
-   - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
-   - any other logic, really, the full language is there
 - diff: takes one or two points of the dialog and gives you a diff.
 - access masks
 - Recursive lambdas by referencing itself?
-- Efficient recalculation in cell.respond
 - @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
 
 ### Engine
@@ -469,6 +445,76 @@ view
 
 ## Development notes
 
+### 2026-01-01
+
+The diff responded by @ put or @ wipe can be gone when things change, but it stays always in the dialog.
+
+I need to make wipe not delete the dialog. But I don't need it yet. Let's let that emerge.
+
+I wonder if the diff returned by put should be with absolute or relative paths. Relative would be without the context path. But then, how would we really know what it replaced? I need to see it concretely.
+
+We can use x instead of - for removed paths.
+
+Wait, the sorting is useless if I do it on + and x. I need to make those as a list that is smartly sorted. But how nice would it look? Let's go without this sorting, perhaps the calls to put are small enough that we can track the changes. It's not about the challenge of writing the code. I don't like every item of the diff prepended by a -, it's a lot of noise.
+
+Wait, the sorting is useless if I do it on + and x. I need to make those as a list that is smartly sorted. But how nice would it look?
+
+With default sorting, + comes before x. Another git/myers convention broken. Let's see how it unfolds.
+
+put is THE diff maker! It's 2026 and I've finally arrived to "first class edits".
+
+I'm really liking absolute paths in the diffs responded by @ put. Also love how the dot goes away.
+
+I can't wait to actually be able to program in cell. Like, really program.
+
+Thinking about respond. Perhaps it's not that difficult after all, and I'm just needing some clarity.
+
+- Everything to the left of the first @ is context. Absolute.
+- Everything to the right of the last @ is pure value. It's what we set it to.
+- The part between the first @ and the last @ is the trickiest. This determines the actual absolute path. This is the part that walks up.
+- The @ on the leftmost @ do is considered the last @. Everything after it, including "do", is pure value. This is how cell.respond freezes calls.
+
+How can the value we get in cell.respond be empty that we have to go look for @ do? Ah, it's because we pass a message that's presumably not defined in the path! foo might be defined, but foo 1 is not. That's why we try with @ do.
+
+I'm thinking we should try from the left, not the right.
+
+It shouldn't be over the entire value path, but rather -1, since the last item has to be the message.
+
+```
+eleven @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+How would the expansion happen?
+
+Round 1: path 1
+
+```
+context eleven
+target eleven
+value @ plus1 10
+
+Resolving value:
+- Not an if or do
+- Direct get:
+   - `eleven plus1 10` finds nothing
+   - `plus1 10` finds nothing
+- Find a sequence:
+   - `eleven plus1 @ do` finds nothing
+   - `plus1 @ do` finds something!
+
+definitionPath plus1 @ do
+message 10
+```
+
+### 2025-12-31
+
+https://www.tarsnap.com/open-source.html
+"Tarsnap has a policy of contributing each year an amount equal to its gross profits for the month of December to support open source software."
+
+Idea: user prompt as a bubble up that can be caught! But we need a continuation there. Do we also need continuations on stop? If you look at it as a value, you'd almost have to rewrite things. Could you just delete the errors (bubbling down) or even replace them with the override, so that the sequence can continue?
+
 ### 2025-12-30
 
 === Outline of a paper on cell:
@@ -476,10 +522,10 @@ view
    - Building is like writing
       - Global communication
       - Tool of thought
-      - Creating artifacts that stand on their own.
+      - Creating artifacts that stand on their own. System building is building a representation.
    - Understanding is the key to building
-      - Understanding as having a good representation of the system.
-      - Systems as representations.
+      - Understanding is building a representation of the system.
+      - Outline of a theory of complexity defined against difficulty of understanding.
    - Understanding can be easier by removing the five obstacles
       - Low-noise way to look at data: fourdata. Compare to yaml, json, csv. Relate to autopoiesis in that the paths don't point to the data, they are the data.
       - Unified dataspace. Relate to the web.
@@ -5706,6 +5752,8 @@ TODO
 
 The validation that goes in the sorter prevents a tie between two paths that have different lengths but have the same prefixer. But that assumes that validation comes before sorting, which is not the case!
 We take the minimum length and compare on that. If we still get a 0, that means that the short one is a prefix of the long one. In that case, the short one goes first. We make it 0 by default in case we're comparing two empty paths.
+numbers first
+= goes before :
 
 #### `cell.pathsToText`
 
@@ -5870,6 +5918,7 @@ We join all the lines with newlines and return the result. This finishes `cell.p
 #### `cell.JSToPaths`
 
 TODO
+Invalid values (nan, null, but not undefined) are returned as empty text
 
 #### `cell.pathsToJS`
 
