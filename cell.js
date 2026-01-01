@@ -212,11 +212,9 @@ cell.sorter = function (paths) {
    var compare = function (v1, v2) {
       if (v1 === v2) return 0;
       var types = [type (v1) === 'string' ? 'text' : 'number', type (v2) === 'string' ? 'text' : 'number'];
-      // Numbers first.
       if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
       if (types [0] === 'number') return v1 - v2;
 
-      // = goes before :
       if (v1 === '=' && v2 === ':') return -1;
       if (v1 === ':' && v2 === '=') return 1;
 
@@ -231,7 +229,6 @@ cell.sorter = function (paths) {
    });
 }
 
-// Assumes that paths are dedashed and sorted!
 cell.validator = function (paths) {
 
    var seen = {};
@@ -312,7 +309,6 @@ cell.JSToPaths = function (v, paths) {
       if (Type === 'boolean') return v ? 1 : 0;
       if (Type === 'date') return v.toISOString ();
       if (teishi.inc (['regex', 'function', 'infinity'], Type)) return v.toString ();
-      // Invalid values (nan, null, but not undefined) are returned as empty text
       return '';
    }
 
@@ -777,7 +773,6 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
 
    var dataspace = get ();
 
-   // The object deduplicates paths with the same hooks.
    var hooks = dale.obj (paths, function (path) {
       var dotMode = path [0] === '.';
       return [JSON.stringify (path [dotMode ? 1 : 0]), dotMode];
@@ -816,6 +811,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
       });
    });
 
+   var removed = [];
    dataspace = dale.fil (dataspace, undefined, function (path) {
       if (hooks [JSON.stringify (path [0])] === -1) return path;
       var remove = dale.stop (path.slice (0, path.length - 1), true, function (step, k) {
@@ -829,6 +825,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
          if (seen [key] !== t || lastStep) return true;
       });
       if (! remove) return path;
+      else removed.push (path);
    }).concat (paths);
 
    cell.sorter (dataspace);
@@ -838,7 +835,11 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
       return cell.respond (path, get, put);
    });
 
-   return [['ok']];
+   return dale.go (paths, function (path) {
+      return ['diff', '+'].concat (path);
+   }).concat (dale.go (removed, function (path) {
+      return ['diff', 'x'].concat (path);
+   }));
 }
 
 cell.wipe = function (prefix, get, put) {
@@ -913,7 +914,7 @@ if (isNode && process.argv [2] === 'test') (function () {
          }
          // test.c has a call that is valid fourtext
          if (test.c !== undefined) {
-            // test.context is only present for a few calls to cell.put
+            // test.context is only present in a few calls to cell.put
             if (test.context) {
                var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
                var response = cell.pathsToText (cell.put (call, test.context, get, put));
@@ -923,11 +924,8 @@ if (isNode && process.argv [2] === 'test') (function () {
             }
          }
 
-         // Some test steps have no assertions because they are just setting the ground for the next test. We don't make any assertions over those -- except for the case of @ put, where if there are no assertions on the response, we want it to return `ok`
-         if (test.r === undefined) {
-            if (test.c ['@'] && test.c ['@'].put) test.r = 'ok';
-            else return;
-         }
+         // Some test steps have no assertions because they are just setting the ground for the next test. We don't make any assertions over those.
+         if (test.r === undefined) return;
 
          // Remove the dialog or omit id and ms
          response = cell.pathsToText (dale.fil (cell.textToPaths (response), undefined, function (path) {

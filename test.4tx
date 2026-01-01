@@ -382,11 +382,13 @@
               - c @ put party list 1 Jan
                                    2 Jip
                               open 1
-                r ok
+                r diff + party list 1 Jan
+                                    2 Jip
+                               open 1
                 tag "Create a hash with three paths"
 
               - c @ put serious business
-                r ok
+                r diff + serious business
                 tag "Create another hash"
 
               - c @
@@ -432,6 +434,10 @@
                 tag "Get the entire last path and obtain nothing"
 
               - c @ put party 1
+                r diff + party 1
+                       x party list 1 Jan
+                                    2 Jip
+                               open 1
                 tag "Overwrite prefix with multiple paths"
 
               - c @
@@ -442,6 +448,10 @@
               - c @ put party list 1 Jan
                                    2 Jip
                               open 1
+                r diff + party list 1 Jan
+                                    2 Jip
+                               open 1
+                       x party 1
                 tag "Restore party"
 
 - WIPE - c @ wipe serious
@@ -597,14 +607,13 @@
                    hide 1
                    id <OMITTED>
                    ms <OMITTED>
-                   r ok
+                   r diff + key value
                    to cell
           key value
         keepDialog 1
         tag "Get dataspace including dialog"
 
-      - c @ wipe
-      - c @ put key value
+      - c @ put something else
       - c @
         r dialog 1 c "@ wipe"
                    from user
@@ -618,11 +627,26 @@
                    hide 1
                    id <OMITTED>
                    ms <OMITTED>
-                   r ok
+                   r diff + key value
+                   to cell
+                 3 c @
+                   from user
+                   hide 1
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r dialog 3 r [OMITTED]
+                   to cell
+                 4 c "@ put something else"
+                   from user
+                   hide 1
+                   id <OMITTED>
+                   ms <OMITTED>
+                   r diff + something else
                    to cell
           key value
+          something else
         keepDialog 1
-        tag "Get dataspace including dialog (two path call)"
+        tag "Get dataspace including dialog after two more calls"
 
       - c @ wipe
 
@@ -638,24 +662,34 @@
         tag "Add another path to a partially overlapping prefix"
 
       - c @ put data simple
+        r diff + data simple
+               x data just this path
+                      list 1 a
+                           2 b
 
       - c @ data
         r simple
         tag "Overwrite long path with a short one"
 
       - c @ put data hash 1
+        r diff + data hash 1
+               x data simple
 
       - c @ put data 2 3
+        r diff + data 2 3
+               x data hash 1
 
       - c @ data
         r 2 3
         tag "Replace a hash with a list"
 
       - c @ put data more 3
+        r diff + data more 3
+               x data 2 3
 
       - c @ data
         r more 3
-        tag "Replace a list with a list"
+        tag "Replace a list with a hash"
 
       - c @ wipe
 
@@ -720,6 +754,7 @@
 
                           - c @ put value 1
                             context - foo
+                            r diff + value 1
 
                           - c @
                             r hook something
@@ -737,6 +772,8 @@
 
                           - c @ put value 2
                             context - hook
+                            r diff + hook value 2
+                                   x hook value 0
 
                           - c @
                             r hook value 2
@@ -752,6 +789,8 @@
                             context - mothership
                                     - deeper
                                     - context
+                            r diff + mothership count 2
+                                   x mothership count 1
 
                           - c @
                             r mothership count 2
@@ -768,6 +807,7 @@
                             context - inside
                                     - list
                                     - 1
+                            r diff + inside list 3 yes
 
                           - c @
                             r inside list 1 no
@@ -782,6 +822,8 @@
                             context - inside
                                     - list
                                     - 1
+                            r diff + inside list 3 yes
+                                   x inside list 3 ""
 
                           - c @
                             r inside list 1 no
@@ -796,6 +838,8 @@
                            pit ball 2
 
                  - c @ put . ball 3
+                   r diff + ball 3
+                          x ball 1
 
                  - c @
                    r ball 3
@@ -805,6 +849,7 @@
                  - c @ put . ball 4
                    context - completely
                            - different
+                   r diff + completely different ball 4
 
                  - c @
                    r ball 3
@@ -814,6 +859,8 @@
 
                  - c @ put . ball 5
                    context - pit
+                   r diff + pit ball 5
+                          x pit ball 2
 
                  - c @
                    r ball 3
@@ -825,7 +872,6 @@
 
           - c @ put foo 10
                     reffoo @ foo
-            r ok
             tag "Set a reference to foo"
 
           - c @
