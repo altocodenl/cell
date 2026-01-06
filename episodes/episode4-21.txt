@@ -1,0 +1,11 @@
+Twenty-first episode of season 4! I'm building a programming environment from scratch while recording myself. Debugging, debugging...
+
+Hi there!
+
+Starting late today, let's see if we can debug this.
+
+Found the issue. It took me forever!
+
+OK, so the first call to execute happens, then a nested sequence of cell.do -> cell.put happens, everything gets updated, but the first execute still returns a [['']] and that overrides the good result.
+
+Let's continue later...

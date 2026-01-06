@@ -1,0 +1,3 @@
+Twenty-second episode of season 4! I'm building a programming environment from scratch while recording myself. Finished the debugging! It all works! Well, fizzbuzz not yet. But at least that initial sequence is being properly executed, without any extra steps, and with full understanding. There were definitely things to improve.
+
+https://github.com/altocodenl/cell

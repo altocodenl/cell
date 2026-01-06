@@ -1,0 +1,3 @@
+Twentieth episode of season 4! I'm building a programming environment from scratch while recording myself. Massive debugging session about cell.respond, we are getting to understand how it works.
+
+https://github.com/altocodenl/cell

@@ -1245,7 +1245,6 @@
            - c @ put eleven @ plus1 10
                      plus1 @ do int - @ + - @ int
                                           - 1
-
            - c @
              r eleven = 11
                       : int 10

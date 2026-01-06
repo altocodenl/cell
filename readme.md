@@ -52,6 +52,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
    - @ wipe
       - multipath
       - wipe in context (walking up)?
+      - Must call cell.respond! Add test too.
    - cell.respond
       - Understand the naive, from the top approach.
       - Add dependents/dependencies to only recalculate what's necessary.
@@ -444,6 +445,281 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-06
+
+Ideas on the why/how/what of cell:
+- Speed should be a result, not the purpose.
+- "Understand what you build".
+- "Build on strong foundation"
+- **"Own what you build"**
+- The opposite of ownership is debt.
+- Build without debt.
+- Strong foundation one-two punch: understanding & flexibility.
+- Reduce effort to understand; reduce effort to change the system.
+- The two problems of tall stacks: huge effort to understand what's going on; and large effort to change the system.
+- The curiousness of strength in software: a strong foundation is a flexible foundation.
+- Make things as easy as possible to 1) understand and 2) change.
+- Ownership: 1) understand the system, know what it does and how; 2) be able to change it without fear of breaking it.
+
+https://datagubbe.se/endofciv/
+"I have at times fought long and hard against introducing pointless complexity, resulting in some wins and some (well, sadly, mostly) losses. The sad truth is of course that when push comes to shove, I prefer not defaulting on my mortgage over not adding more software complexity. Yes, we programmers play a large role in this, but so does the market - and other, tangential stuff, too."
+
+"I honestly believe that reducing workplace complexity would also, in the long run, reduce software complexity."
+
+Thinking about class vs type
+
+https://stackoverflow.com/a/25114770
+"In type theory terms;
+A type is an abstract interface.
+Types generally represent nouns, such as a person, place or thing, or something nominalized,
+A class represents an implementation of the type.
+It is a concrete data structure and collection of subroutines"
+
+In cell, the notion of abstraction is only an interface. Which is a call. A type is a class, which is the structure of what you expect something to be. This type or class is concrete in that it is implemented, but it conveys abstraction in that it has an interface. The interface is what you call, not the implementation. An interface gives you compression. But, in the end, it is all calls.
+
+OK, back to debugging:
+- How to debug faster:
+   - Just run this test
+   - Note a copy of the count variable so that recursive calls, when incrementing it, don't disturb it.
+- Return `true` from cell.do execute to indicate that there was a call to cell.put and that nothing should be placed there by cell.respond.
+
+Let's count the puts
+
+1. Initial
+2. Message
+3. First/only step of the sequence
+4. Reference
+5. Native
+6. Result on eleven
+7. Definition
+
+That's it! The eight is the one for the dialog. Returning true stopped unnecessary puts.
+
+Now for fully understanding the paths being responded.
+
+Every time there's a change we start over. Even with call prefix dependency tracking, this will be like this, only with less paths.
+
+The essence of the bug was then:
+
+- We were not sending a stopping value back from cell.do when it called cell.put.
+- We were not taking this stopping value in respond and 1) not updating the dataspace; 2) bubbling it up.
+
+See how the true final call (15) then wraps up the two recursive calls to definitions and they close without doing anything else.
+
+```
+(2026-01-06T20:43:27.369Z) respond 15:
+plus1 @ do int 1 @ + 1 @ int
+(2026-01-06T20:43:27.369Z) respond call 2:
+newValue 1
+path 1 eleven
+     2 @
+     3 plus1
+     4 10
+(2026-01-06T20:43:27.369Z) respond call 1:
+newValue 1
+path 1 eleven
+     2 @
+     3 plus1
+     4 10
+```
+
+The pattern of returning `true` to stop outer recursive calls is key. We already had done it between cell.respond and cell.put, but now we completed the circle by also doing it with cell.do. This is solid.
+
+### 2026-01-05
+
+Let's continue debugging. The thing goes off the rails at 289
+
+Found the issue. It took me forever!
+
+```
+(2026-01-05T21:27:14.102Z) respond 288:
+eleven @ plus1 10
+(2026-01-05T21:27:14.102Z) do:
+contextPath 1 eleven
+definitionPath 1 plus1
+               2 @
+               3 do
+message 1 1 10
+op execute
+(2026-01-05T21:27:14.103Z) respond put 288:
+eleven = ""
+(2026-01-05T21:27:14.103Z) put:
+diff + eleven = ""
+     x eleven = 11
+```
+
+Why eleven @ is not properly looked up?
+
+Ah, because @ plus1 now has a value so it's looked up. I need to add a way to shortcircuit this.
+
+No, no shortcircuit. We need to actually execute it again to see if it should change. We're not doing this properly in do.
+
+Am I losing it? How can a function executed once print twice, and different things to boot?
+
+```
+output? 56 {
+  definitionPath: [ 'plus1', '@', 'do' ],
+  contextPath: [ 'eleven' ],
+  op: 'execute'
+} [ [ 11 ] ]
+output? 56 {
+  definitionPath: [ 'plus1', '@', 'do' ],
+  contextPath: [ 'eleven' ],
+  op: 'execute'
+} [ [ '' ] ]
+```
+
+Same counter! I can go nuts now.
+
+It has to be a recursive call. But how?
+
+Earlier calls already trigger the recursive call on eleven,
+
+### 2026-01-03
+
+Aim for those who want to understand? Or to scientists/entrepreneurs?
+
+```
+- respond eleven @ plus1 10
+- execute context eleven
+          message 1 10
+          path plus1 @ do
+- put + eleven : int 10
+
+- respond eleven @ plus1 10
+- execute context eleven
+          path plus1 @ do
+- put + eleven : do 1 @ + 1 @ int
+                          2 1
+
+- respond eleven : do 1 @ + 1 @ int
+- reference context eleven : do 1
+            path int
+            value 10
+- put + eleven : do 1 @ + 1 = 10
+
+- respond eleven : do 1 @ + 1 = 10
+- native op +
+         value 1 = 10
+               1 @ int
+               2 1
+- put + eleven : do 1 = 11
+
+- respond eleven : do 1 @ + 1 = 10
+- native op +
+         value 1 = 10
+               1 @ int
+               2 1
+- noop
+
+- respond eleven : do 1 @ + 1 @ int
+- reference contextPath eleven : do 1
+            valuePath 1 int
+- noop
+
+- respond eleven @ plus1 10
+- execute contextPath 1 eleven
+          message 1 10
+          path plus1 @ do
+- diff + eleven = 11
+```
+
+What I'm re-learning:
+- @ do (execute) will respond with empty text until it finishes.
+- @ do (execute) will make its own puts directly when it is expanding (making an expansion).
+- Those calls to @ put from @ do make respond go through those new paths again.
+- Because the expansion goes above the @, when re-entering the dataspace to respond, we hit the expansion first (instead of the call). That's how the thing moves forward.
+- Interesting that you can already execute something whose definition hasn't been responded to. For example, the response of plus1 itself would be `= 1`, but we don't need that to be there for us to actually compute the sequence. Because we just read what we need from @ do.
+
+OK, so the sequence for the first path is done in 7 calls to respond:
+
+1. Put the messge in the expansion
+2. Put the first (and only) step of the sequence in the expansion
+3. Resolve the reference on the first path of the first step of the sequence in the expansion.
+4. Make the native call to +.
+5. Re-enter and get a noop on the path with the call to +.
+6. Re-enter and get a noop on the reference on the first path of the first step of the sequence in the expansion.
+7. Hit again the original path (eleven @ plus1 10), execute and now get a result (the response of the last step of the sequence).
+
+Clarification: a no-op is when the currentValue and the newValue are the same, no need to do anything, just proceed down the dataspace.
+
+After this happens, the following happens:
+
+8. Native no-op again.
+9. Reference no-op again.
+10. Execute no-op (for the first time).
+11. Finally, we go and expand plus1.
+
+```
+respond plus1 @ do int 1 @ + 1 @ int
+define contextPath plus1
+       path plus1 @ do
+put + plus1 = int 1
+```
+
+At this point, we'd be officially done. But we're going to go through the entire cycle again, but with no-ops. Let's see. Wait, there's a put below. Let's get surprised.
+
+12. Native no-op for the third time.
+13. Reference no-op for the third time.
+14. Execute no-op for the second time.
+15. Here we expect a no-op for the first time on the definition (plus1). But we get a call to replace `eleven 11` with `eleven ""`. This is wrong. But how?
+
+
+The final dataspace will look like this:
+
+```
+eleven = 11
+       : int 10
+         do - = 11
+              @ + - = 10
+                    @ int
+                  - 1
+       @ plus1 10
+plus1 = int 1
+      @ do int - @ + - @ int
+                     - 1
+```
+
+But here, there are only four paths that are "first calls", in that they have calls that have to be checked and stand for other paths with the same call prefix.
+
+```
+eleven : do - @ + - = 10      (native)
+eleven : do - @ + - @ int     (reference)
+eleven @ plus1 10             (execute sequence)
+plus1 @ do int - @ + - @ int  (define sequence)
+```
+
+Why it should be 15 steps?
+
+You start at execute sequence and add message (1). Then, add sequence (2). When we're here, all the "first calls" (or should we call them "call prefixes"?) are there.
+
+At the end of step 2, all the call prefixes are there? No, it's just 3 call prefixes, because @ int is not expanded yet.
+
+```
+eleven : int 10
+         do @ + - @ int
+                  - 1
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+Then, what happens is:
+
+```
+eleven : int 10
+         do @ + - = 10
+                  @ int
+                  - 1
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+After step 3, we do have all four call prefixes. Then, we respond to the first one with native (4), then get no-ops on native (5) and reference (6). Then we can respond to the third call prefix (7). Because there's a change, we go back to the top and get three no-ops (8-10). Then, we finally expand plus1 (11). Then, we go to the top again and hit four no-ops for all of the call prefixes (12-15). This should be the end of the response.
+
+The mechanism of expansions (never mind the bug that we'll solve, I don't think this is a discovery, just a bug) is that the expansion of a call prefix can put other call prefixes on top. Once any of these hit a change, we just go back to the top. Even when we have dependencies, a simmilar mechanism will happen, only on a smaller amount of paths, and what's the "top" will depend on the dependencies.
 
 ### 2026-01-01
 
@@ -6204,14 +6480,16 @@ Now imagine that we have a path that is `bar cocktail 5`. We may have `bar cockt
 
 So we are going to find out like this: we are going to iterate as many times as there are steps in `valuePath`. We start by getting the `valuePath`, chopping of n elements (starting with `n` as `1`), and concatenating `@ do` to that path. We then `cell.get` that path, using our `contextPath`.
 
+We try with shorter paths first (making the destination as short as possible and the message as long as possible), then gradually lengthen the destination and shorten the message.
+
 If we didn't get something, we just keep on trying until the iteration finishes.
 
 If we did get something, that means that we found a prefix of `valuePath` where there's a sequence definition. We will consider that to be our `definitionPath` and consider whatever is to its right (in the `valuePath`) to be the `message`.
 
 ```js
-         var call = dale.stopNot (dale.times (valuePath.length, 1), undefined, function (k) {
-            var value = cell.get (valuePath.slice (0, -k).concat (['@', 'do']), contextPath, get);
-            if (value.length) return {definitionPath: valuePath.slice (0, -k).concat (['@', 'do']), message: valuePath.slice (-k)};
+         var call = dale.stopNot (dale.times (valuePath.length - 1, 1), undefined, function (k) {
+            var value = cell.get (valuePath.slice (0, k).concat (['@', 'do']), contextPath, get);
+            if (value.length) return {definitionPath: valuePath.slice (0, k).concat (['@', 'do']), message: valuePath.slice (k)};
          });
 ```
 
@@ -6265,6 +6543,12 @@ This concludes the case of neither `if` or `do`.
 ```js
       }
    }
+```
+
+It might be the case that a call to `cell.do` with `op: execute` has done a recursive call to `cell.put` (which in turn performs a recursive call to `cell.respond`!). In that case, the wise choice is to not update the dataspace, since the recursive calls have a more up to date version of the dataspace.
+
+```js
+   if (newValue === true) return true;
 ```
 
 By now, we have a `newValue`. If we got no paths in `newValue`, we set it to a single path with a single empty text. This will allow us to have paths like `foo = ""`, which is more illustrative (and correct) thatn `foo =`.
@@ -6427,20 +6711,16 @@ If we're just defining the sequence, we return a single path that has two steps:
    if (op === 'define') return [[messageName, teishi.last (definition) [1]]];
 ```
 
-If we are here, we are executing a sequence. We start by defining `output` to be a single path with a single step (an empty text).
-
-```js
-   var output = [['']];
-```
+If we are here, we are executing a sequence.
 
 If we are executing a sequence, we need to do two things. We need to compute the expansion of this execution, and we need to return a value for its response. We are not going to do this at once, but by steps. This is not unlike the way that `cell.respond` gradually expands paths that have multiple calls.
 
-We have already decided that the final value (response) to the execution will be returned in `output`. We have also decided that any changes to the expansion will be performed not by returning those, but rather by calling `cell.put` directly.
+We have already decided that the final value (response) to the execution will be returned, if we find it. We have also decided that any changes to the expansion will be performed not by returning those, but rather by calling `cell.put` directly. If we call `cell.put`, we will return `true` to indicate this to the caller so that they stop updating the dataspace.
 
 If we think of our requirements for a `cell.do` execution, they are the following:
 - Put the message in `:` using the message name and the actual value of it.
 - Take the steps in the definition and expand them one at a time. If one of them responds with a path that starts with `stop` or `error`, we stop and don't go further.
-- Take the value of the last step of the sequence and return that as `output`.
+- Take the value of the last step of the sequence and return that.
 
 There are two more things that makes this even trickier:
 - We must "wait" until any recursive calls (`@`s to the right, in our message or our steps) have results.
@@ -6450,8 +6730,8 @@ How are we going to tackle all of this? It took a while to figure out. Here it i
 
 - We consider the message to be a sort of step zero of the definition. Basically, we treat it like a step.
 - We write a function `stripper` that takes the message, or a step of the sequence, and removes everything that's either an expansion or a response from it. This allows us to compare two sets of paths and decide whether the definition used is correct or stale.
-- We run each of the steps (starting with the message) through the stripper and compare them to the definition. If one is different, we replace it with the one from the definition and stop - a later call will proceed with the work. When we stop, we return that empty `output` we defined above. Otherwise, we carry on.
-- If we make it all the way to the end, or find a stopping value (`stop` or `error`), we have a response, so we return `output`.
+- We run each of the steps (starting with the message) through the stripper and compare them to the definition. If one is different, we replace it with the one from the definition and stop - a later call will proceed with the work. When we stop, we return `true` to stop the caller from doing unnecessary work. Otherwise, we carry on.
+- If we make it all the way to the end, or find a stopping value (`stop` or `error`), we have a response, so we return it.
 
 Let's define `stripper`:
 
@@ -6520,16 +6800,18 @@ If they are not the same, that can be because of two reasons:
 
 In both cases, the required action is the same: we will then set `:` to the new message. We do this through a direct call to `cell.put`. Note we use the dot to indicate that this has to be done right here, instead of looking for a `:` up the chain if it doesn't exist. We also pass the `contextPath`.
 
+One more detail: we need to wipe whatever sequence was already there in the expansion, so we put an empty text on `: do`. Later, let's change this to a call to `@ wipe`.
+
 ```js
       cell.put (dale.go (message, function (v) {
          return ['.', ':', messageName].concat (v);
-      }), contextPath, get, put);
+      }).concat ([['.', ':', 'do', '']]), contextPath, get, put);
 ```
 
-We then return `output` (which will be a single path with an empty text) and close the case where the message has changed.
+We then return `true` to indicate that a call to `cell.put` has happened; this will prevent the caller (`cell.respond`) from updating the dataspace; this makes this call almost tail recursive. This concludes the case where the message has changed.
 
 ```js
-      return output;
+      return true;
    }
 ```
 
@@ -6547,10 +6829,12 @@ We also note the length of the sequence.
 
 We are ready to start iterating the steps of the sequence.
 
-We will iterate up to n times, where `n` is the length of the sequence. We will use anything that's not `undefined` as a way to break out of the loop early.
+We will iterate up to n times, where `n` is the length of the sequence. We will use anything that's not `undefined` as a way to break out of the loop early - or not early, in case we're really done with the sequence.
+
+We store the result of this iteration in `result`.
 
 ```js
-   dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
+   var result = dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 ```
 
 The previous step is the step already stored at `contextPath` plus `: seq <step number>`. It's "previous" in the same way we earlier referred to `previousExpansion` vs `currentExpansion`, not as in step `n - 1`.
@@ -6570,9 +6854,12 @@ We also get the current step from the definition, slicing the number from the fr
 As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
 
 ```js
-      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) return cell.put (dale.go (currentStep, function (v) {
-         return [':', 'seq', stepNumber].concat (v);
-      }), contextPath, get, put);
+      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) {
+         cell.put (dale.go (currentStep, function (v) {
+            return [':', 'do', stepNumber].concat (v);
+         }), contextPath, get, put);
+         return true;
+      }
 ```
 
 Note that in the body of the conditional above, we are returning the result of `cell.put`, which will stop the loop early because it's not `undefined`.
@@ -6597,16 +6884,15 @@ If there's no value yet (because the call hasn't been expanded), just give up (b
 
 If we're here, there's an existing value already.
 
-If that existing value is a stopping value (a hash with a key error or stop), or we are at the last step of the sequence, we set `output` to `existingValue`. We also return `true` to stop the sequence. We don't really need to return `true` if we are at the last step of the sequence, but since we're using a joint conditional to do the same if we find a stopping value, we just return `true` always anyway.
+If that existing value is a stopping value (a hash with a key error or stop), or we are at the last step of the sequence, we return `existingValue`.
 
 ```js
       if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === sequenceLength) {
-         output = existingValue;
-         return true;
+          return existingValue;
       }
 ```
 
-We close the iteration over the steps of the sequence, return `output` and close the function.
+We close the iteration over the steps of the sequence, return `result` and close the function.
 
 ```js
    });
