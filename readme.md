@@ -48,6 +48,7 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 - Language
    - @ put
+      - No diff on same paths, no cell.respond if zero diff
       - Annotate
    - @ wipe
       - multipath
@@ -74,14 +75,14 @@ I'm currently recording myself while building cell. You can check out [the Youtu
       - Single entrypoint
       - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
    - @ catch
+   - cell.native
+      - count
+      - sum
+      - duplicates
+      - push/lepush (left push)
+      - pop, lepop
 - Upload: upload that stores the file in the dataspace, as well as the data
    - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
-- cell.native
-   - count
-   - sum
-   - duplicates
-   - push/lepush (left push)
-   - pop, lepop
 - @ rule
    - type
    - equality
@@ -445,6 +446,83 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-07
+
+More things on types:
+- Types can be understood and implemented as assertions; assertions are calls that pass/fail. If code goes through an assertion, anything below it can be considered as passing the assertion.
+- An abstract class can be seen simply as a partial list of assertions. What's partial is in the eye of the beholder, because anything that doesn't completely determine the data (down to the last character) could also be considered abstract, in that it allows different possibilities. Assertions provide information in the Shannon sense of limiting/cutting down possibilities.
+- The whole OOP game can be seen as assertion or transformation (modification of state). They're both calls.
+- Inheritance can be done with assertion calls making other assertion calls in turn. Or transformation calls making other transformation calls. But the mechanism in cell is explicit.There are no implicit calls through inheritance.
+- When you're in C, without objects, you don't have clear places to put things, you only have a toplevel namespace and must make your own structs. OOP gives you places to put the data; but with a nestable dataspace, this is no longer necessary.
+
+https://userpage.fu-berlin.de/~ram/pub/pub_jf47ht81Ht/doc_kay_oop_en
+"- I thought of objects being like biological cells and/or individual computers on a network, only able to communicate with messages (so messaging came at the very beginning -- it took a while to see how to do messaging in a programming language efficiently enough to be useful)."
+
+It seems that I'm just rediscovering/copying what Alan Kay was doing in 1966.
+
+"  - I wanted to get rid of data. The B5000 almost did this via its almost unbelievable HW architecture. I realized that the cell/whole-computer metaphor would get rid of data, and that "<-" would be just another message token (it took me quite a while to think this out because I really thought of all these symbols as names for functions and procedures."
+
+Well, maybe not so much. I actually want to get rid of the notion that anything in computing is not data.
+
+"(I'm not against types, but I don't know of any type systems that aren't a complete pain, so I still like dynamic typing.)
+OOP to me means only messaging, local retention and protection and hiding of state-process, and extreme late-binding of all things. It can be done in Smalltalk and in LISP. There are possibly other systems in which this is possible, but I'm not aware of them."
+
+https://softwareengineering.stackexchange.com/a/163195 Linus Torvalds:
+"git actually has a simple design, with stable and reasonably well-documented data structures. In fact, I'm a huge proponent of designing your code around the data, rather than the other way around, and I think it's one of the reasons git has been fairly successful […] I will, in fact, claim that the difference between a bad programmer and a good one is whether he considers his code or his data structures more important."
+
+Data structures are calls! They're not just data. They are sections of the dataspace that respond to calls. This is beautiful. That's why they are so useful. They're not data at rest.
+cell already makes data into data structures. You can run direct queries (equality based) on lists and hashes. Then, other structures can be built up with sequences and conditionals.
+
+claude: "The dataspace isn't a pile of inert data - it's a space of responsive structures. You can see them (unlike hidden objects), but they're alive (unlike passive data)."
+
+I don't think that redis' quality is orthogonal to its simplicity. I actually think they are so related to be almost indistinguishable. You cannot have quality at that level (I wager) without that level of simplicity.
+
+The problem with natural language documentation is that it is not executable and thus represents a source of truth disconnected to the rest of the system. what execution allows (and therefore, where tests win) is that you can run them and, with great speed and little effort, know if things are as supposed to be or not.
+
+Years of building frontend libraries got it through my thick skull that the entire system can recompute a part of it based on a change instead of doing the whole thing. So it's possible to think of assertions at every level only happening when they need to be, instead of having to somehow "cache" validations to avoid unnecessary computation.
+
+The underlying bet:
+- There is no metamathematics, just mathematics.
+- There is no metadata, just data.
+- There is no metaprogramming, just programming.
+- There are no abstractions, just concretions at different levels. Spaces of possibilities with different shannon entropies (the amount of possible datums that fit an assertion).
+
+Back to understanding cell.respond. Now that the first sequence is very clear, studying how the update happens.
+
+When the update happens, we take it from the top. The first two call prefixes work with the existing definition. One is the native call, it hasn't changed, so we leave it. The second is the reference, it hasn't changed, and we leave it. When we hit the third call prefix, THEN we realize that the definition has changed and we update it!
+
+```
+(2026-01-07T20:05:27.544Z) respond path18:
+eleven @ plus1 10
+(2026-01-07T20:05:27.544Z) do 8:
+contextPath 1 eleven
+definitionPath 1 plus1
+               2 @
+               3 do
+message 1 1 10
+op execute
+(2026-01-07T20:05:27.544Z) put 11:
+diff + eleven : do 1 @ + 1 @ int
+                         2 2
+     x eleven : do 1 @ + 1 @ int
+                         2 1
+```
+
+A bit of inefficiency: if the first call prefix is changed, when we re-enter, we check it again. But to not do this would require us to pass a flag saying ("I'm the first one and I just changed"). Don't like that at all.
+
+I am needing a "mute" put or "mute" wipe that doesn't trigger cell.respond. It's very funny to see it like this. It's the exact same thing I encountered with gotoB (a frontend library).
+
+Attacking fizzbuzz:
+- Native should not return false, but rather an error if you send something to it that is not there. Well, shouldn't it default to [['']] instead? Yes, it should [CHANGE].
+- Native needs to call put [DONE]
+- Annotate that native returns true in the case of a put because we want to stop the outer recursive call to proceed with stuff.
+- Native doesn't have push!
+- But the cycle happens because put keeps on calling itself.
+- Put needs to return a zero diff if it doesn't change any paths.
+- We need a mute put, then. Call it mute. If returns a zero diff, proceed. Otherwise, return true to stop the outer? But no, in the case where there's a change, I don't want the inner put to be mute. I want it to be mute only conditionally, only if it doesn't change anything. But in that case, silly, just make put not call cell.respond. If there's no diff, what is there to update? So always treat the call to native put as a stopper for the outer respond? No, not either. When the diff is zero, don't return false, just keep on going. But wait! In that case, we'd be overwriting the diff from the previous result! This is highly, highly inconvenient! We need to monkey patch it in cell.respond.
+
+Is it always correct to not overwrite a diff with nothing? I think so. We're treating put almost like a gotoB change event.
 
 ### 2025-01-06
 
@@ -6776,19 +6854,19 @@ if there's no lookahead call, we return this path. Otherwise, we don't and there
    }
 ```
 
-We get the previous expansion by getting what's currently at `contextPath` plus `:`. From there, we remove `seq` and just get the previous message.
+We get the current expansion by getting what is now at `contextPath` plus `:`. From there, we remove `seq` and just get the current message.
 
 ```js
-   var previousExpansion = cell.get (contextPath.concat (':'), [], get);
-   var previousMessage = dale.fil (previousExpansion, undefined, function (path) {
+   var currentExpansion = cell.get (contextPath.concat (':'), [], get);
+   var currentMessage = dale.fil (currentExpansion, undefined, function (path) {
       if (path [0] !== 'seq') return path;
    });
 ```
 
-We compare the stripped previous message with the stripped message we received as an argument.
+We compare the stripped current message with the stripped message we received as an argument.
 
 ```js
-   if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
+   if (! teishi.eq (stripper (currentMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
 ```
@@ -6837,25 +6915,25 @@ We store the result of this iteration in `result`.
    var result = dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 ```
 
-The previous step is the step already stored at `contextPath` plus `: seq <step number>`. It's "previous" in the same way we earlier referred to `previousExpansion` vs `currentExpansion`, not as in step `n - 1`.
+The current step is the step already stored at `contextPath` plus `: do <step number>`. It's "current" in the same way we earlier referred to `currentExpansion` vs `newExpansion`, not as in step `n - 1`.
 
 ```js
-      var previousStep = cell.get (contextPath.concat ([':', 'seq', stepNumber]), [], get);
+      var currentStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
 ```
 
-We also get the current step from the definition, slicing the number from the front.
+We also get the new step from the definition, slicing the number from the front.
 
 ```js
-      var currentStep = dale.fil (definition, undefined, function (path) {
+      var newStep = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 ```
 
-As with the message, we compare the previous step and the current step. If they differ, we set the current step at `contextPath` plus `: seq <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
+As with the message, we compare the previous step and the new step. If they differ, we set the new step at `contextPath` plus `: do <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
 
 ```js
-      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) {
-         cell.put (dale.go (currentStep, function (v) {
+      if (! teishi.eq (stripper (currentStep), stripper (newStep))) {
+         cell.put (dale.go (newStep, function (v) {
             return [':', 'do', stepNumber].concat (v);
          }), contextPath, get, put);
          return true;
@@ -6871,8 +6949,8 @@ We will now get the value of this step. To do this, we need to:
 - If it doesn't, the step itself is the value.
 
 ```js
-      var existingValuePath = contextPath.concat ([':', 'seq', stepNumber]);
-      if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
+      var existingValuePath = contextPath.concat ([':', 'do', stepNumber]);
+      if (teishi.last (newStep) [0] === '@') existingValuePath.push ('=');
       var existingValue = cell.get (existingValuePath, [], get);
 ```
 
