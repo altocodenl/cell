@@ -46,21 +46,26 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ### Demo
 
+- wipe: call respond, mute call.
+- cell.do to wipe steps N and beyond (not just N) when N changes.
+- Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
+- Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
+
 - Language
    - @ put
-      - No diff on same paths, no cell.respond if zero diff
       - Annotate
    - @ wipe
       - multipath
       - wipe in context (walking up)?
       - Must call cell.respond! Add test too.
+      - Add mute call for when we need it in cell.respond
    - cell.respond
       - Understand the naive, from the top approach.
       - Add dependents/dependencies to only recalculate what's necessary.
    - @ if
       - Pass lambdas in do/else
    - @ do
-      - fizzbuzz (single return fizzbuzz)
+      - sizzbuzz (single return fizzbuzz)
       - html generation/validation
       - allow for multiple args (destructuring of lists or hashes) and no args (the sequence just there)
       - test two step calls
@@ -70,7 +75,6 @@ I'm currently recording myself while building cell. You can check out [the Youtu
       - test descending funarg (pass function)
       - test ascending funarg (return function)
       - Loop
-      - Implement fizzbuzz & html validation/generation
    - cell.call
       - Single entrypoint
       - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
@@ -446,6 +450,24 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-09
+
+This is quite interesting, because we're really dealing with a side effect. Put responds with a result but it also changes something outside of that result. To make it idempotent, we need to make sure that whatever it wants to put, it's already put. Only in that case we can be sure we can move on. But that is given to us by the zerodiff! That should do it, so we're fine.
+
+Push, however, is more tricky. Because it only tells you to add something, not to set it to something. So you have no way of knowing whether you "did it" or not yet. But we can also see the diff in it. It will never be zerodiff, though. So how can we know this? On re-entry, we'll just run this again. This is a big problem. What we can do is only to run it if it has no response on top. But this means that the call has to "sniff" its outside to know whether to run or not. And this may well be.
+
+Who will remove the response of the push? If the message changes, the whole `do` is overwritten, so all good. If the step itself is changed, we put it anew, so, all good? We need to be sure of this, that the put really removes the result. And what if a step above changes? Then all steps below should be removed! All bets are off in that case. We cannot do a diff "in the middle", at least not without a LOT of analysis, and that analysis might be way more expensive than running the damn thing. So not.
+
+Don't "push". "add". It's a clearer term. And left? ladd? leadd! Can be pronounced more distinctly.
+
+TODO:
+- Put with zero diff and no call to cell.respond if zerodiff.
+- cell.do to wipe steps N and beyond (not just N) when N changes.
+- cell.respond to ignore overwriting zerodiffs on put no-ops.
+- Implement add. Make it "smell outside" and see if there's already a result. If so, don't push.
+
+It's very interesting that cell.native might decide not to do a call with a side effect if there's a value already on that diff. This could really work. In sequences, it will work. But what about loose calls? It will be interesting to see. This could also work for things like HTTP calls, or DB calls (to external DBs, I mean). By having the values as part of the system, you can control whether something is fresh or not without putting a more explicit gate.
 
 ### 2025-01-07
 
@@ -6608,7 +6630,7 @@ If there's no call, we check to see if this is a native call. We get the message
             });
 ```
 
-Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `newValue`.
+Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `newValue`. Otherwise, we won't modify `newValue` - if we made it this far without a `newValue`, this is really a reference to nowhere and it should be then responded with an empty text.
 
 ```js
             var nativeResponse = cell.native (valuePath [0], message);

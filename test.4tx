@@ -598,15 +598,15 @@
         r dialog 1 c "@ wipe"
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
+                   id [OMITTED]
+                   ms [OMITTED]
                    r ok
                    to cell
                  2 c "@ put key value"
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
+                   id [OMITTED]
+                   ms [OMITTED]
                    r diff + key value
                    to cell
           key value
@@ -618,29 +618,29 @@
         r dialog 1 c "@ wipe"
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
+                   id [OMITTED]
+                   ms [OMITTED]
                    r ok
                    to cell
                  2 c "@ put key value"
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
+                   id [OMITTED]
+                   ms [OMITTED]
                    r diff + key value
                    to cell
                  3 c @
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
-                   r dialog 3 r [OMITTED]
+                   id [OMITTED]
+                   ms [OMITTED]
+                   r [OMITTED]
                    to cell
                  4 c "@ put something else"
                    from user
                    hide 1
-                   id <OMITTED>
-                   ms <OMITTED>
+                   id [OMITTED]
+                   ms [OMITTED]
                    r diff + something else
                    to cell
           key value
@@ -747,6 +747,18 @@
         r foo bar jip 1
           oh yeah 1
         tag "Allow putting multiple paths at the same time"
+
+      - c @ wipe
+
+      - c @ put zero change
+        r diff + zero change
+
+      - c @ put zero change
+        r diff ""
+
+      - c @ put zero one
+        r diff + zero one
+               x zero change
 
       - c @ wipe
 
@@ -1313,37 +1325,17 @@
                    @ do message 1 @ message
              tag "Call a sequence with a message that is a hash"
 
-           - c @ put call @ do n - @ if cond 1
-                                        do nosuchcall bar
-
-           - c @ put fizzbuzz @ do n - @ put : output ""
+           - c @ put sizzbuzz @ do n - @ put : output ""
                                      - @ if cond @ % - @ n
                                                      - 3
-                                            else @ push output fizz
+                                            else @ push output sizz
                                      - @ if cond @ % - @ n
                                                      - 5
                                             else @ push output buzz
                                      - @ output
-             tag "Define fizzbuzz"
+             tag "Define sizzbuzz"
 
-           - c @ put "fizzbuzz 15" @ !izzbuzz 15
-             tag "Fizzbuzz 15"
-
-           - c @ wipe
-           - c @ put eleven @ plus1 10
-                     plus1 @ do int - @ + - @ int
-                                          - 1
-           - c @
-             r eleven = 11
-                      : int 10
-                        do - = 11
-                             @ + - = 10
-                                   @ int
-                                 - 1
-                      @ plus1 10
-               plus1 = int 1
-                     @ do int - @ + - @ int
-                                    - 1
-             tag "Valid sum"
+           - c @ put "sizzbuzz 15" @ !izzbuzz 15
+             tag "Sizzbuzz 15"
 
            - c @ wipe

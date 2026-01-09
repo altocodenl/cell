@@ -377,7 +377,7 @@ cell.call = function (message, from, to, hide, get, put) {
          ['dialog', length + 1, 'from', from],
          ['dialog', length + 1, 'to', to],
          ['dialog', length + 1, 'c', message],
-         ...dale.go (message === '@' ? [['dialog', length + 1, 'r', '[OMITTED]']] : response, function (path) {
+         ...dale.go (message === '@' ? [['[OMITTED]']] : response, function (path) {
             return ['dialog', length + 1, 'r', ...path];
          }),
          ['dialog', length + 1, 'id', callId],
@@ -451,7 +451,7 @@ cell.call = function (message, from, to, hide, get, put) {
    //*/
 }
 
-// var cr = 0, cd = 0, cp = 0;
+//var cr = 0, cd = 0, cp = 0;
 
 // *** RESPOND ***
 
@@ -481,9 +481,9 @@ cell.respond = function (path, get, put) {
    /*
    cr++;
    var id = cr;
-   pretty ('dataspace ' + id, dataspace);
-   pretty ('respond ' + id, path);
-   //pretty ('respond', cell.JSToPaths ({path, contextPath, targetPath, valuePath}));
+   if (cr > 30) throw new Error ('pim');
+   pretty ('respond ds ' + id, dataspace);
+   pretty ('respond path ' + id, path);
    */
 
    var multipleCalls = dale.stopNot (dataspace.slice (index + 1), false, function (p) {
@@ -507,7 +507,7 @@ cell.respond = function (path, get, put) {
 
       if (newValue [0] && newValue [0] [0] === '@') return;
 
-      // if (newValue.length) pretty ('reference ' + id, {valuePath, contextPath});
+      //if (newValue.length) pretty ('reference ' + id, {valuePath, contextPath});
 
       if (newValue.length === 0) {
          var call = dale.stopNot (dale.times (valuePath.length - 1, 1), undefined, function (k) {
@@ -532,23 +532,17 @@ cell.respond = function (path, get, put) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
             });
+            //pretty ('respond native call ' + id, newValue);
             var nativeResponse = cell.native (valuePath [0], message);
             if (nativeResponse !== false) newValue = nativeResponse;
-            //pretty ('respond native call ' + id, newValue);
          }
       }
    }
 
-   if (newValue === true) return true;
+   if (newValue === true || valuePath [0] === 'put') return true;
    if (newValue.length === 0) newValue = [['']];
 
    if (teishi.eq (currentValue, newValue)) return;
-
-   /*
-   pretty ('respond put ' + id, dale.go (newValue, function (path) {
-      return targetPath.concat (path);
-   }));
-   */
 
    cell.put (dale.go (newValue, function (path) {
       return targetPath.concat (path);
@@ -612,12 +606,12 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
       });
    }
 
-   var previousExpansion = cell.get (contextPath.concat (':'), [], get);
-   var previousMessage = dale.fil (previousExpansion, undefined, function (path) {
+   var currentExpansion = cell.get (contextPath.concat (':'), [], get);
+   var currentMessage = dale.fil (currentExpansion, undefined, function (path) {
       if (path [0] !== 'do') return path;
    });
 
-   if (! teishi.eq (stripper (previousMessage), stripper (dale.go (message, function (path) {
+   if (! teishi.eq (stripper (currentMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
       cell.put (dale.go (message, function (v) {
@@ -633,27 +627,26 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    var result = dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 
-      var previousStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
+      var currentStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
 
-      var currentStep = dale.fil (definition, undefined, function (path) {
+      var newStep = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 
-      if (! teishi.eq (stripper (previousStep), stripper (currentStep))) {
-         cell.put (dale.go (currentStep, function (v) {
+      if (! teishi.eq (stripper (currentStep), stripper (newStep))) {
+         cell.put (dale.go (newStep, function (v) {
             return [':', 'do', stepNumber].concat (v);
          }), contextPath, get, put);
          return true;
       }
 
       var existingValuePath = contextPath.concat ([':', 'do', stepNumber]);
-      if (teishi.last (currentStep) [0] === '@') existingValuePath.push ('=');
+      if (teishi.last (newStep) [0] === '@') existingValuePath.push ('=');
       var existingValue = cell.get (existingValuePath, [], get);
 
       if (existingValue.length === 0) return true;
 
       if (['error', 'stop'].includes (existingValue [0] [0]) || stepNumber === sequenceLength) {
-         //pretty ('do condition ' + id, existingValue);
          return existingValue;
       }
    });
@@ -662,16 +655,19 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    return result;
 }
 
-cell.native = function (call, message, contextPath, get) {
+cell.native = function (call, message, contextPath, get, put) {
    var nativeCalls = [
       'if', 'do', // Conditional & sequence
       '+', '-', '*', '/', '%', // Math
       'eq', '>', '<', '>=', '<=', // Comparison
       'and', 'or', 'not', // Logical
-      'upload' // Organization
+      'upload', // Organization
+      'put', 'wipe', // Storage
    ];
 
    if (nativeCalls.indexOf (call) === -1) return false;
+
+   if (call === 'put') return cell.put (message, contextPath, get, put);
 
    //pretty ('native', {call, message, contextPath});
 
@@ -836,7 +832,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    if (error) return error;
 
    var seen = {};
-   dale.go (paths, function (path) {
+   dale.go (paths, function (path, index) {
       dale.go (path.slice (0, path.length - 1), function (step, k) {
          var key = JSON.stringify (path.slice (0, k + 1));
          if (seen [key]) return;
@@ -845,6 +841,8 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
          var lastStep = k + 2 === path.length;
          seen [key] = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
       });
+      // Add the last value to the entire path to see if the path already exists. This is different than storing the type.
+      seen [JSON.stringify (path)] = [teishi.last (path), index];
    });
 
    var removed = [];
@@ -858,11 +856,20 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
          var lastStep = k + 2 === path.length;
          var t = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
 
-         if (seen [key] !== t || lastStep) return true;
+         if (seen [key] !== t) return true;
+         if (lastStep) {
+            var newLastStep = seen [JSON.stringify (path)];
+            if (type (newLastStep) !== 'array') return true;
+            // If it is an array, then it is also the last step of the new path. Compare values.
+            if (newLastStep [0] !== path [k + 1]) return true;
+            paths [newLastStep [1]] = null; // Remove the new path, leave the old
+         }
       });
       if (! remove) return path;
       else removed.push (path);
-   }).concat (paths);
+   });
+   paths = dale.fil (paths, null, function (v) {return v});
+   dataspace = dataspace.concat (paths);
 
    cell.sorter (dataspace);
    put (dataspace);
@@ -876,6 +883,8 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
       return ['diff', 'x'].concat (path);
    })));
    */
+
+   if (! paths.length) return [['diff', '']];
 
    if (! (paths [0] [0] === 'dialog' && teishi.last (paths) [0] === 'dialog')) {
       dale.stop (dataspace, true, function (path) {
@@ -979,7 +988,7 @@ if (isNode && process.argv [2] === 'test') (function () {
          response = cell.pathsToText (dale.fil (cell.textToPaths (response), undefined, function (path) {
             if (path [0] !== 'dialog') return path;
             if (! test.keepDialog) return;
-            if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('<OMITTED>');
+            if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('[OMITTED]');
             return path;
          }));
 
