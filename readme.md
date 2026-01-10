@@ -451,6 +451,30 @@ view
 
 ## Development notes
 
+### 2025-01-10
+
+Had two ideas:
+1. The query call can be much simpler than I thought. You can pass literals, and you can pass sequences that check whether that item matches or not. For example:
+
+```
+query - status
+      - @ do int @ and - @ >= - @ int
+                              - 200
+                       - @ < - @ int
+                             - 400
+
+(or, with a helper)
+
+query - status
+      - @ do int @ range between - 200
+                                 - 399
+                         value @ int
+```
+
+By default, it is all at a relative depth, but the two you pass are expected to be next to each other.
+
+- To mark what needs to be recalculated, just remove the results and recalculate! Rather than recalculating to see if things change, just explicitly remove what needs to change. When tracking dependents, if X changes, take all the call prefixes that directly point to them and remove their =s, and do this recursively. Then you can explicitly see what needs to happen again and what doesn't. This will send me back to the drawing board with cell.respond but that's OK.
+
 ### 2025-01-09
 
 This is quite interesting, because we're really dealing with a side effect. Put responds with a result but it also changes something outside of that result. To make it idempotent, we need to make sure that whatever it wants to put, it's already put. Only in that case we can be sure we can move on. But that is given to us by the zerodiff! That should do it, so we're fine.
