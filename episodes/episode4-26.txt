@@ -1,0 +1,11 @@
+Twenty-sixth episode of season 4! I'm building a programming environment from scratch while recording myself. I don't dare yet to annotate the code, but the changes to wipe, put and do came together. Some testing, annotating/cleanup and we'll be ready to tackle a new way of computing the changes.
+
+https://github.com/altocodenl/cell
+
+Remarkable music:
+
+pearl and the oysters - pacific ave
+
+sweet trip - air supply
+
+part time- i can treat you better

@@ -370,7 +370,7 @@ cell.call = function (message, from, to, hide, get, put) {
 
    var respond = function (response) {
 
-      var dialog = cell.get (['dialog'], [], get, put);
+      var dialog = cell.get (['dialog'], [], get);
       var length = dialog.length ? teishi.last (dialog) [0] : 0;
 
       cell.put ([
@@ -439,7 +439,7 @@ cell.call = function (message, from, to, hide, get, put) {
    }
 
    if (paths [0] [1] === 'wipe') {
-      return respond (cell.wipe (paths [0].slice (2), get, put));
+      return respond (cell.wipe (dale.go (paths, function (path) {return path.slice (2)}), [], get, put));
    }
 
    // Neither a put nor a do, we can just call get to resolve the reference
@@ -614,10 +614,10 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
    if (! teishi.eq (stripper (currentMessage), stripper (dale.go (message, function (path) {
       return [messageName].concat (path);
    })))) {
+      cell.wipe ([['.', ':']], contextPath, get, put, 'mute');
       cell.put (dale.go (message, function (v) {
          return ['.', ':', messageName].concat (v);
-      // TODO: wipe do properly
-      }).concat ([['.', ':', 'do', '']]), contextPath, get, put);
+      }), contextPath, get, put);
 
       return true;
    }
@@ -627,13 +627,21 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 
    var result = dale.stopNot (dale.times (sequenceLength, 1), undefined, function (stepNumber) {
 
-      var currentStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
+      var currentStep = cell.get ([':', 'do', stepNumber], contextPath, get);
 
       var newStep = dale.fil (definition, undefined, function (path) {
          if (path [0] === stepNumber) return path.slice (1);
       });
 
       if (! teishi.eq (stripper (currentStep), stripper (newStep))) {
+
+         var wiped = [];
+         dale.go (cell.get (contextPath.concat ([':', 'do']), contextPath, get), function (path) {
+            if (path [0] <= stepNumber || wiped.includes (path [0])) return;
+            wiped.push (path [0]);
+            cell.wipe ([':', 'do', path [0]], contextPath, get, put, 'mute');
+         });
+
          cell.put (dale.go (newStep, function (v) {
             return [':', 'do', stepNumber].concat (v);
          }), contextPath, get, put);
@@ -776,7 +784,7 @@ cell.upload = function (name, mime, base64, data) {
 
 // *** REFERENCE & STORE ***
 
-cell.get = function (queryPath, contextPath, get) {
+cell.get = function (queryPath, contextPath, get, absolute) {
    var dataspace = get ();
 
    var dotMode = queryPath [0] === '.';
@@ -793,7 +801,7 @@ cell.get = function (queryPath, contextPath, get) {
       prefix = contextPath.slice (0, k).concat (queryPath);
 
       return dale.fil (dataspace, undefined, function (path) {
-         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return path.slice (prefix.length);
+         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return absolute ? path : path.slice (prefix.length);
       });
 
    }) || [];
@@ -899,13 +907,25 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    }));
 }
 
-cell.wipe = function (prefix, get, put) {
+cell.wipe = function (paths, contextPath, get, put, mute) {
+
+   if (type (paths) === 'object') paths = [paths];
+   else if (paths.length > 1) paths = dale.go (paths, function (path) {
+      return path.slice (1);
+   });
 
    var dataspace = get ();
 
+   var wiped = {};
+
+   dale.go (paths, function (path) {
+      dale.go (cell.get (path, contextPath, get, 'absolute'), function (wipedPath) {
+         wiped [JSON.stringify (wipedPath)] = true;
+      });
+   });
+
    dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (prefix.length > path.length) return path;
-      if (! teishi.eq (prefix, path.slice (0, prefix.length))) return path;
+      if (! wiped [JSON.stringify (path)]) return path;
    });
 
    var listPrefixCount = {};
@@ -920,7 +940,19 @@ cell.wipe = function (prefix, get, put) {
 
    put (dataspace);
 
-   return [['ok']];
+   if (dale.keys (wiped).length === 0) return [['diff', '']];
+
+   if (! mute) dale.stop (dataspace, true, function (path) {
+      return cell.respond (path, get, put);
+   });
+
+   var response = dale.fil (wiped, undefined, function (v, path) {
+      path = JSON.parse (path);
+      if (path [0] === 'dialog') return;
+      return ['diff', 'x'].concat (path);
+   });
+
+   return response.length > 0 ? response : [['diff', '']];
 }
 
 // *** TESTS ***
@@ -987,7 +1019,7 @@ if (isNode && process.argv [2] === 'test') (function () {
          // Remove the dialog or omit id and ms
          response = cell.pathsToText (dale.fil (cell.textToPaths (response), undefined, function (path) {
             if (path [0] !== 'dialog') return path;
-            if (! test.keepDialog) return;
+            if (! test.dialog) return;
             if (['id', 'ms'].includes (path [path.length - 2])) return path.slice (0, -1).concat ('[OMITTED]');
             return path;
          }));

@@ -455,7 +455,7 @@
                 tag "Restore party"
 
 - WIPE - c @ wipe serious
-         r ok
+         r diff x serious business
          tag "Wipe serious"
 
        - c @
@@ -465,7 +465,7 @@
          tag "Get everything after serious was wiped"
 
        - c @ wipe party list 1 Jan Hertog
-         r ok
+         r diff ""
          tag "Wipe a path that does not exist, should change nothing"
 
        - c @
@@ -475,6 +475,7 @@
          tag "Get everything after wipe no-op"
 
        - c @ wipe party list 1
+         r diff x party list 1 Jan
          tag "Wipe the first member of the list"
 
        - c @ party
@@ -483,7 +484,9 @@
          tag "Get party after one element was wiped"
 
        - c @ wipe
-         tag "Wipe everything"
+         r diff x party list 1 Jip
+                        open 1
+         tag "Wipe party"
 
        - c @
          r ""
@@ -503,7 +506,27 @@
          tag "Get everything after wiping part of a nested list"
 
        - c @ wipe
+
+       - c @
+         r ""
          tag "Wipe everything"
+
+       - c @ put a b
+                 c d e
+                   f g
+                 h i
+
+       - c @ wipe - a
+                  - c d
+         r diff x a b
+                  c d e
+
+       - c @
+         r c f g
+           h i
+         tag "Wipe two prefixes"
+
+       - c @ wipe
 
 - "GET WITH CONTEXT" - c @ put employee price 15
                                friend price 20
@@ -593,6 +616,9 @@
 
                  - c @ wipe
 
+                 - c @ wipe
+                   comment "We wipe twice in a row to have an empty diff on the next test"
+
 - PUT - c @ put key value
       - c @
         r dialog 1 c "@ wipe"
@@ -600,7 +626,7 @@
                    hide 1
                    id [OMITTED]
                    ms [OMITTED]
-                   r ok
+                   r diff ""
                    to cell
                  2 c "@ put key value"
                    from user
@@ -610,7 +636,7 @@
                    r diff + key value
                    to cell
           key value
-        keepDialog 1
+        dialog 1
         tag "Get dataspace including dialog"
 
       - c @ put something else
@@ -620,7 +646,7 @@
                    hide 1
                    id [OMITTED]
                    ms [OMITTED]
-                   r ok
+                   r diff ""
                    to cell
                  2 c "@ put key value"
                    from user
@@ -645,7 +671,7 @@
                    to cell
           key value
           something else
-        keepDialog 1
+        dialog 1
         tag "Get dataspace including dialog after two more calls"
 
       - c @ wipe

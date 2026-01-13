@@ -46,21 +46,15 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ### Demo
 
-- wipe: call respond, mute call.
-- cell.do to wipe steps N and beyond (not just N) when N changes.
+- annotate: changes to get, changes to wipe (respond diff, multi, call respond, mute), changes to put, cell.do (wipe all steps if message changes, wipe any N+... steps if N changes)
 - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
 - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
 
 - Language
-   - @ put
-      - Annotate
    - @ wipe
-      - multipath
-      - wipe in context (walking up)?
-      - Must call cell.respond! Add test too.
-      - Add mute call for when we need it in cell.respond
+      - Test context
+      - Test respond
    - cell.respond
-      - Understand the naive, from the top approach.
       - Add dependents/dependencies to only recalculate what's necessary.
    - @ if
       - Pass lambdas in do/else
@@ -85,6 +79,9 @@ I'm currently recording myself while building cell. You can check out [the Youtu
       - duplicates
       - push/lepush (left push)
       - pop, lepop
+   - @ query
+      - query path surrounded by implicit stars
+      - query path that can have a sequence (or a reference to a sequence) OR a validator
 - Upload: upload that stores the file in the dataspace, as well as the data
    - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
 - @ rule
@@ -450,6 +447,30 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-12
+
+I cannot do something like this:
+
+```
+- c @ wipe a
+           c d
+```
+
+But I could do something like this
+
+```
+- c @ wipe - a
+           - c d
+```
+
+The difference between put and wipe is that put takes a consistent set of paths, but wipe could presumably get different things that between themselves don't form a valid dataspace.
+
+Interesting to consider two paths as a dataspace. Any consistent set of paths is a dataspace.
+
+cell.get doesn't give you an absolute path, does it? It's always relative. But you don't get the absolute path that matched it. When it's found, the partial (or total) context path that was used gets removed completely.
+
+What about inconsistent paths in the diff? Can we return them? I don't think so, because whatever we wipe, it is consistent with itself. Any subset of a valid dataspace is also a valid dataspace, if the subset takes entire paths.
 
 ### 2025-01-10
 
