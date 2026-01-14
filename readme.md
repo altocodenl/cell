@@ -47,15 +47,17 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 ### Demo
 
 - annotate: changes to put
-- test no-op put (that returns empty diff) and then execution continues
--
-- Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
-- Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
+- Test no-op put (that returns empty diff) and then execution continues
+- Test wipe: context, call to respond
+
+- EITHER:
+   - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
+   - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
+- OR:
+   - Use missing results rather than existingValue === newValue to make updates. That is, remove results when a transitive dependency changes.
+
 
 - Language
-   - @ wipe
-      - Test context
-      - Test respond
    - cell.respond
       - Add dependents/dependencies to only recalculate what's necessary.
    - @ if
