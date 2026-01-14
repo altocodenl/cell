@@ -539,7 +539,7 @@ cell.respond = function (path, get, put) {
       }
    }
 
-   if (newValue === true || valuePath [0] === 'put') return true;
+   if (newValue === true || (valuePath [0] === 'put' && ! teishi.eq (newValue, [['diff', '']]))) return true;
    if (newValue.length === 0) newValue = [['']];
 
    if (teishi.eq (currentValue, newValue)) return;
@@ -636,7 +636,7 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
       if (! teishi.eq (stripper (currentStep), stripper (newStep))) {
 
          var wiped = [];
-         dale.go (cell.get (contextPath.concat ([':', 'do']), contextPath, get), function (path) {
+         dale.go (cell.get ([':', 'do'], contextPath, get), function (path) {
             if (path [0] <= stepNumber || wiped.includes (path [0])) return;
             wiped.push (path [0]);
             cell.wipe ([':', 'do', path [0]], contextPath, get, put, 'mute');
@@ -880,7 +880,6 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    dataspace = dataspace.concat (paths);
 
    cell.sorter (dataspace);
-   put (dataspace);
 
    /*
    cp++;
@@ -893,6 +892,8 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
    */
 
    if (! paths.length) return [['diff', '']];
+
+   put (dataspace);
 
    if (! (paths [0] [0] === 'dialog' && teishi.last (paths) [0] === 'dialog')) {
       dale.stop (dataspace, true, function (path) {
@@ -909,8 +910,7 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
 
 cell.wipe = function (paths, contextPath, get, put, mute) {
 
-   if (type (paths) === 'object') paths = [paths];
-   else if (paths.length > 1) paths = dale.go (paths, function (path) {
+   if (paths.length > 1 && type (paths [0] [0]) === 'integer') paths = dale.go (paths, function (path) {
       return path.slice (1);
    });
 
@@ -938,9 +938,9 @@ cell.wipe = function (paths, contextPath, get, put, mute) {
       });
    });
 
-   put (dataspace);
-
    if (dale.keys (wiped).length === 0) return [['diff', '']];
+
+   put (dataspace);
 
    if (! mute) dale.stop (dataspace, true, function (path) {
       return cell.respond (path, get, put);

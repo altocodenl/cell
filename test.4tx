@@ -524,7 +524,21 @@
        - c @
          r c f g
            h i
-         tag "Wipe two prefixes"
+         tag "Wipe two prefixes, passing list"
+
+       - c @ wipe
+
+       - c @ put a b 1 x
+                   c 2 y
+                   d 3 z
+
+       - c @ wipe a b 1
+                    d 3
+
+       - c @
+         r a c 1 y
+         tag "Wipe two prefixes, passing hash"
+         comment "Note that the step went from 2 to 1, because wipe recalculates the indexes of lists when it removes paths"
 
        - c @ wipe
 
@@ -785,6 +799,18 @@
       - c @ put zero one
         r diff + zero one
                x zero change
+
+      - c @ wipe
+
+      - c @ put a 1 a
+                b 2 b
+                c 3 c
+
+      - c @
+        r a 1 a
+          b 2 b
+          c 3 c
+        tag "Get sparse list"
 
       - c @ wipe
 

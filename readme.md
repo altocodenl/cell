@@ -46,7 +46,9 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ### Demo
 
-- annotate: changes to get, changes to wipe (respond diff, multi, call respond, mute), changes to put, cell.do (wipe all steps if message changes, wipe any N+... steps if N changes)
+- annotate: changes to put
+- test no-op put (that returns empty diff) and then execution continues
+-
 - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
 - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
 
@@ -447,6 +449,18 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-14
+
+We're going to start calling cell a programming *substrate* (not tool, not environment, not language). Its goal is to be a substrate, like the spreadsheet, like hypercard, like dbase (perhaps).
+
+Emerging pattern: update dataspace, then run cell.respond.
+
+Changes to wipe:
+- Multi paths
+- Call cell.respond
+- Respond with a diff
+- Mute mode
 
 ### 2025-01-12
 
@@ -6692,8 +6706,12 @@ This concludes the case of neither `if` or `do`.
 
 It might be the case that a call to `cell.do` with `op: execute` has done a recursive call to `cell.put` (which in turn performs a recursive call to `cell.respond`!). In that case, the wise choice is to not update the dataspace, since the recursive calls have a more up to date version of the dataspace.
 
+This will also be the case if we just made a call to put. If we did, and that call actually brought back a diff (which means that it called `cell.respond` recursively, we also return `true` to let the outer call to `cell.put` to stop iterating. (This is not exactly precise: if we wanted to be completely correct, we'd also check that the call to put updates something else than the dialog).
+
+One subtle point: we cannot use the `newValue` being equal to `true` mechanism for `put`, because `put` returns a diff that we also want to return as a value. Whereas calls to `cell.do` don't need to do this.
+
 ```js
-   if (newValue === true) return true;
+   if (newValue === true || (valuePath [0] === 'put' && ! teishi.eq (newValue, [['diff', '']]))) return true;
 ```
 
 By now, we have a `newValue`. If we got no paths in `newValue`, we set it to a single path with a single empty text. This will allow us to have paths like `foo = ""`, which is more illustrative (and correct) thatn `foo =`.
@@ -6828,10 +6846,10 @@ We get the name of the message. If it's not text, we return an error.
    if (type (messageName) !== 'string') return [['error', 'The definition of a sequence must contain a textual name for its message.']];
 ```
 
-We forbid `seq` to be the name of the message. We already are going to use `seq` to show the expansion of each step of the sequence, and we want to avoid overwriting it.
+We forbid `do` to be the name of the message. We already are going to use `do` to show the expansion of each step of the sequence, and we want to avoid overwriting it.
 
 ```js
-   if (messageName === 'seq') return [['error', 'The name of the message cannot be `seq`.']];
+   if (messageName === 'do') return [['error', 'The name of the message cannot be `do`.']];
 ```
 
 We forbid that there should be multiple messages.
@@ -6921,12 +6939,12 @@ if there's no lookahead call, we return this path. Otherwise, we don't and there
    }
 ```
 
-We get the current expansion by getting what is now at `contextPath` plus `:`. From there, we remove `seq` and just get the current message.
+We get the current expansion by getting what is now at `contextPath` plus `:`. From there, we remove `do` and just get the current message.
 
 ```js
    var currentExpansion = cell.get (contextPath.concat (':'), [], get);
    var currentMessage = dale.fil (currentExpansion, undefined, function (path) {
-      if (path [0] !== 'seq') return path;
+      if (path [0] !== 'do') return path;
    });
 ```
 
@@ -6945,12 +6963,13 @@ If they are not the same, that can be because of two reasons:
 
 In both cases, the required action is the same: we will then set `:` to the new message. We do this through a direct call to `cell.put`. Note we use the dot to indicate that this has to be done right here, instead of looking for a `:` up the chain if it doesn't exist. We also pass the `contextPath`.
 
-One more detail: we need to wipe whatever sequence was already there in the expansion, so we put an empty text on `: do`. Later, let's change this to a call to `@ wipe`.
+One more detail: we also need to wipe whatever sequence was already there in the expansion. We do that first. Note we pass `mute` as the last argument to `cell.wipe` so that this wiping doesn't trigger a call to `cell.respond`.
 
 ```js
+      cell.wipe ([['.', ':']], contextPath, get, put, 'mute');
       cell.put (dale.go (message, function (v) {
          return ['.', ':', messageName].concat (v);
-      }).concat ([['.', ':', 'do', '']]), contextPath, get, put);
+      }), contextPath, get, put);
 ```
 
 We then return `true` to indicate that a call to `cell.put` has happened; this will prevent the caller (`cell.respond`) from updating the dataspace; this makes this call almost tail recursive. This concludes the case where the message has changed.
@@ -6985,7 +7004,7 @@ We store the result of this iteration in `result`.
 The current step is the step already stored at `contextPath` plus `: do <step number>`. It's "current" in the same way we earlier referred to `currentExpansion` vs `newExpansion`, not as in step `n - 1`.
 
 ```js
-      var currentStep = cell.get (contextPath.concat ([':', 'do', stepNumber]), [], get);
+      var currentStep = cell.get ([':', 'do', stepNumber], contextPath, get);
 ```
 
 We also get the new step from the definition, slicing the number from the front.
@@ -6996,10 +7015,28 @@ We also get the new step from the definition, slicing the number from the front.
       });
 ```
 
-As with the message, we compare the previous step and the new step. If they differ, we set the new step at `contextPath` plus `: do <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
+As with the message, we compare the previous step and the new step.
 
 ```js
       if (! teishi.eq (stripper (currentStep), stripper (newStep))) {
+```
+
+If we are here, the current step and the new one differ. If so, we start by removing any current steps that come after this. This is necessary in cases where a sequence is redefined to have less steps than before: without this provision, we'd have phantom steps in the sequence that are not removed from the dataspace.
+
+The mechanism is to iterate the steps in the sequence; any step that is larger than the current one and not in an array of already `wiped` steps we keep, we proceed to wipe. We also wipe mutely, as we did earlier in this function.
+
+```js
+         var wiped = [];
+         dale.go (cell.get ([':', 'do'], contextPath, get), function (path) {
+            if (path [0] <= stepNumber || wiped.includes (path [0])) return;
+            wiped.push (path [0]);
+            cell.wipe ([':', 'do', path [0]], contextPath, get, put, 'mute');
+         });
+```
+
+We now set the new step at `contextPath` plus `: do <step number>`. Note we do not use the dot, since `:` exists already because it was placed there when we set the message.
+
+```js
          cell.put (dale.go (newStep, function (v) {
             return [':', 'do', stepNumber].concat (v);
          }), contextPath, get, put);
@@ -7048,14 +7085,15 @@ We close the iteration over the steps of the sequence, return `result` and close
 
 #### `cell.get`
 
-We now define `cell.get`, which performs `reference` for us. It takes three arguments:
+We now define `cell.get`, which performs `reference` for us. It takes four arguments:
 
 - A `queryPath`, which is the path of what we're looking for.
 - A `contextPath`, which is the path of where we're currently standing. For calls that come from outside, this will be an empty list.
 - `get`, a storage-layer function that gives us the entire dataspace.
+- `absolute` is an argument that, if truthy, will not strip the `contextPath` from the result; rather, it will return the full paths.
 
 ```js
-cell.get = function (queryPath, contextPath, get) {
+cell.get = function (queryPath, contextPath, get, absolute) {
 ```
 
 We start by getting all the paths in the dataspace.
@@ -7085,12 +7123,6 @@ However, in dot mode, we will just run the loop one time, to prevent "walking up
    return dale.stopNot (dale.times (! dotMode ? contextPath.length + 1 : 1, contextPath.length, -1), undefined, function (k) {
 ```
 
-We go through the dataspace and accumulate any paths that will match both the current context path and the query.
-
-```js
-      var matches = dale.fil (dataspace, undefined, function (path) {
-```
-
 We define `prefix` as the `contextPath` plus the hook of the `queryPath`. If there's no hook (because `queryPath` is empty), this prefix will just be the context path.
 
 ```js
@@ -7113,13 +7145,13 @@ If we're here, our hook caught something. We now set `prefix` to context path pl
       prefix = contextPath.slice (0, k).concat (queryPath);
 ```
 
-We iterate the dataspace again and, for each path that matches the prefix, we remove the prefix from it and return what's left.
+We iterate the dataspace again and, for each path that matches the prefix, we remove the prefix from it and return what's left. Note that if `absolute` is truthy, we do not slice the returned paths by the prefix length, but instead return them in full.
 
 This completes the inner loop.
 
 ```js
       return dale.fil (dataspace, undefined, function (path) {
-         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return path.slice (prefix.length);
+         if (teishi.eq (prefix, path.slice (0, prefix.length)) && path.length > prefix.length) return absolute ? path : path.slice (prefix.length);
       });
 ```
 
@@ -7170,10 +7202,13 @@ Now, the dataspace variable is updated. We sort it, then persist the changes.
 
 ```js
    cell.sorter (dataspace);
-   put (dataspace);
 ```
 
 We will now iterate the dataspace, running `cell.respond` of each of the paths, until we either finish iterating the paths or `cell.respond` returns `true`.
+
+```js
+   put (dataspace);
+```
 
 We call `cell.respond` in case some reference needs to be updated. If `cell.respond` finds that changes should happen, it will call `cell.put` in turn. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated. The `true` that `cell.respond` is only to make things more efficient and avoid unnecessary calls.
 
@@ -7194,15 +7229,53 @@ We return `[['ok']]`. This closes the function.
 
 #### `cell.wipe`
 
-`cell.wipe` is the function that removes data from the dataspace. It takes a main argument which is `prefix`. When `prefix` is empty or undefined, `cell.wipe` will remove all paths from the dataspace. If it's defined and non-empty, `cell.wipe` will only remove from the dataspace the paths that start with that prefix.
+`cell.wipe` is the function that removes data from the dataspace. It takes a main argument which is `paths`. When `paths` is empty, `cell.wipe` will remove all paths from the dataspace. If there is one path, `cell.wipe` will only remove from the dataspace the paths that have that path as a prefix. `cell.wipe` also takes a `contextPath`, which allows for "walking up" (just like we do in `cell.get` and `cell.put`).
 
-Besides `prefix`, it also takes `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
+Besides `paths` and `contextPath`, it also takes `get` and `put`: two functions that, when executed, either get the dataspace or update it. These are the storage-layer functions (`get` is the exact same function we pass to `cell.get` above).
+
+Finally, it takes a `mute` flag, which when truthy will make the function *not* call `cell.respond`.
 
 ```js
-cell.wipe = function (prefix, get, put) {
+cell.wipe = function (paths, contextPath, get, put, mute) {
+```
 
+As `paths`, we can either receive a list of prefixes to wipe, or just one prefix. If we get a list of prefixes (which means that we have more than one path and that the first step of the first path is a number, denoting that the overall `paths` data is a list), we strip away the first element of each path.
+
+```js
+   if (paths.length > 1 && type (paths [0] [0]) === 'integer') paths = dale.go (paths, function (path) {
+      return path.slice (1);
+   });
+```
+
+We get the entire dataspace onto memory. Remind me this if I ever call myself a real programmer.
+
+```js
    var dataspace = get ();
 ```
+
+We will keep track of all the paths we wiped. We do this with an object so that we can have fast lookup if there are many paths, although I wonder if stringifying JSON makes this slower than n comparisons of m elements.
+
+```js
+   var wiped = {};
+```
+
+We iterate all the paths we want to wipe. For each of them, we call `cell.get`, so we can have the `contextPath` as part of the query. Note we pass the `absolute` argument to `cell.get` so that we get full paths.
+
+This is the sole reason for which `cell.get` takes that parameter. This behavior allows us to know exactly what we just wiped (since we cannot just know it from the `contextPath` + `path` because we might have walked up to find this wiped path.
+
+```js
+   dale.go (paths, function (path) {
+      dale.go (cell.get (path, contextPath, get, 'absolute'), function (wipedPath) {
+```
+
+We put each of the wiped paths as keys on `wiped`.
+
+```js
+         wiped [JSON.stringify (wipedPath)] = true;
+      });
+   });
+```
+
 
 We iterate all paths in the dataspace; if a path is shorter than the prefix, we keep it (the prefix can only delete things that fully match it). If not, we compare the first n elements of the path with the prefix (where n is the length of the prefix) and if they are the same, we remove that path.
 
@@ -7249,13 +7322,40 @@ We update the `listPrefixCount` entry. This concludes the logic for filling up g
    });
 ```
 
+If we wiped no paths, this is a no-op. We return an empty diff.
 
-We update the dataspace through `put`, return OK and close the function.
+```js
+   if (dale.keys (wiped).length === 0) return [['diff', '']];
+```
+
+If we're here, there were updates. We update the dataspace through `put`.
 
 ```js
    put (dataspace);
+```
 
-   return [['ok']];
+If the `mute` flag is not passed, we call `cell.respond` for each of the new paths, stopping if any call returns `true`. This is exactly the same thing we do at the end stage of `cell.put`, and for good reason: the pattern is the same.
+
+```js
+   if (! mute) dale.stop (dataspace, true, function (path) {
+      return cell.respond (path, get, put);
+   });
+```
+
+We now compute the diff and put it in `response`. We do it by iterating `wiped` and ignoring entries that start with `dialog`. `cell.wipe` can delete the dialog paths, but it doesn't include them in its diff.
+
+```js
+   var response = dale.fil (wiped, undefined, function (v, path) {
+      path = JSON.parse (path);
+      if (path [0] === 'dialog') return;
+      return ['diff', 'x'].concat (path);
+   });
+```
+
+If we only wiped dialog entries, we return an empty diff; otherwise, we return the diff we just built. This concludes the function.
+
+```js
+   return response.length > 0 ? response : [['diff', '']];
 }
 ```
 
