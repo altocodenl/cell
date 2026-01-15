@@ -1,0 +1,3 @@
+Twenty-seventh episode of season 4! I'm building a programming environment from scratch while recording myself. A cleanup episode. The core language keeps on taking shape.
+
+https://github.com/altocodenl/cell

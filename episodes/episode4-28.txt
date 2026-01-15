@@ -1,0 +1,5 @@
+Twenty-eight episode of season 4! I'm building a programming substrate from scratch while recording myself. Didn't plan to remake cell.respond today by using a dependency system and cleaning up old results, but that's what came out. Happy.
+
+Hi! Starting silent today, then adding voice.
+
+I'll continue later.

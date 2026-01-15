@@ -56,7 +56,6 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 - OR:
    - Use missing results rather than existingValue === newValue to make updates. That is, remove results when a transitive dependency changes.
 
-
 - Language
    - cell.respond
       - Add dependents/dependencies to only recalculate what's necessary.
@@ -451,6 +450,269 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-15
+
+It's remarkable how computers that halted were the correct ones for Turing (because they calculated something), whereas now for us an errored/crashed state is when a computer is halted and stops responding. We now expect computers to always be on to communicate with us and respond, rather than calculate one thing and going back to sleep.
+
+Is it about ownership or is it about ease?
+
+Perhaps it's not even about a substrate. We only care if it's one thing or many only because many things are harder to grasp than one. But it could be just about surface.
+
+Equation:
+system power = what you can do / elements ^ 2
+
+A few elements. Understand what you build.
+
+Ownership as long-term convenience: it still works, you can still resume work on it, no vendor will lock you or price you out of it.
+
+From understanding stems: ownership, speed, quality.
+
+Yeah, it is not "own what you build". It is "understand what you build".
+
+If life is cognition, and intelligent life is about cognition about cognition, then we could lay claim to intelligence being life squared.
+
+Getting goosebumps about thinking that recalculation can be a mere question of removing the results that are stale, and about having a single call prefix per path that you need to resolve.
+
+Coming back to [this article](https://jrcpl.us/contrib/2025/Scrappy):
+"We did decide to focus on the niche variously known as “end-user programming”, “small computing”, “casual programming”, “home-cooked software”, “personal software”, and “software for one”. This is in contrast to typical software development frameworks and “no-code” development platforms which cater to professionals working on industrial-strength apps and websites. Another way of putting it is that we wanted to target that gap between going shopping for apps and having to hire someone to build bespoke solutions — or becoming a skilled programmer yourself."
+
+"With today’s LLMs, you end up with pages of AI-generated code, even if it’s hidden away under a shiny UI, and you’re left helpless when something doesn’t work the way you intended."
+
+https://xcancel.com/id_aa_carmack/status/1902088032519405919?s=46%20data
+"There have been countless efforts to make software development “more visual”, but anything that isn’t a simple collection of human (and LLM!) readable text files continues to step on land mines."
+
+Let's redesign cell.respond to use missing values to show when something should be recomputed.
+
+Why is this possible here and not on a spreadsheet? Because we keep the formulas here and have a separate place for the values. But so do spreadsheets. The difference is then that you can see both of them at the same time. In normal programming languages, the "formulas" (code) gets transformed into values, so you cannot re-run the thing again reactively.
+
+Let's do it with this example:
+
+
+```
+eleven @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+1. We start with the first path with a call:
+
+```
+eleven @ plus1 10
+```
+
+In this case, we can already determine that 1) `eleven` is the call prefix; 2) `plus1` is the hook after the call. But we want to have the absolute path to which we depend. In this case it is easy to see it is actually `plus1`, but if we walked up to find something nested, it would be different. So we need to resolve the absolute path, which means we need to use that flag in cell.get to get it.
+
+Then:
+
+2. We get the call prefix and the absolute path to the hook to which it points.
+
+Now, why the hook and not more steps? Because if the hook changes, all bets are off. This will make us recompute things that we might not need, but there might be cases where we do need that. However, we did this already in gotoB. The solution is to depend on changes on any prefix of the dependency, but you can still store the full dependency. So let's do that, instead of getting the absolute path to the hook, let's get it to the hook plus whatever is there, if there's something, to be more precise.
+
+```
+depends - calls - eleven
+          on plus1
+```
+
+3. Now, let's continue. The dataspace is now expanded.
+
+```
+eleven : int 10
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+The first call path is the same as before. We go into it again: we can simply skip the dependency if it exists.
+
+Wait, the relationship could be always 1 to 1! This call prefix depends on this other path. Then it could be just pairs. Could it really be that simple? I think so, but let's see what happens with calls that have references (like the @ int one).
+
+If it's 1:1 (one call prefix has one dependency) it's almost like SSA (static single assignment form). We can just have pairs of relationships.
+
+```
+pairs - - eleven
+        - plus1
+```
+
+We cannot have this in a single hash because you might have things with different depths, right?
+
+```
+a
+c d
+```
+
+Yes, it's not a consistent dataspace.
+
+Let's just do pairs and be done for now. The first element is the dependent, the second is the dependency? No, let's make it a hash.
+
+I cannot figure out good names. Let's make it pairs, at least for now.
+
+4. Now the expansion looks like this:
+
+```
+eleven : do - @ + - @ int
+                  - 1
+         int 10
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+5. Now we have this path to expand:
+
+```
+eleven : do - @ + - @ int
+```
+
+Here, the left part of the path is:
+
+```
+eleven : do - @ + -
+```
+
+What's throwing me off here is that there's an @. But this is to be expected, really. There can be more than one call in one path. You just deal with it one at a time.
+
+Here, we'll add this pair (note we resolve the dash in the path to a number, so we have it completely unambiguous):
+
+```
+pairs - - eleven
+        - plus1
+      - - eleven : do - @ + 1
+        - eleven : int
+```
+
+Note there's no circularity here, but also this is no longer at the toplevel, dependent and dependency share a non-zero prefix.
+
+It's cool to finally understand that that path is now resolved, another one will appear to deal with the left @.
+
+6. Now we have to expand the overall step of the sequence.
+
+Wait, what about the equals? Actually, that's implied, since on top of each @ there's an =. So no need to put it there, we just know.
+
+```
+eleven : do - = 11
+              @ + - = 10
+                    @ int
+                  - 1
+         int 10
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+Then, we have:
+
+```
+pairs - - eleven
+        - plus1
+      - - eleven : do 1 @ + 1
+        - eleven : int
+      - - eleven : do 1
+        - eleven : do 1 @ +
+```
+
+On what does eleven : do 1 depend? It's not really coming from another reference, but rather from the mechanism of cell.do. Hmmm.
+
+Let's think it through. The response of the step of a sequence depends on the message and the definition itself. Well, not the definition, the call itself. What we want is the chain not to be broken. We could say that `eleven : do 1` depends on `eleven : do 1 @ + 1`, because that's what depends on `@ int`. Can I just do this instead? `eleven : do 1 @ +`. It's not just `+`, it's `+` with that prefix. I think that would work just fine.
+
+7. Then, finally, we have eleven already expanded:
+
+```
+eleven = 11
+       : do - = 11
+              @ + - = 10
+                    @ int
+                  - 1
+         int 10
+       @ plus1 10
+plus1 @ do int - @ + - @ int
+                     - 1
+```
+
+```
+pairs - - eleven
+        - plus1
+      - - eleven : do 1 @ + 1
+        - eleven : int
+      - - eleven : do 1
+        - eleven : do 1 @ +
+```
+
+I didn't add any extra pairs. There's only three, one per call prefix:
+
+```
+eleven : do - @ + - = 10
+eleven : do - @ + - @ int
+eleven @ plus1 10
+```
+
+This feels a bit strange, but it makes sense perhaps more deeply than what I see right now.
+
+8. We now finally have to do `plus1`. But it really doesn't depend on anything else, except perhaps do. Which might as well, if you redefine do!
+
+```
+pairs - - eleven
+        - plus1
+      - - eleven : do 1 @ + 1
+        - eleven : int
+      - - eleven : do 1
+        - eleven : do 1 @ +
+      - - plus1
+        - do
+```
+
+And that's really it.
+
+I'm still not sure about +. Why don't we look for +?
+
+Let's see a multiarg function. A native plus.
+
+```
+sum @ plus - 5
+           - 4
+plus m - @ + - @ m 1
+             - @ m 2
+```
+
+Let's do the expansion:
+
+```
+sum = 9
+    : do - @ + - = 5
+                 @ m 1
+               - = 4
+                 @ m 2
+      m - 5
+        - 4
+    @ plus - 5
+           - 4
+```
+
+What would the pairs be?
+
+```
+pairs - - sum
+        - plus
+      - - sum : do 1 @ + 1
+        - sum : m 1
+      - - sum : do 1 @ + 2
+        - sum : m 2
+      - - sum : do 1
+        - sum : m 1
+        - sum : m 2
+        - +
+```
+
+It definitely makes sense to say that `sum : do 1` has three dependencies: its two arguments and +. So, instead of pairs, we could have each call prefix depending on one or more elements.
+
+Also, one more thing that is missing (from the first example too): how do we connect a change in sum to a change in everything else? Ah, that one we can do because if sum changes, sum is a prefix of others that start with sum, so if sum changes, the other ones change too. It doesn't have to match the full path (gotoB change behavior).
+
+Thinking: when we wipe things, do we also go from the top to recalculate everything? That sounds a bit silly. Perhaps things have to be recalculated in the reverse order in which we wipe them, LIFO. No, the other way around! It's not the reverse order, it's starting from where you change something with put or wipe. Those paths that you put or wipe are the ones on which you start the recomputation. Probably path by path? Probably not, too inefficient. Do a mute placement, then clean up, then recalculate in the order of depth of what you cleaned up.
+
+Depth means how many transitive jumps you made, not length of the paths.
+
+claude: "Excel even has optimizations like only recalculating the "dirty" subgraph rather than the whole sheet, which is exactly what you're doing with the invalidation phase before recalculation.
+The main difference is you're making the dependency structure explicit with your pairs/lists, whereas spreadsheets infer it from formula references. But the recalculation strategy is the same principle."
 
 ### 2025-01-14
 
