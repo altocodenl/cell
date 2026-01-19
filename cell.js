@@ -194,18 +194,14 @@ cell.textToPaths = function (message) {
 }
 
 cell.dedasher = function (paths) {
-   dale.go (paths, function (v, k) {
-      dale.go (v, function (v2, k2) {
-         if (v2 === null) return paths [k] [k2] = paths [k - 1] [k2];
+   dale.go (paths, function (path, pathIndex) {
+      dale.go (path, function (step, stepIndex) {
+         if (step === null) return paths [pathIndex] [stepIndex] = paths [pathIndex - 1] [stepIndex];
+         if (step !== '-') return;
+         var lastPath = paths [pathIndex - 1];
 
-         if (v2 !== '-' && v !== null) return;
-         var lastPath = paths [k - 1];
-         var continuing;
-         if (lastPath === undefined) continuing = false;
-         else continuing = teishi.eq (lastPath.slice (0, k2), v.slice (0, k2)) && type (lastPath [k2]) !== 'string';
-
-         if (! continuing) paths [k] [k2] = 1;
-         else              paths [k] [k2] = lastPath [k2] + 1;
+         var continuing = lastPath !== undefined && teishi.eq (lastPath.slice (0, stepIndex), path.slice (0, stepIndex)) && type (lastPath [stepIndex]) !== 'string';
+         paths [pathIndex] [stepIndex] = continuing ? lastPath [stepIndex] + 1 : 1;
       });
    });
    return paths;
@@ -216,7 +212,7 @@ cell.sorter = function (paths) {
    var compare = function (v1, v2) {
       if (v1 === v2) return 0;
       var types = [type (v1) === 'string' ? 'text' : 'number', type (v2) === 'string' ? 'text' : 'number'];
-      if (types [0] !== types [1]) return types [1] === 'text' ? -1 : 1;
+      if (types [0] !== types [1]) return types [0] === 'number' ? -1 : 1;
       if (types [0] === 'number') return v1 - v2;
 
       if (v1 === '=' && v2 === ':') return -1;
@@ -303,11 +299,11 @@ cell.pathsToText = function (paths) {
 
 // *** JS HELPERS ***
 
-cell.JSToPaths = function (v, paths) {
+cell.JSToPaths = function (v) {
 
-   paths = paths || [];
+   var paths = [];
 
-   var singleTo4 = function (v) {
+   var singleToFourdata = function (v) {
       var Type = type (v);
       if (teishi.inc (['integer', 'float', 'string'], Type)) return v;
       if (Type === 'boolean') return v ? 1 : 0;
@@ -317,8 +313,8 @@ cell.JSToPaths = function (v, paths) {
    }
 
    var recurse = function (v, path) {
-      if (v === undefined) return; // Skip undefined paths to properly represent sparse arrays
-      if (teishi.simple (v)) paths.push ([...path, singleTo4 (v)]);
+      if (v === undefined) return;
+      if (teishi.simple (v)) paths.push ([...path, singleToFourdata (v)]);
       else                   dale.go (v, function (v2, k2) {
          recurse (v2, [...path, type (k2) === 'integer' ? k2 + 1 : k2]);
       });
@@ -329,7 +325,7 @@ cell.JSToPaths = function (v, paths) {
    return cell.sorter (paths);
 }
 
-cell.pathsToJS = function (paths, output) {
+cell.pathsToJS = function (paths) {
 
    if (paths.length === 0) return '';
 
@@ -339,14 +335,14 @@ cell.pathsToJS = function (paths, output) {
 
    dale.go (paths, function (path) {
       var target = output;
-      dale.go (path, function (element, depth) {
+      dale.go (path, function (step, depth) {
          if (depth + 1 === path.length) return;
-         if (type (element) === 'integer') element = element - 1;
+         if (type (step) === 'integer') step = step - 1;
          if (depth + 2 < path.length) {
-            if (target [element] === undefined) target [element] = type (path [depth + 1]) === 'string' ? {} : [];
-            target = target [element];
+            if (target [step] === undefined) target [step] = type (path [depth + 1]) === 'string' ? {} : [];
+            target = target [step];
          }
-         else target [element] = path [depth + 1];
+         else target [step] = path [depth + 1];
       });
    });
 
@@ -666,11 +662,11 @@ cell.do = function (op, definitionPath, contextPath, message, get, put) {
 cell.native = function (call, message, contextPath, get, put) {
    var nativeCalls = [
       'if', 'do', // Conditional & sequence
-      '+', '-', '*', '/', '%', // Math
-      'eq', '>', '<', '>=', '<=', // Comparison
+      'put', 'wipe', // Storage
+      '+', 'sub', 'mul', 'div', 'mod', // Math
+      'eq', 'gt', 'lt', 'gte', 'lte', // Comparison
       'and', 'or', 'not', // Logical
       'upload', // Organization
-      'put', 'wipe', // Storage
    ];
 
    if (nativeCalls.indexOf (call) === -1) return false;
@@ -849,16 +845,14 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
          var lastStep = k + 2 === path.length;
          seen [key] = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
       });
-      // Add the last value to the entire path to see if the path already exists. This is different than storing the type.
       seen [JSON.stringify (path)] = [teishi.last (path), index];
    });
 
    var removed = [];
    dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (hooks [JSON.stringify (path [0])] === -1) return path;
-      var remove = dale.stop (path.slice (0, path.length - 1), true, function (step, k) {
+      var remove = dale.stopNot (path.slice (0, path.length - 1), undefined, function (step, k) {
          var key = JSON.stringify (path.slice (0, k + 1));
-         if (! seen [key]) return;
+         if (! seen [key]) return false;
 
          var textStep = type (path [k + 1]) === 'string';
          var lastStep = k + 2 === path.length;
@@ -868,15 +862,18 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
          if (lastStep) {
             var newLastStep = seen [JSON.stringify (path)];
             if (type (newLastStep) !== 'array') return true;
-            // If it is an array, then it is also the last step of the new path. Compare values.
             if (newLastStep [0] !== path [k + 1]) return true;
-            paths [newLastStep [1]] = null; // Remove the new path, leave the old
+            paths [newLastStep [1]] = null;
          }
       });
       if (! remove) return path;
       else removed.push (path);
    });
+
    paths = dale.fil (paths, null, function (v) {return v});
+
+   if (! paths.length) return [['diff', '']];
+
    dataspace = dataspace.concat (paths);
 
    cell.sorter (dataspace);
@@ -890,8 +887,6 @@ cell.put = function (paths, contextPath, get, put, updateDialog) {
       return ['diff', 'x'].concat (path);
    })));
    */
-
-   if (! paths.length) return [['diff', '']];
 
    put (dataspace);
 

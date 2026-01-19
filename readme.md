@@ -46,7 +46,6 @@ I'm currently recording myself while building cell. You can check out [the Youtu
 
 ### Demo
 
-- annotate: changes to put
 - Test no-op put (that returns empty diff) and then execution continues
 - Test wipe: context, call to respond
 
@@ -222,7 +221,7 @@ TODO
          - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
          - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
          - Same with right & left.
-      - When reloading the page, if the selected element is far down/right enough, autoscroll to it automatically.
+      - When reloading the page, if the selected step is far down/right enough, autoscroll to it automatically.
       - The cursor should cast a dim light (green) on all paths that share its prefix up until the cursor.
    - Write
       - Click on a selected step and enter edit mode.
@@ -450,6 +449,33 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-19
+
+Not elements, but steps. Path "depth" is also a great name. Much better than index.
+
+### 2025-01-16
+
+Cell is for those that want to:
+
+1. Build their own systems
+2. Understand what they build
+
+Why build your own systems?
+
+Computer programs are strange and beautiful beasts. Like written words, like ideas. But can run very far. Practical magic.
+
+Two main purposes: to reach others, and to think. They are a medium to reach others anywhere with internet and a phone/computer (with information, games, art); and a way to think, a sort of written language that harnesses the power of computers. A tool of thought (link notation as tool).
+
+What stands in the way is the tremendous complexity of programming tools. To build your own system, you need a programming language, a text editor, a database and a server that runs it (including domains and email).
+
+Cell massively simplifies the landscape by giving you an unified environment (or substrate) where all the core capabilities are there, in one place, in a simpler way. It is quite unfamiliar, but because it has AI integrated, you can hopefully learn it quickly.
+
+Why understand your own systems?
+
+Understanding as the key to ownership and flow.
+
+You're not transforming or transmitting the symbols. The computer is doing that. Your value comes from understanding how those symbols should be transformed and transmitted.
 
 ### 2025-01-15
 
@@ -6378,7 +6404,7 @@ If we are here, there are no non-literal double quotes in `line`. We proceed to 
 If there's a whitespace character that's not space, we return an error, because those should have been enclosed between non-literal double quotes.
 
 ```js
-         if (element.match (/\s/)) return 'The line `' + line + '` contains a whitespace that should be contained within quotes.';
+         if (element.match (/\s/)) return 'The line `' + line + '` contains a space that should be contained within quotes.';
 ```
 
 If there is a double quote in the element, we also return an error, because it was not properly escaped.
@@ -6437,22 +6463,176 @@ We validate the resulting paths. If we get an error, we return it; otherwise, we
 ```js
    var error = cell.validator (paths);
    return error.length ? error : paths;
-   return paths;
 }
 ```
 
 #### `cell.dedasher`
 
-TODO
+This function converts dashes (`-`) to numbers in paths. In fourdata, dashes are a syntactic convenience for writing list items without explicit indices. For example:
+
+```
+foo - bar
+    - baz
+```
+
+Gets converted to:
+
+```
+foo 1 bar
+foo 2 baz
+```
+
+The function takes `paths` and modifies them in place, also returning them.
+
+```js
+cell.dedasher = function (paths) {
+```
+
+We iterate through all paths.
+
+```js
+   dale.go (paths, function (path, pathIndex) {
+```
+
+For each path, we iterate through all its steps.
+
+```js
+      dale.go (path, function (step, stepIndex) {
+```
+
+If the step is `null`, it means we're dealing with indentation below a dash placeholder. These `null`s come from `cell.textToPaths`. In this case, we copy the corresponding step from the previous path. This handles cases like:
+
+```
+foo - bar 1
+          2
+```
+
+Where the second line's `null` placeholder needs to inherit `foo` and the list index from the previous path.
+
+Earlier, we said:
+
+> However, a subtle point! If we have a dash on the previous path, we don't want to copy that, because if we add a dash, the `cell.dedasher` function will understand this to be a new element of a list, rather than belonging to the existing one. To mark these indentations that stand for belonging to the same (dashed) element of a list, we cover our noses and use `null`.
+
+This is where we use it.
+
+```js
+         if (step === null) return paths [pathIndex] [stepIndex] = paths [pathIndex - 1] [stepIndex];
+```
+
+If the step is not a dash, there's nothing to dedash, so we skip it.
+
+```js
+         if (step !== '-') return;
+```
+
+If we're here, we have a dash that needs to be converted to a number. We get the previous path and determine if we're "continuing" an existing list. This is true when:
+1. There is a previous path.
+2. The prefix up to this step matches between current and previous path.
+3. The corresponding step in the previous path is a number (not text).
+
+```js
+         var lastPath = paths [pathIndex - 1];
+
+         var continuing = lastPath !== undefined && teishi.eq (lastPath.slice (0, stepIndex), path.slice (0, stepIndex)) && type (lastPath [stepIndex]) !== 'string';
+```
+
+If we're continuing, we increment from the previous path's index. Otherwise, this is the first item of a new list, so we set the step to 1.
+
+```js
+         paths [pathIndex] [stepIndex] = continuing ? lastPath [stepIndex] + 1 : 1;
+      });
+   });
+```
+
+We return the modified paths. This closes the function.
+
+```js
+   return paths;
+}
+```
 
 #### `cell.sorter`
 
-TODO
+This function sorts an array of paths according to a specific ordering. The sorting rules are:
 
-The validation that goes in the sorter prevents a tie between two paths that have different lengths but have the same prefixer. But that assumes that validation comes before sorting, which is not the case!
-We take the minimum length and compare on that. If we still get a 0, that means that the short one is a prefix of the long one. In that case, the short one goes first. We make it 0 by default in case we're comparing two empty paths.
-numbers first
-= goes before :
+1. Numbers come before text.
+2. Numbers are sorted numerically, smaller first.
+3. For text, `=` comes before `:` (responses before expansions).
+4. Other text is sorted lexicographically.
+
+If two paths share the same prefix, the shorter one comes first.
+
+```js
+cell.sorter = function (paths) {
+```
+
+We define a helper function `compare` that compares two individual steps. It returns -1 if `v1` should come first, 1 if `v2` should come first, or 0 if they're equal.
+
+```js
+   var compare = function (v1, v2) {
+```
+
+If the values are identical, they're equal.
+
+```js
+      if (v1 === v2) return 0;
+```
+
+We determine the type of each value: either `'text'` or `'number'`.
+
+```js
+      var types = [type (v1) === 'string' ? 'text' : 'number', type (v2) === 'string' ? 'text' : 'number'];
+```
+
+If the types differ, numbers come first.
+
+```js
+      if (types [0] !== types [1]) return types [0] === 'number' ? -1 : 1;
+```
+
+If both are numbers, we sort numerically.
+
+```js
+      if (types [0] === 'number') return v1 - v2;
+```
+
+If both are text, we handle the special case of `=` and `:`. Responses (`=`) come before expansions (`:`).
+
+```js
+      if (v1 === '=' && v2 === ':') return -1;
+      if (v1 === ':' && v2 === '=') return 1;
+```
+
+For all other text, we sort lexicographically. This closes the `compare` function.
+
+```js
+      return v1 < v2 ? -1 : 1;
+   }
+```
+
+We now sort the paths using the native `sort` method with a custom comparator.
+
+```js
+   return paths.sort (function (a, b) {
+```
+
+We compare paths step by step, up to the length of the shorter path. We iterate through each index and compare the steps at that index. If we find a non-zero result, we stop and use that as our comparison result. If all compared steps are equal, `result` will be 0.
+
+```js
+      var result = dale.stopNot (dale.times (Math.min (a.length, b.length), 0), 0, function (k) {
+         return compare (a [k], b [k]);
+      }) || 0;
+```
+
+If `result` is non-zero, we use it. Otherwise, the shorter path comes first (this happens when one path is a prefix of the other). While there will never be two paths with the same prefix where one is just the prefix and the other one is the prefix plus one or more elements, this function is meant to be used on paths that haven't been checked for consistency yet: `cell.validator` expects its input to be sorted (since it makes its implementation easier), so this function needs to be able to deal with inconsistent paths.
+
+This closes the sort comparator and the function.
+
+```js
+      return result !== 0 ? result : a.length - b.length;
+   });
+}
+```
 
 #### `cell.pathsToText`
 
@@ -6616,12 +6796,170 @@ We join all the lines with newlines and return the result. This finishes `cell.p
 
 #### `cell.JSToPaths`
 
-TODO
-Invalid values (nan, null, but not undefined) are returned as empty text
+This function converts a javascript value to an array of paths. It's the inverse of `cell.pathsToJS`.
+
+```js
+cell.JSToPaths = function (v) {
+```
+
+We initialize `paths` as an empty array. This will accumulate all the paths as we recurse through `v`.
+
+```js
+   var paths = [];
+```
+
+We define a helper function `singleToFourdata` that converts a single (scalar) JS value to its fourdata equivalent.
+
+```js
+   var singleToFourdata = function (v) {
+      var Type = type (v);
+```
+
+Integers, floats, and strings are kept as-is. The first two are numbers, the third is text.
+
+```js
+      if (teishi.inc (['integer', 'float', 'string'], Type)) return v;
+```
+
+Booleans become 1 (true) or 0 (false), so they become numbers.
+
+```js
+      if (Type === 'boolean') return v ? 1 : 0;
+```
+
+Dates become ISO strings, which are text.
+
+```js
+      if (Type === 'date') return v.toISOString ();
+```
+
+Regexes, functions, and infinity become their text representation.
+
+```js
+      if (teishi.inc (['regex', 'function', 'infinity'], Type)) return v.toString ();
+```
+
+Everything else (null, NaN, etc.) becomes empty text.
+
+```js
+      return '';
+   }
+```
+
+We define a recursive function that walks through the value.
+
+```js
+   var recurse = function (v, path) {
+```
+
+We skip `undefined` values. This allows sparse arrays to be represented properly. Rather than having a path with `undefined` inside, this will indicate the absence of a path.
+
+```js
+      if (v === undefined) return; // Skip undefined paths to properly represent sparse arrays
+```
+
+If `v` is a simple value (not an object or array), we've hit the end of the path: we add a path with the converted value appended.
+
+```js
+      if (teishi.simple (v)) paths.push ([...path, singleToFourdata (v)]);
+```
+
+Otherwise, we iterate through the object/array and recurse. For arrays, we convert 0-based indices to 1-based (fourdata uses 1-based lists).
+
+```js
+      else                   dale.go (v, function (v2, k2) {
+         recurse (v2, [...path, type (k2) === 'integer' ? k2 + 1 : k2]);
+      });
+   }
+```
+
+We start the recursion with an empty path.
+
+```js
+   recurse (v, [])
+```
+
+We sort the paths before returning. This closes the function.
+
+```js
+   return cell.sorter (paths);
+}
+```
 
 #### `cell.pathsToJS`
 
-TODO
+This function converts an array of paths to a JavaScript value. It's the inverse of `cell.JSToPaths`.
+
+```js
+cell.pathsToJS = function (paths) {
+```
+
+If there are no paths, we return empty text.
+
+```js
+   if (paths.length === 0) return '';
+```
+
+If there's exactly one path with exactly one element, we return that element directly (a scalar value).
+
+```js
+   if (paths.length === 1 && paths [0].length === 1) return paths [0] [0];
+```
+
+We determine whether the output should be an object or array based on the first step of the first path. If it's text, we're building a hash; if it's a number, we're building a list.
+
+```js
+   var output = type (paths [0] [0]) === 'string' ? {} : [];
+```
+
+We iterate through all paths to build the output structure.
+
+```js
+   dale.go (paths, function (path) {
+      var target = output;
+```
+
+For each path, we walk through its steps (except the last, which is the value).
+
+```js
+      dale.go (path, function (step, depth) {
+```
+
+If we're at the last element of the step, we can ignore it, since we're working "one step ahead" (see below).
+
+```js
+         if (depth + 1 === path.length) return;
+```
+
+We convert 1-indexed indices back to 0-indexed since javascript arrays are 0-indexed.
+
+```js
+         if (type (step) === 'integer') step = step - 1;
+```
+
+If we're not at the second-to-last step, we need to create intermediate structures (objects or arrays) as needed, then descend into them.
+
+```js
+         if (depth + 2 < path.length) {
+            if (target [step] === undefined) target [step] = type (path [depth + 1]) === 'string' ? {} : [];
+            target = target [step];
+         }
+```
+
+If we're at the second-to-last step, the next step is the value, so we assign it.
+
+```js
+         else target [step] = path [depth + 1];
+      });
+   });
+```
+
+We return the built structure. This closes the function.
+
+```js
+   return output;
+}
+```
 
 #### `cell.validator`
 
@@ -6711,7 +7049,7 @@ If this is a terminal value (either text or number), we cannot have it twice. Fo
    });
 ```
 
-If an error was found, we return it as a path with `'error'` as the first element. Otherwise, we return an empty array to indicate the paths are valid.
+If an error was found, we return it as a path with `'error'` as the first step. Otherwise, we return an empty array to indicate the paths are valid.
 
 ```js
    return error ? [['error', error]] : [];
@@ -6750,10 +7088,10 @@ This function takes three arguments: a `path`, `get`, a storage-layer function t
 cell.respond = function (path, get, put) {
 ```
 
-If there is no `@` in this path, there are no calls. Therefore, there's nothing to do, so we ignore this path.
+If there is no `@` in this path, there are no calls. Therefore, there's nothing to do, so we ignore this path. We also ignore paths that start with `dialog`, since those are internal bookkeeping and shouldn't trigger further expansions.
 
 ```js
-   if (path.indexOf ('@') === -1) return;
+   if (path.indexOf ('@') === -1 || path [0] === 'dialog') return;
 ```
 
 We define two variables, each of them with an index. `leftmostAt` will have the index of the leftmost `@`. And `rightmostAt` will have the index of the rightmost `@`.
@@ -6794,7 +7132,7 @@ Now, you may be asking: what happens when a path has *two* (or more) `@`s? How d
 
 If we are here, we know we are dealing with a call. A call has a message that could have one or more paths. We don't want to execute this call for the second or subsequent paths with the same prefix of the same call, just for the first one. Therefore, we now write some logic to see if this path is indeed the first for its call.
 
-To do this, we first take the prefix of the path, which is the target path without the `=` at its end, plus `@` and the first element of the `valuePath`.
+To do this, we first take the prefix of the path, which is the target path without the `=` at its end, plus `@` and the first step of the `valuePath`.
 
 ```js
    var prefix = targetPath.slice (0, -1).concat (['@', valuePath [0]]);
@@ -6901,7 +7239,7 @@ Imagine that our `valuePath` is something like this: `bar 10`. Imagine that `bar
 
 Now imagine that we have a path that is `bar cocktail 5`. We may have `bar cocktail` defined as a sequence (and we'd pass `5` as its message) or we may have `bar` as a sequence (and we'd pass `cocktail 5`) as a message. All we know is that, if any of these is a possible call, there has to be a valid point in which to split the left part from the right part.
 
-So we are going to find out like this: we are going to iterate as many times as there are steps in `valuePath`. We start by getting the `valuePath`, chopping of n elements (starting with `n` as `1`), and concatenating `@ do` to that path. We then `cell.get` that path, using our `contextPath`.
+So we are going to find out like this: we are going to iterate as many times as there are steps in `valuePath`. We start by getting the `valuePath`, chopping of n steps (starting with `n` as `1`), and concatenating `@ do` to that path. We then `cell.get` that path, using our `contextPath`.
 
 We try with shorter paths first (making the destination as short as possible and the message as long as possible), then gradually lengthen the destination and shorten the message.
 
@@ -6927,9 +7265,11 @@ First, we might need to change `prefix` to reflect the fact that `definitionPath
 
 We also need to collect all the paths inside the message, which could be many. For that, we iterate all the paths after path that have the same prefix as this one, and return whatever is after the prefix. This is the reason, by the way, for us updating the prefix just above.
 
+Note we stop if we find a path that has a length that is less than this prefix, which already indicates this path doesn't have the same prefix.
+
 ```js
             call.message = [];
-            dale.stopNot (dataspace.slice (index), true, function (v) {
+            dale.stop (dataspace.slice (index), undefined, function (v) {
                if (v.length < prefix.length) return;
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return call.message.push (v.slice (prefix.length));
             });
@@ -7009,10 +7349,6 @@ This finishes the loop and the function.
 ```js
 }
 ```
-
-#### `cell.native`
-
-TODO
 
 #### `cell.if`
 
@@ -7122,7 +7458,7 @@ We forbid that there should be multiple messages.
    if (dale.keys (cell.pathsToJS (definition)).length !== 1) return [['error', 'The definition of a sequence can only contain a single name for its message.']];
 ```
 
-The definition of a sequence has to start with a list that starts at element 1. We also check that the sequence has only consecutive steps. If any of these conditions is violated, we return an error.
+The definition of a sequence has to start with a list that starts at step 1. We also check that the sequence has only consecutive steps. If any of these conditions is violated, we return an error.
 
 ```js
    if (definition [0] [1] !== 1) return [['error', 'The definition of a sequence must start with step number 1.']];
@@ -7343,9 +7679,17 @@ We close the iteration over the steps of the sequence, return `result` and close
 ```js
    });
 
-   return output;
+   return result;
 }
 ```
+
+#### `cell.native`
+
+TODO
+
+#### `cell.upload`
+
+TODO
 
 #### `cell.get`
 
@@ -7366,7 +7710,7 @@ We start by getting all the paths in the dataspace.
    var dataspace = get ();
 ```
 
-If the first element of `queryPath` is a dot, this has a special meaning: it means search *right here*, don't walk up. In this case, we will set a variable `dotMode` and remove the dot from `queryPath`.
+If the first step of `queryPath` is a dot, this has a special meaning: it means search *right here*, don't walk up. In this case, we will set a variable `dotMode` and remove the dot from `queryPath`.
 
 ```js
    var dotMode = queryPath [0] === '.';
@@ -7377,7 +7721,7 @@ We will try to find the first step of the `queryPath` at the longest (deepest) p
 
 If `contextPath` has more than length 0, we start by finding all the paths that match it. We then shave off the `contextPath` as prefix from each of the matched paths and we go through all of them to find what matches the first step of `queryPath`. If there is no hook because `queryPath` is empty, we get everything that matches `contextPath`.
 
-In this way, the function walks "up" the context path, removing elements from its end, and stopping when it finds one or more paths that match the query.
+In this way, the function walks "up" the context path, removing steps from its end, and stopping when it finds one or more paths that match the query.
 
 We will run a loop that stops on not `undefined` and runs at most the length of contextPath + 1 (the + 1 is to run it against an empty context path).
 
@@ -7455,39 +7799,232 @@ We get the entire dataspace onto memory. Isn't inefficiency fun?
    var dataspace = get ();
 ```
 
-TODO EXPLAIN:
-- Multiple hooks.
-- It's an upsert if there are no type conflicts, otherwise, the conflicting existing structure is removed.
-- We calculate context paths first based on the existing data.
-- Then we get the types for every prefix on every path (with those paths already having the proper context path).
-- Then we go through the entire dataspace and compare the existing paths with the new ones, and remove the old existing paths.
+We now collect the "hooks" (the outermost keys of all paths) that we're going to update. When we write paths to the dataspace, each hook is the first step of each of those paths. The hook is where we're "hooking" the new data, exactly in the same way as hooks work for `cell.get`.
 
-Now, the dataspace variable is updated. We sort it, then persist the changes.
+We iterate `paths` and for each one we extract the first step (unless we're in "dot mode", in which case we take the second step). `hooks` will take the shape of `{<hook (which is just a step)>: true/false}`, where `true` indicates dot mode and `false` indicates normal mode.
+
+Why an object and not an array? We could potentially have multiple paths with the same prefix, so doing it like an object reduces unnecessary lookups ove ra long array later.
+
+```js
+   var hooks = dale.obj (paths, function (path) {
+      var dotMode = path [0] === '.';
+      return [JSON.stringify (path [dotMode ? 1 : 0]), dotMode];
+   });
+```
+
+We now iterate the hooks to determine the context path for each one. The goal of this section is to set each of the entries of `hooks` to a context path where we can find that hook.
+
+```js
+   dale.go (hooks, function (dotMode, hook) {
+```
+
+ If a hook is in dot mode, we simply use the `contextPath` as-is.
+
+```js
+      if (dotMode) return hooks [hook] = contextPath;
+```
+
+If not in dot mode, we need to "walk up" to find where this hook already exists in the dataspace. We iterate backwards through the `contextPath`, starting from its full length down to 0. For each position, we create a prefix by taking that slice of `contextPath` and appending the hook. We then check if any path in the dataspace starts with this prefix. If we find a match, we return the prefix without the hook itself (just the context portion) and stop the iteration (since we found what we want).
+
+```js
+      var context = dale.stopNot (dale.times (contextPath.length, contextPath.length, -1), undefined, function (k) {
+         var prefix = contextPath.slice (0, k).concat (JSON.parse (hook));
+         if (! dale.stop (dataspace, true, function (path) {
+            return teishi.eq (prefix, path.slice (0, prefix.length));
+         })) return;
+```
+
+We return the context path without the hook.
+
+```js
+         return prefix.slice (0, -1);
+      });
+```
+
+If `context` is present, we found a non-empty context path for that hook, so we set it in `hooks [hook]`. Otherwise, no match is found at any level, so we default to an empty `contextPath`.
+
+```js
+      hooks [hook] = context || [];
+   });
+```
+
+We now expand each path by prepending its context path. We iterate `paths` and for each one, we look up its hook in `hooks` to get the context path, then concatenate it with the path itself. If in dot mode, we skip the leading `.` by taking `path.slice (1)`.
+
+```js
+   var error;
+   paths = dale.go (paths, function (path) {
+      var dotMode = path [0] === '.';
+      path = hooks [JSON.stringify (path [dotMode ? 1 : 0])].concat (dotMode ? path.slice (1) : path);
+```
+
+We also check that we're not trying to write to `dialog` without the `updateDialog` flag. The dialog is protected from being overwritten by normal puts. This is the sole reason we have the `error` variable outside the iteration.
+
+```js
+      if (! updateDialog && path [0] === 'dialog') error = [['error', 'A dialog cannot be supressed by force.']];
+      else return path;
+   });
+```
+
+If we have an error because of trying to overwrite the error, we return early with an error.
+
+```js
+   if (error) return error;
+```
+
+We now build a `seen` object that tracks the type of every prefix in the paths we want to put. This will allow us to detect type conflicts with existing data.
+
+```js
+   var seen = {};
+```
+
+We iterate the paths: for each of them, we iterate each of the steps on each (except for the last). If a path has n steps, we iterate n-1 since we assume (actually, expect) that the overall type of the paths is a hash. This is so because the dataspace has top-level keys that are texts (such as `dialog`). Remember that these paths are now absolute paths and so must go directly into the dataspace.
+
+```js
+   dale.go (paths, function (path, index) {
+      dale.go (path.slice (0, path.length - 1), function (step, k) {
+```
+
+We create a key that is the stringification of the path minus the last step.
+
+```js
+         var key = JSON.stringify (path.slice (0, k + 1));
+         if (seen [key]) return;
+```
+
+For each prefix, we determine its type based on the next step. If the next step is text, the prefix is either `'text'` (if it's the last step) or `'hash'`. If the next step is a number, the prefix is either `'number'` or `'list'`.
+
+```js
+         var textStep = type (path [k + 1]) === 'string';
+         var lastStep = k + 2 === path.length;
+         seen [key] = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
+      });
+```
+
+We also store the full path with its last value and index. This lets us check if a path already exists with the same value. The index refers to the position of this path on the list of paths to be put.
+
+```js
+      seen [JSON.stringify (path)] = [teishi.last (path), index];
+   });
+```
+
+We now iterate the dataspace to determine which existing paths need to be removed. We initialize `removed` to track paths that will be deleted (for reporting in the diff output). We filter the dataspace: for each existing path, we check if it conflicts with what we're trying to put.
+
+```js
+   var removed = [];
+   dataspace = dale.fil (dataspace, undefined, function (path) {
+```
+
+For each existing path, we iterate through its prefixes (all steps except the last). We use `stopNot` to stop either at the first conflict or the moment that this path's prefix is no longer in conflict with one of the seen paths; if we return `undefined`, the iteration keeps on going until the end.
+
+```js
+      var remove = dale.stopNot (path.slice (0, path.length - 1), undefined, function (step, k) {
+```
+
+We compute a key by taking a prefix of the path.
+
+```js
+         var key = JSON.stringify (path.slice (0, k + 1));
+```
+
+If this prefix hasn't been seen, we return `false`, since neither itself nor any path that has that prefix as prefix can represent a conflict for this put.
+
+```js
+         if (! seen [key]) return false;
+```
+
+If the prefix *was* seen, we need to determine what type the existing path expects at this prefix. We compute the type in exactly the same way we did when building `seen`: based on whether the next step is text or number, and whether it's the last step.
+
+```js
+         var textStep = type (path [k + 1]) === 'string';
+         var lastStep = k + 2 === path.length;
+         var t = textStep ? (lastStep ? 'text' : 'hash') : (lastStep ? 'number' : 'list');
+```
+
+If the type of the existing path doesn't match what we saw in the new paths, we have a conflict. We return `true` to signal that this path should be removed.
+
+```js
+         if (seen [key] !== t) return true;
+```
+
+If we're at the last step of this path we're iterating, we need special handling. We check if the existing path with this prefix also finishes here.
+
+If that is the case, its `seen` key will be an array of the shape `[<last step>, <index>]`. If it's not an array, this is just a conflict, so we return `true`.
+
+```js
+         if (lastStep) {
+            var newLastStep = seen [JSON.stringify (path)];
+            if (type (newLastStep) !== 'array') return true;
+```
+
+If we're here, both the old and the new path end at this exact location. We compare the values: if they differ, we remove the existing path (return `true`). If they match, we mark the new path as `null` to avoid adding a duplicate.
+
+```js
+            if (newLastStep [0] !== path [k + 1]) return true;
+            paths [newLastStep [1]] = null; // Remove the new path, leave the old
+         }
+      });
+```
+
+After checking all prefixes of an existing path, if `remove` is falsy we keep the path by returning it. Otherwise, we push it to `removed` (for the diff output) and return `undefined` to filter it out.
+
+```js
+      if (! remove) return path;
+      else removed.push (path);
+   });
+```
+
+We filter out any `null` entries from `paths` (these were duplicates of existing paths).
+
+```js
+   paths = dale.fil (paths, null, function (v) {return v});
+```
+
+If no paths were actually added, we return an empty diff early.
+
+```js
+   if (! paths.length) return [['diff', '']];
+```
+
+We add the new paths to the dataspace.
+
+```js
+   dataspace = dataspace.concat (paths);
+```
+
+Now the dataspace variable is updated. We sort it.
 
 ```js
    cell.sorter (dataspace);
 ```
 
-We will now iterate the dataspace, running `cell.respond` of each of the paths, until we either finish iterating the paths or `cell.respond` returns `true`.
+We persist the changes.
 
 ```js
    put (dataspace);
 ```
 
-We call `cell.respond` in case some reference needs to be updated. If `cell.respond` finds that changes should happen, it will call `cell.put` in turn. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated. The `true` that `cell.respond` is only to make things more efficient and avoid unnecessary calls.
+We call `cell.respond` for each path in the dataspace, but only if the paths we're putting don't all start with `dialog` (the dialog can only be appended to or wiped, but never updated).
+
+We skip calling `cell.respond` if `cell.respond` finds that changes should happen, it will call `cell.put` in turn. In that way, `cell.put` and `cell.respond` will call each other recursively until all the changes are propagated. The `true` that `cell.respond` returns is only to make things more efficient and avoid unnecessary calls.
 
 We don't validate the dataspace after calling `cell.respond` because no expansion of a call should generate an incorrect result: every call defines a hash (because `@` is text), so putting a `=` on the same prefix will not change the type of the prefix. Because of this, the call to `cell.put` from inside `cell.respond` doesn't check for errors returned by `cell.put`.
 
 ```js
-   dale.stop (dataspace, true, function (path) {
-      return cell.respond (path, get, put);
-   });
+   if (! (paths [0] [0] === 'dialog' && teishi.last (paths) [0] === 'dialog')) {
+      dale.stop (dataspace, true, function (path) {
+         return cell.respond (path, get, put);
+      });
+   }
 ```
 
-We return `[['ok']]`. This closes the function.
+Finally, we return the diff. The diff contains all the paths that were added (prefixed with `+`) and all the paths that were removed (prefixed with `x`). This closes the function.
 
 ```js
-   return [['ok']];
+   return dale.go (paths, function (path) {
+      return ['diff', '+'].concat (path);
+   }).concat (dale.go (removed, function (path) {
+      return ['diff', 'x'].concat (path);
+   }));
 }
 ```
 
@@ -7503,7 +8040,7 @@ Finally, it takes a `mute` flag, which when truthy will make the function *not* 
 cell.wipe = function (paths, contextPath, get, put, mute) {
 ```
 
-As `paths`, we can either receive a list of prefixes to wipe, or just one prefix. If we get a list of prefixes (which means that we have more than one path and that the first step of the first path is a number, denoting that the overall `paths` data is a list), we strip away the first element of each path.
+As `paths`, we can either receive a list of prefixes to wipe, or just one prefix. If we get a list of prefixes (which means that we have more than one path and that the first step of the first path is a number, denoting that the overall `paths` data is a list), we strip away the first step of each path.
 
 ```js
    if (paths.length > 1 && type (paths [0] [0]) === 'integer') paths = dale.go (paths, function (path) {
@@ -7517,7 +8054,7 @@ We get the entire dataspace onto memory. Remind me this if I ever call myself a 
    var dataspace = get ();
 ```
 
-We will keep track of all the paths we wiped. We do this with an object so that we can have fast lookup if there are many paths, although I wonder if stringifying JSON makes this slower than n comparisons of m elements.
+We will keep track of all the paths we wiped. We do this with an object so that we can have fast lookup if there are many paths, although I wonder if stringifying JSON makes this slower than n comparisons of m steps.
 
 ```js
    var wiped = {};
@@ -7540,13 +8077,11 @@ We put each of the wiped paths as keys on `wiped`.
    });
 ```
 
-
-We iterate all paths in the dataspace; if a path is shorter than the prefix, we keep it (the prefix can only delete things that fully match it). If not, we compare the first n elements of the path with the prefix (where n is the length of the prefix) and if they are the same, we remove that path.
+We iterate all paths in the dataspace. If a path is in our `wiped` hash, we filter it out (by returning `undefined`). Otherwise, we keep it.
 
 ```js
    dataspace = dale.fil (dataspace, undefined, function (path) {
-      if (prefix.length > path.length) return path;
-      if (! teishi.eq (prefix, path.slice (0, prefix.length))) return path;
+      if (! wiped [JSON.stringify (path)]) return path;
    });
 ```
 

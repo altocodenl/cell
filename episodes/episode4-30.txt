@@ -1,0 +1,3 @@
+Thirtieth episode of season 4! I'm building a programming substrate from scratch while recording myself. Done annotating all source code except for the incomplete functions! Ready to tackle a couple tests and then the new approach on cell.respond!
+
+https://github.com/altocodenl/cell
