@@ -1367,54 +1367,54 @@
            - c @ wipe
 
            - c @ put eleven @ plus1 10
-                     plus1 @ do int - @ + - @ int
-                                          - 1
+                     plus1 @ do int - @ add - @ int
+                                            - 1
            - c @
              r eleven = 11
                       : int 10
                         do - = 11
-                             @ + - = 10
-                                   @ int
-                                 - 1
+                             @ add - = 10
+                                     @ int
+                                   - 1
                       @ plus1 10
                plus1 = int 1
-                     @ do int - @ + - @ int
-                                    - 1
+                     @ do int - @ add - @ int
+                                      - 1
              tag "Valid sum: ten plus one"
 
-           - c @ put plus1 @ do int - @ + - @ int
-                                          - 2
+           - c @ put plus1 @ do int - @ add - @ int
+                                            - 2
 
            - c @
              r eleven = 12
                       : int 10
                         do - = 12
-                             @ + - = 10
-                                   @ int
-                                 - 2
+                             @ add - = 10
+                                     @ int
+                                   - 2
                       @ plus1 10
                plus1 = int 1
-                     @ do int - @ + - @ int
-                                    - 2
+                     @ do int - @ add - @ int
+                                      - 2
              tag "Update sequence, the sum should update"
 
            - c @ wipe
 
            - c @ put eleven @ nested plus1 10
-                     nested plus1 @ do int - @ + - @ int
-                                                 - 1
+                     nested plus1 @ do int - @ add - @ int
+                                                   - 1
 
            - c @
              r eleven = 11
                       : int 10
                         do 1 = 11
-                             @ + - = 10
-                                   @ int
-                                 - 1
+                             @ add - = 10
+                                     @ int
+                                   - 1
                       @ nested plus1 10
                nested plus1 = int 1
-                            @ do int 1 @ + - @ int
-                                           - 1
+                            @ do int 1 @ add - @ int
+                                             - 1
              tag "Call a sequence at a path two steps long"
 
            - c @ wipe

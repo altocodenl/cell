@@ -663,7 +663,7 @@ cell.native = function (call, message, contextPath, get, put) {
    var nativeCalls = [
       'if', 'do', // Conditional & sequence
       'put', 'wipe', // Storage
-      '+', 'sub', 'mul', 'div', 'mod', // Math
+      'add', 'sub', 'mul', 'div', 'mod', // Math
       'eq', 'gt', 'lt', 'gte', 'lte', // Comparison
       'and', 'or', 'not', // Logical
       'upload', // Organization
@@ -704,7 +704,7 @@ cell.native = function (call, message, contextPath, get, put) {
       return Math.round (n * 1000000000) / 1000000000;
    }
 
-   if (call === '+') {
+   if (call === 'add') {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types.length > 1 && ! teishi.eq (types.sort, ['number', 'text'])) return [['error', 'Cannot mix these elements:', types.join (', ')]];
 
@@ -717,7 +717,7 @@ cell.native = function (call, message, contextPath, get, put) {
 
       return [[dale.acc (message, function (a, b) {return a + b})]];
    }
-   if (call === '-') {
+   if (call === 'sub') {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
       if (types.length > 1) return [['error', 'Cannot mix these elements:', types.join (', ')]];
