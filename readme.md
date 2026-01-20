@@ -231,6 +231,88 @@ Instead of @ query, @ ask. This is shorter and more memorable.
 
 Perhaps, when writing about code, I no longer need to do "..." or `...`, the @ is what makes it a call in the context of natural language.
 
+Getting ready to redesign cell.respond. Let's take the classic:
+
+
+```
+eleven @ plus1 10
+plus1 @ do int - @ add - @ int
+                       - 1
+```
+
+Let's go through it. We can write it like this, like fourdata. See the execution path also in the dataspace, as a list of hashes.
+
+Let's assume that we go with the system of no-result, we compute; a result, we skip.
+
+```
+1 dataspace eleven @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "put message in expansion"
+
+2 dataspace eleven : int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "put step 1 in expansion"
+
+3 dataspace eleven : do - @ add - @ int
+                                - 1
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven : do - @ add - @ int
+  op reference path eleven : int
+
+4 dataspace eleven : do - @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven : do - @ add - = 10
+  op native op add
+            message - 10
+                    - 1
+
+5 dataspace eleven = 11
+                   : do - = 11
+                          @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path plus1 @ do int - @ add - @ int
+  op do definition plus1
+
+6 dataspace eleven = 11
+                   : do - = 11
+                          @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 = int 1
+                  @ do int - @ add - @ int
+                                   - 1
+  DONE 1
+```
+
+When you're at a stopping value or the last step, put the value on the caller directly, don't do a re-entry. Why not when we are putting the message and the step? Because we might want to expand the message first? Maybe we could skip that re-entry too and go straight. Good one.
+
+No, I like it like this. You put the message, it resolves (is responded) and then you put the first step of the sequence. It should still work anyway, but you avoid more back and forth and it's easier to trace it.
+
+In this way, seen above, we only go through the thing five times. One per call prefix, except for the sequence call, which requires two (one for definition and one for first step). Every sequence would require N+1, where N is the number of steps in it.
+
+Interesting that I use step for both a path and for sequence. I think it composes well.
+
 ### 2025-01-19
 
 Not elements, but steps. Path "depth" is also a great name. Much better than index.

@@ -1,0 +1,3 @@
+Thirty-first episode of season 4! I'm building a programming substrate from scratch while recording myself. Add a couple good tests for wipe. Find a loop where cell gets stuck because put and no-op don't work with cell.respond. Finally tackle the remaking of cell.respond, at the very end, and discover we can use fourdata to express the expansions in a readable way.
+
+https://github.com/altocodenl/cell
