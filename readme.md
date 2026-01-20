@@ -2,10 +2,10 @@
 
 ## Why cell
 
-cell is built around three ideas:
+cell is built atop three ideas:
 
 1. Building data systems is like writing: a way to reach the world, an essential tool of thought and a way to produce work that transcends the author.
-2. Understanding is the key to building data systems: a system you understand is a reliable, easy to modify system.
+2. Understanding is the key to building good data systems: a system you understand is the foundation for flow and ownership.
 3. Understanding can be easier if we remove obstacles: most of what makes programming difficult is unnecessary.
 
 cell is a tool that makes building and understanding [data systems](https://github.com/altocodenl/todis) as easy as possible.
@@ -41,251 +41,6 @@ For each of these, cell provides:
 5. An editor that constantly responds to your changes and which integrates service, interface and database. And which runs in your browser, with no installation required.
 
 I'm currently recording myself while building cell. You can check out [the Youtube channel here](https://www.youtube.com/channel/UCEcfQSep8KzW7H2S0HBNj8g).
-
-## TODO
-
-### Demo
-
-- Test no-op put (that returns empty diff) and then execution continues
-- Test wipe: context, call to respond
-
-- EITHER:
-   - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
-   - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
-- OR:
-   - Use missing results rather than existingValue === newValue to make updates. That is, remove results when a transitive dependency changes.
-
-- Language
-   - cell.respond
-      - Add dependents/dependencies to only recalculate what's necessary.
-   - @ if
-      - Pass lambdas in do/else
-   - @ do
-      - sizzbuzz (single return fizzbuzz)
-      - html generation/validation
-      - allow for multiple args (destructuring of lists or hashes) and no args (the sequence just there)
-      - test two step calls
-      - test stop
-      - test nested calls
-      - test recursive calls
-      - test descending funarg (pass function)
-      - test ascending funarg (return function)
-      - Loop
-   - cell.call
-      - Single entrypoint
-      - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
-   - @ catch
-   - cell.native
-      - count
-      - sum
-      - duplicates
-      - push/lepush (left push)
-      - pop, lepop
-   - @ query
-      - query path surrounded by implicit stars
-      - query path that can have a sequence (or a reference to a sequence) OR a validator
-- Upload: upload that stores the file in the dataspace, as well as the data
-   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
-- @ rule
-   - type
-   - equality
-   - range (for numbers): >, <, >=, <=
-   - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
-   - any other logic, really, the full language is there
-- @ view
-   - Serving the view
-   - HTML generation
-   - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
-- @ api
-   - Register api calls
-   - Serve api calls
-   - Send api calls through the service
-
-### Publishing
-
-- Bring data from anywhere:
-   - Fixed prompt to ask you to enter data
-   - Modes
-      - Clipboard
-      - Upload
-      - API
-      - AI (bring public data or invent sample data)
-   - Parse
-      - Spreadsheet
-      - CSV
-      - JSON
-   - Ask AI to name the output
-   - Save the file and have a reference to it from the cell (the metadata is in the cell)
-
-- Prompt the making of a dashboard, a form or a table, with some buttons
-
-- Dashboard (first view):
-   - Set view.dashboard to
-
-view dashboard @ do dataspace 1 div class main
-                                    _ 1 p _ 1 "Foo is"
-                                              = 1
-                                            2 @ foo
-                                    _ 2 p _ 1 "Bar is"
-                                              = 2
-                                            2 @ bar
-
-- html with tachyons, gotob and cell
-- bootstrap js that does the following:
-   - gets the entire cell (the id is preloaded)
-   - gets the view that it is in (the view name is preloaded)
-   - gets the contents of the view, which requires evaluation
-   - convert them to lith
-   - puts a reactive view that depends on the dataspace (contents below)
-   - put this function inside the reactive view
-- Query every n seconds to refresh
-
-- For the form:
-   - Validation which defines rules
-
-- For the table
-   - Iteration for generating rows
-
-Left out for now:
-- Read from DB.
-- Read DB dump.
-- Access levels on data (for now, all is accessible all the time by everyone)
-
-### Thinking
-
-TODO
-
-### More use cases
-
-- Civ2 savegame analyzer
-- Rent a crud
-- Back tester for stocks
-- Fitness companion for phone
-- Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
-- Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
-- Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
-- Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
-- Usage dashboard: requests per second, also per code, bytes flowing. See fun data in real time.
-
-## Features
-
-### Editor
-
-- Find
-   - Have a cursor [DONE]
-   - Move it around with the keys [DONE]
-   - Fold/unfold
-   - Jumping search
-   - Auto scroll to where the cursor is, if the cursor jumps
-   - Copy (the cursor determines the selection)
-   - Show images and graphs where the = is, as a large pseudo step (a la netscape)
-   - Search input that calls the search call (see devnotes 2025-08-27)
-   - Store searches in the dataspace and have quick retrieval
-   - Table view with headers at top and rows on the left?
-   - Fast scrolling with >100k (see devnotes 2025-08-27)
-   - Get only the diff between your last refresh and the server version
-
-- Write
-   - Edit step [DONE]
-   - Add
-      - Add ground laterally (one step)
-         - At the end
-         - In the middle
-      - Add ground at the bottom (remove step)
-      - A way to create space that doesn't entail editing something already there. Sort of a blank space that you can create or go to with a click.
-   - Remove
-      - Join steps
-      - Remove step
-      - Remove path with all suffixes (show what would be deleted by highlighting, first delete shows you the extent of the deletion, second executes)
-   - Support for quoted texts
-   - Diffs
-      - Give ids to calls
-      - Make mute calls still be in the dialog but not shown
-      - Rename dialogue to dialog [DONE]
-   - Undo
-   - Vim mode when editing long texts
-
-- Editor tests
-   - Noop
-      - If the input/textarea on the right is selected, don't do anything on the left.
-      - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
-   - Find
-      - Click on a non selected step and see how the cursor jumps there.
-      - Go to the left, don't do anything because you're already at position 1.
-      - Go all the way to the right, one at a time, until you hit the last one.
-      - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
-      - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
-      - Do the same going up, it should also jump up.
-      - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). When you go left, rather than going to the abridged, you jump up and left until foo bar (the previous path that has a nonabridged step at position 3).
-      - Scroll down/up when jumping far enough (requires more than a screenful of data).
-         - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
-         - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
-         - Same with right & left.
-      - When reloading the page, if the selected step is far down/right enough, autoscroll to it automatically.
-      - The cursor should cast a dim light (green) on all paths that share its prefix up until the cursor.
-   - Write
-      - Click on a selected step and enter edit mode.
-      - Change the value.
-      - Exit it again with escape, this will not change the value.
-      - Enter edit mode again with enter.
-      - Change the value again.
-      - Exit it again with enter, this will save the change and retain the cursor, but not editing it.
-      - Enter edit mode again with enter and exit again with enter, retain the cursor.
-
-### Language
-
-- search (general call to get matching paths)
-- replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
-- wall (block walking up, but not down)
-- diff: takes one or two points of the dialog and gives you a diff.
-- access masks
-- Recursive lambdas by referencing itself?
-- @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
-
-### Engine
-
-- Sublinear search
-   - Set from a path to all its following steps (just the next one)
-   - Set from a step (by value) to all its prefixes
-
-Cell engines (dbs):
-- Disk (improve efficiency enough so that it's at least linear)
-- Redis (with aof)
-- Postgres
-
-Implementing sublinear cell in redis:
-- Consider each step to be represented by four things: an id, a value, a position (1, 2, ...) and the id of the parent. For example, the "bar" in foo bar would have value bar, position 2, and the parent id would be that of foo.
-- What about naive indexing on redis? Take each column (row) that's not an id and make it into a set. For example: value:bar would be a set of all the ids (of steps) that have as value "bar". Or position:2 would be a set of all the steps that are in position 2. And children:ID would be the set of all the steps that are children of the step ID.
-- The deeper idea is to sets like masks. I'd love a prefix mask where shorter and longer elements that have similar prefixes match, and this would be done inside redis without having to go to the Lua script.
-- Example: look for "status 200", where those are two distinct steps, one next to each other. They are at any position, so ignore the position. You would start by looking those ids with status, then get all the 200 that have each of those ids as parent, then intersect for a result. I'm itching to find a pattern like that in Earley's parser where you "combine like subparses". Rather than starting from a point, you go through each of the search terms in parallel, gathering subresults in sets, and then you intersect until you get all the steps that match. Then, you linearly reconstruct the paths from the ids.
-- The memory footprint would be softened by having data where a lot of the texts or numbers are the same, because then they would have the same entry. I wonder how much more memory this representation requires than an equivalent text representation.
-
-For postgres:
-- How is this implemented? Make a single table on a relational database, with 2000 columns, the odd ones text and the even ones number. For a path element at position m, store it in m\*2 if it's text and m\*2+1 if it is a number. perform queries accordingly.
-- What do you get out of this?
-   - ACID, because it's backed by a relational database.
-   - Fast querying on arbitrary path elements.
-   - Range and match tests.
-
-Tackling consistency:
-- run the sync code in the db within a transaction
-- make async ops not have consistency requirements except for checking things when they are ready for sync again
-- have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
-- If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
-
-Vague but compelling: every change generates a new id. This can recompute the entire dataspace affected by it. This creates a snapshot. The latest versions are resolved lexically. This would be a sort of indexing on top of the database itself (instead of it being a linear performance call going backwards from the latest to the requested one through applying reverse diffs).
-
-### Service
-
-- Altocookies: login with email with link (no password) or oauth with providers that always provide email (google)
-- Make a queue per cell to process calls. Take cb as argument.
-- ai
-- outbound http
-- inbound email: automatic email inbox per cell
-- domain
-- Encrypted (password/passkey protected) export/import
-- PWAs out of the box.
-- Dashboard with 10^... values (exponent with two decimal points) for requests per second, weekly active users and and GBs in memory.
 
 ## Concepts
 
@@ -449,6 +204,19 @@ view
 ```
 
 ## Development notes
+
+### 2025-01-20
+
+Nested queries give you relational-like fetching! And if this is combined with @ rule, you can express relations, like saying that this field contains an id of one of the entities of the other kind.
+
+Interesting to read about [fair-code](https://faircode.io/). It makes sense to move cell to that, perhaps with a threshold (below 1M ARR, you can offer hosted cell without paying anything).
+
+The why of cell: understanding is the foundation for ownership & flow. Those are the two things we want! Ownership and flow. Ownership is trust, now and long term. Flow is about the energy you get, the happiness you have when using it. The magic.
+
+https://bvisness.me/high-level/
+"Low-level programming is not the goal unto itself. High-level programming—a new kind of high-level programming—is the goal, and low-level is how we get there."
+
+Motivators for using cell: love & pride. Love for what you do, pride for what you do. It's difficult to love your system if the tools you use are constantly rotting, or not letting you see the plain beauty of what you're making.
 
 ### 2025-01-19
 
@@ -8167,3 +7935,249 @@ Leon Marshall has contributed the term "speak" to describe interactions between 
 ## License
 
 cell is written by [Federico Pereiro](mailto:fpereiro@gmail.com) and released into the public domain.
+
+## TODO
+
+### Demo
+
+- Test no-op put (that returns empty diff) and then execution continues
+- Test wipe: context, call to respond
+
+- EITHER:
+   - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
+   - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
+- OR:
+   - Use missing results rather than existingValue === newValue to make updates. That is, remove results when a transitive dependency changes.
+
+- Language
+   - cell.respond
+      - Add dependents/dependencies to only recalculate what's necessary.
+   - @ if
+      - Pass lambdas in do/else
+   - @ do
+      - sizzbuzz (single return fizzbuzz)
+      - html generation/validation
+      - allow for multiple args (destructuring of lists or hashes) and no args (the sequence just there)
+      - test two step calls
+      - test stop
+      - test nested calls
+      - test recursive calls
+      - test descending funarg (pass function)
+      - test ascending funarg (return function)
+      - Loop
+   - cell.call
+      - Single entrypoint
+      - Convention: if you send a lambda (@ do) over the wire, you want us to call it.
+   - @ catch
+   - cell.native
+      - count
+      - sum
+      - duplicates
+      - push/lepush (left push)
+      - pop, lepop
+   - @ query
+      - query path surrounded by implicit stars
+      - query path that can have a sequence (or a reference to a sequence) OR a validator
+- Upload: upload that stores the file in the dataspace, as well as the data
+   - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
+- @ rule
+   - type
+   - equality
+   - range (for numbers): >, <, >=, <=
+   - match (for text): regex (more verbose and readable format for regexes: More open regex format with lists: literal, character class, backreference or lookahead)
+   - any other logic, really, the full language is there
+- @ view
+   - Serving the view
+   - HTML generation
+   - Auto-wiring of api calls to the messages that the views receive, as well as the references they do higher up.
+- @ api
+   - Register api calls
+   - Serve api calls
+   - Send api calls through the service
+
+### Publishing
+
+- Bring data from anywhere:
+   - Fixed prompt to ask you to enter data
+   - Modes
+      - Clipboard
+      - Upload
+      - API
+      - AI (bring public data or invent sample data)
+   - Parse
+      - Spreadsheet
+      - CSV
+      - JSON
+   - Ask AI to name the output
+   - Save the file and have a reference to it from the cell (the metadata is in the cell)
+
+- Prompt the making of a dashboard, a form or a table, with some buttons
+
+- Dashboard (first view):
+   - Set view.dashboard to
+
+view dashboard @ do dataspace 1 div class main
+                                    _ 1 p _ 1 "Foo is"
+                                              = 1
+                                            2 @ foo
+                                    _ 2 p _ 1 "Bar is"
+                                              = 2
+                                            2 @ bar
+
+- html with tachyons, gotob and cell
+- bootstrap js that does the following:
+   - gets the entire cell (the id is preloaded)
+   - gets the view that it is in (the view name is preloaded)
+   - gets the contents of the view, which requires evaluation
+   - convert them to lith
+   - puts a reactive view that depends on the dataspace (contents below)
+   - put this function inside the reactive view
+- Query every n seconds to refresh
+
+- For the form:
+   - Validation which defines rules
+
+- For the table
+   - Iteration for generating rows
+
+Left out for now:
+- Read from DB.
+- Read DB dump.
+- Access levels on data (for now, all is accessible all the time by everyone)
+
+### Thinking
+
+TODO
+
+### More use cases
+
+- Civ2 savegame analyzer
+- Rent a crud
+- Back tester for stocks
+- Fitness companion for phone
+- Library catalog: Upload a CSV with book data. Make queries on the data. Expose them through an interface that draws a table.
+- Logs and alerts: Push logs. Create queries on them. When certain logs come in, send an email or a notification.
+- Spreadsheet database: Upload an XLS with data. Create a schema with the LLM and expose it as a table with associated form in an UI.
+- Admin: place a DB dump. Run queries to detect inconsistencies and derive a better schema. Show these tables in an admin. Expose the dump through an HTTP endpoint in your service to update this.
+- Usage dashboard: requests per second, also per code, bytes flowing. See fun data in real time.
+
+## Features
+
+### Editor
+
+- Find
+   - Have a cursor [DONE]
+   - Move it around with the keys [DONE]
+   - Fold/unfold
+   - Jumping search
+   - Auto scroll to where the cursor is, if the cursor jumps
+   - Copy (the cursor determines the selection)
+   - Show images and graphs where the = is, as a large pseudo step (a la netscape)
+   - Search input that calls the search call (see devnotes 2025-08-27)
+   - Store searches in the dataspace and have quick retrieval
+   - Table view with headers at top and rows on the left?
+   - Fast scrolling with >100k (see devnotes 2025-08-27)
+   - Get only the diff between your last refresh and the server version
+
+- Write
+   - Edit step [DONE]
+   - Add
+      - Add ground laterally (one step)
+         - At the end
+         - In the middle
+      - Add ground at the bottom (remove step)
+      - A way to create space that doesn't entail editing something already there. Sort of a blank space that you can create or go to with a click.
+   - Remove
+      - Join steps
+      - Remove step
+      - Remove path with all suffixes (show what would be deleted by highlighting, first delete shows you the extent of the deletion, second executes)
+   - Support for quoted texts
+   - Diffs
+      - Give ids to calls
+      - Make mute calls still be in the dialog but not shown
+      - Rename dialogue to dialog [DONE]
+   - Undo
+   - Vim mode when editing long texts
+
+- Editor tests
+   - Noop
+      - If the input/textarea on the right is selected, don't do anything on the left.
+      - Select a cursor and also check that if the input/textarea on the right is selected, nothing moves.
+   - Find
+      - Click on a non selected step and see how the cursor jumps there.
+      - Go to the left, don't do anything because you're already at position 1.
+      - Go all the way to the right, one at a time, until you hit the last one.
+      - When index is 4, go down twice and see how, in a path that has length 3 (foo soda wey) the cursor goes back to 3 instead of being out of bounds.
+      - Be in position 1 of foo bar 1 jip and move down. See it skip to the next distinct position 1 (the something in something else).
+      - Do the same going up, it should also jump up.
+      - Go back up to an abridged path (like foo bar 2, you'll go to the 2 at position 3). When you go left, rather than going to the abridged, you jump up and left until foo bar (the previous path that has a nonabridged step at position 3).
+      - Scroll down/up when jumping far enough (requires more than a screenful of data).
+         - Jumping down: if the bottom of the step > bottom of the grid, jump enough so that the top of the step is N pixels (roughly one step tall) below the top of the grid. (jump to the "top door")
+         - Jumping up: if the top of the step < top of the grid, jump enough so that the bottom of the step is N pixels above the bottom of the grid. (jump to the "bottom door").
+         - Same with right & left.
+      - When reloading the page, if the selected step is far down/right enough, autoscroll to it automatically.
+      - The cursor should cast a dim light (green) on all paths that share its prefix up until the cursor.
+   - Write
+      - Click on a selected step and enter edit mode.
+      - Change the value.
+      - Exit it again with escape, this will not change the value.
+      - Enter edit mode again with enter.
+      - Change the value again.
+      - Exit it again with enter, this will save the change and retain the cursor, but not editing it.
+      - Enter edit mode again with enter and exit again with enter, retain the cursor.
+
+### Language
+
+- search (general call to get matching paths)
+- replace (macro): @! as lisp commas that turn off the quoting so that references are resolved at define time
+- wall (block walking up, but not down)
+- diff: takes one or two points of the dialog and gives you a diff.
+- access masks
+- Recursive lambdas by referencing itself?
+- @@: get at a point of the dataspace (query a la datomic). Takes a time or time+id as part of the message.
+
+### Engine
+
+- Sublinear search
+   - Set from a path to all its following steps (just the next one)
+   - Set from a step (by value) to all its prefixes
+
+Cell engines (dbs):
+- Disk (improve efficiency enough so that it's at least linear)
+- Redis (with aof)
+- Postgres
+
+Implementing sublinear cell in redis:
+- Consider each step to be represented by four things: an id, a value, a position (1, 2, ...) and the id of the parent. For example, the "bar" in foo bar would have value bar, position 2, and the parent id would be that of foo.
+- What about naive indexing on redis? Take each column (row) that's not an id and make it into a set. For example: value:bar would be a set of all the ids (of steps) that have as value "bar". Or position:2 would be a set of all the steps that are in position 2. And children:ID would be the set of all the steps that are children of the step ID.
+- The deeper idea is to sets like masks. I'd love a prefix mask where shorter and longer elements that have similar prefixes match, and this would be done inside redis without having to go to the Lua script.
+- Example: look for "status 200", where those are two distinct steps, one next to each other. They are at any position, so ignore the position. You would start by looking those ids with status, then get all the 200 that have each of those ids as parent, then intersect for a result. I'm itching to find a pattern like that in Earley's parser where you "combine like subparses". Rather than starting from a point, you go through each of the search terms in parallel, gathering subresults in sets, and then you intersect until you get all the steps that match. Then, you linearly reconstruct the paths from the ids.
+- The memory footprint would be softened by having data where a lot of the texts or numbers are the same, because then they would have the same entry. I wonder how much more memory this representation requires than an equivalent text representation.
+
+For postgres:
+- How is this implemented? Make a single table on a relational database, with 2000 columns, the odd ones text and the even ones number. For a path element at position m, store it in m\*2 if it's text and m\*2+1 if it is a number. perform queries accordingly.
+- What do you get out of this?
+   - ACID, because it's backed by a relational database.
+   - Fast querying on arbitrary path elements.
+   - Range and match tests.
+
+Tackling consistency:
+- run the sync code in the db within a transaction
+- make async ops not have consistency requirements except for checking things when they are ready for sync again
+- have one source of truth for every part of the dataspace and replicas for each of them, for backup purposes. but you can fragment it as much as you want.
+- If you don't want this, you can build a consensus algorithm on top of it and consider equivalences in paths (if X and Y are equal nodes, you can make random calls to X or Y).
+
+Vague but compelling: every change generates a new id. This can recompute the entire dataspace affected by it. This creates a snapshot. The latest versions are resolved lexically. This would be a sort of indexing on top of the database itself (instead of it being a linear performance call going backwards from the latest to the requested one through applying reverse diffs).
+
+### Service
+
+- Altocookies: login with email with link (no password) or oauth with providers that always provide email (google)
+- Make a queue per cell to process calls. Take cb as argument.
+- ai
+- outbound http
+- inbound email: automatic email inbox per cell
+- domain
+- Encrypted (password/passkey protected) export/import
+- PWAs out of the box.
+- Dashboard with 10^... values (exponent with two decimal points) for requests per second, weekly active users and and GBs in memory.
+
