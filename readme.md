@@ -218,6 +218,19 @@ https://bvisness.me/high-level/
 
 Motivators for using cell: love & pride. Love for what you do, pride for what you do. It's difficult to love your system if the tools you use are constantly rotting, or not letting you see the plain beauty of what you're making.
 
+This is a good test for no-op put. Make sure that the conditional with return `true` is executed and that it's that ! diff === '' condition that makes it true.
+
+```
+- SEQUENCE - c @ put call @ seq 2
+                     seq @ do n - @ put foo @ n
+                                - @ put bar 3
+
+```
+
+Instead of @ query, @ ask. This is shorter and more memorable.
+
+Perhaps, when writing about code, I no longer need to do "..." or `...`, the @ is what makes it a call in the context of natural language.
+
 ### 2025-01-19
 
 Not elements, but steps. Path "depth" is also a great name. Much better than index.
@@ -7064,7 +7077,7 @@ If there's no call, we check to see if this is a native call. We get the message
 Then we call `cell.native`, passing the first step of `valuePath` and the `message`. If we get something other than `false`, it means this is a native call, so we set the returned value to `newValue`. Otherwise, we won't modify `newValue` - if we made it this far without a `newValue`, this is really a reference to nowhere and it should be then responded with an empty text.
 
 ```js
-            var nativeResponse = cell.native (valuePath [0], message);
+            var nativeResponse = cell.native (valuePath [0], message, contextPath, get, put);
             if (nativeResponse !== false) newValue = nativeResponse;
          }
 ```
@@ -7940,9 +7953,6 @@ cell is written by [Federico Pereiro](mailto:fpereiro@gmail.com) and released in
 
 ### Demo
 
-- Test no-op put (that returns empty diff) and then execution continues
-- Test wipe: context, call to respond
-
 - EITHER:
    - Make put also smell outside (or rather, perhaps native can do this) to do a no-op. Return false to indicate a no-op.
    - Implement add. Make it "smell outside" and see if there's already a result. If so, don't push. Return false to indicate a no-op.
@@ -7950,6 +7960,8 @@ cell is written by [Federico Pereiro](mailto:fpereiro@gmail.com) and released in
    - Use missing results rather than existingValue === newValue to make updates. That is, remove results when a transitive dependency changes.
 
 - Language
+   - Test no-op put (that returns empty diff) and then execution continues
+   - Skip over equals in put
    - cell.respond
       - Add dependents/dependencies to only recalculate what's necessary.
    - @ if
@@ -7975,9 +7987,9 @@ cell is written by [Federico Pereiro](mailto:fpereiro@gmail.com) and released in
       - duplicates
       - push/lepush (left push)
       - pop, lepop
-   - @ query
-      - query path surrounded by implicit stars
-      - query path that can have a sequence (or a reference to a sequence) OR a validator
+   - @ ask
+      - ask path surrounded by implicit stars
+      - ask path that can have a sequence (or a reference to a sequence) OR a validator
 - Upload: upload that stores the file in the dataspace, as well as the data
    - Send a lambda call that does two things: 1) upload the file; 2) if data is not empty, set a link to it somewhere in the dataspace (name suggested by the llm).
 - @ rule

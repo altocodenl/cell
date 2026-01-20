@@ -542,6 +542,24 @@
 
        - c @ wipe
 
+       - c @ put a b
+                 c @ a
+
+       - c @
+         r a b
+           c = b
+             @ a
+
+       - c @ wipe a
+         r diff x a b
+
+       - c @
+         r c = ""
+             @ a
+         tag "Wipe updates calls"
+
+       - c @ wipe
+
 - "GET WITH CONTEXT" - c @ put employee price 15
                                friend price 20
                                price 30
@@ -932,9 +950,51 @@
                      pit ball 5
                    tag "Use dot with existing context"
 
-- RESPOND - c @ wipe
+                 - c @ wipe
 
-          - c @ put foo 10
+- "WIPE WITH CONTEXT PATH" - c @ put hook value 2
+                                     value 1
+
+                           - c @ wipe value
+                             context - nonesuch
+                             r diff x value 1
+
+                           - c @
+                             r hook value 2
+                             tag "Context path does not make a difference if there is no hook"
+
+                           - c @ wipe value
+                             context - hook
+                             r diff x hook value 2
+
+                           - c @
+                             r ""
+                             tag "Context path makes a difference if a hook is found"
+
+                           - c @ wipe
+
+- "WIPE WITH DOT" - c @ put hook value 2
+                            value 1
+
+                  - c @ wipe . value
+                    context - nonesuch
+                    r diff ""
+
+                  - c @
+                    r hook value 2
+                      value 1
+                    tag "Dot with context will not walk up"
+
+                  - c @ wipe . value
+                    r diff x value 1
+
+                  - c @
+                    r hook value 2
+                    tag "Top level dot will remove path"
+
+                  - c @ wipe
+
+- RESPOND - c @ put foo 10
                     reffoo @ foo
             tag "Set a reference to foo"
 
@@ -1376,6 +1436,8 @@
                def = message 1
                    @ do message 1 @ message
              tag "Call a sequence with a message that is a hash"
+
+           - c @ wipe
 
            - c @ put sizzbuzz @ do n - @ put : output ""
                                      - @ if cond @ % - @ n

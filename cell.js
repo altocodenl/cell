@@ -478,7 +478,7 @@ cell.respond = function (path, get, put) {
    cr++;
    var id = cr;
    if (cr > 30) throw new Error ('pim');
-   pretty ('respond ds ' + id, dataspace);
+   pretty ('respond dataspace ' + id, dataspace);
    pretty ('respond path ' + id, path);
    */
 
@@ -529,7 +529,7 @@ cell.respond = function (path, get, put) {
                if (teishi.eq (v.slice (0, prefix.length), prefix)) return message.push (v.slice (prefix.length));
             });
             //pretty ('respond native call ' + id, newValue);
-            var nativeResponse = cell.native (valuePath [0], message);
+            var nativeResponse = cell.native (valuePath [0], message, contextPath, get, put);
             if (nativeResponse !== false) newValue = nativeResponse;
          }
       }
@@ -998,10 +998,11 @@ if (isNode && process.argv [2] === 'test') (function () {
          }
          // test.c has a call that is valid fourtext
          if (test.c !== undefined) {
-            // test.context is only present in a few calls to cell.put
+            // test.context is only present in a few calls to cell.put and cell.wipe
             if (test.context) {
-               var call = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
-               var response = cell.pathsToText (cell.put (call, test.context, get, put));
+               var call = cell.JSToPaths (test.c) [0] [1];
+               var message = dale.go (cell.JSToPaths (test.c), function (p) {return p.slice (2)});
+               var response = cell.pathsToText (cell [call] (message, test.context, get, put));
             }
             else {
                var response = cell.call (cell.JSToText (test.c), 'user', 'cell', false, get, put);
