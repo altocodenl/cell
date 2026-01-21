@@ -1440,11 +1440,11 @@
            - c @ wipe
 
            - c @ put sizzbuzz @ do n - @ put : output ""
-                                     - @ if cond @ % - @ n
-                                                     - 3
+                                     - @ if cond @ mod - @ n
+                                                       - 3
                                             else @ push output sizz
-                                     - @ if cond @ % - @ n
-                                                     - 5
+                                     - @ if cond @ mod - @ n
+                                                       - 5
                                             else @ push output buzz
                                      - @ output
              tag "Define sizzbuzz"

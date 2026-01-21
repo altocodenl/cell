@@ -737,13 +737,13 @@ cell.native = function (call, message, contextPath, get, put) {
 
       if (types [0] === 'number') return [[dale.acc (message, function (a, b) {return a - b})]];
    }
-   if (call === '*' || call === '/') {
+   if (call === 'mul' || call === 'div') {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types [0] !== 'number') return [['error', 'Operation only defined for number.']];
 
-      return [[dale.acc (message, function (a, b) {return call === '*' ? a * b : a / b})]];
+      return [[dale.acc (message, function (a, b) {return call === 'mul' ? a * b : a / b})]];
    }
-   if (call === '%') {
+   if (call === 'mod') {
       if (type (message) !== 'array') return [['error', 'Expecting a list.']];
       if (types [0] === 'text') return [['error', 'Operation not defined for text.']];
 

@@ -205,6 +205,280 @@ view
 
 ## Development notes
 
+### 2025-01-21
+
+It feels that the core lang of cell is two parts:
+- What I'm building right now.
+- @ view, @ rule and @ ask.
+
+I'm getting the first half right. The second half is what allows you to 1) create UIs; 2) consistent data wholes; 3) get data with minimal scripting.
+
+Reworking the thing from yesterday, until step 4 we're OK.
+
+```
+1 dataspace eleven @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "put message in expansion"
+
+2 dataspace eleven : int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "put step 1 in expansion"
+
+3 dataspace eleven : do - @ add - @ int
+                                - 1
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven : do - @ add - @ int
+  op reference path eleven : int
+
+4 dataspace eleven : do - @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven : do - @ add - = 10
+  op native op add
+            message - 10
+                    - 1
+
+5 dataspace eleven : do - = 11
+                          @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "take result from step 1 and put it as the overall result"
+
+6 dataspace eleven = 11
+                   : do - = 11
+                          @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path plus1 @ do int - @ add - @ int
+  op do definition plus1
+
+7 dataspace eleven = 11
+                   : do - = 11
+                          @ add - = 10
+                                  @ int
+                     int 10
+                   @ plus1 10
+            plus1 = int 1
+                  @ do int - @ add - @ int
+                                   - 1
+  DONE 1
+```
+
+What are the dependencies? Let's just look at the paths that have calls.
+
+```
+7 dataspace eleven : do - @ add - = 10
+                                  @ int
+                   @ plus1 10
+            plus1 @ do int - @ add - @ int
+```
+
+Taking just the call prefixes:
+
+```
+eleven : do 1
+eleven : do 1 @ add 1
+eleven
+plus1
+```
+
+Dependencies:
+
+```
+deps - - eleven : do 1
+       - add
+       - eleven : int
+     - - eleven
+       - eleven :
+       - plus1
+```
+
+I want to have granularity inside a call/sequence/function, I don't want to throw it all away on a change. It has to go through.
+
+No, eleven doesn't depend on eleven :. It depends on what it calls. If there's a change to plus1, it should recompute. But its sequence will change depending on where eleven points itself.
+
+Can I still have granularity?
+
+```
+deps - - eleven : do 1
+       - add
+       - eleven : int
+       - eleven
+     - - eleven
+       - plus1
+```
+
+(remember, the first element of each deps item is the dependent, the rest are dependencies.)
+
+Possible changes:
+
+```
+@ put eleven plus1 1100 // New message on eleven
+
+@ put plus1 ... // Change definition on plus1
+
+@ put add ... // Change definition of add
+```
+
+If eleven : do 1 is not a dependency of eleven, if add changes, how does that change float up? I'm really resisting batching the lookup of references. But perhaps there's no way around it. Because, in plus1, the definition is muted, we don't look into it. We only look at it on expansion time.
+
+What is complicating things is to have : between @ and =. Otherwise, it would be a clean chain. But there's too much going on with the sequence.
+
+Is the expansion a dependence or a dependency? It is both. I have to accept it. But how do we accept it without being circular?
+
+```
+deps - - eleven :
+       - add
+       - eleven
+     - - eleven
+       - plus1
+       - eleven :
+```
+
+If I don't eagerly expand dependencies, then the outer call has to depend on the expansion so that a change in add would affect it. If it doesn't, add needs to be added to the list of dependencies of the call. We could do this at runtime, or rather, at expansion time.
+
+```
+deps - - eleven
+       - add
+       - plus1
+```
+
+This is the real dependency graph. How would we build it?
+
+The first time we see eleven @ plus1 10, we create our first dep:
+
+```
+deps - - eleven
+       - plus1
+```
+
+When we hit the moment of the expansion where we see a call to @ add, we resolve the absolute path (to be @ add, toplevel, in this case native because there's no add defined), so we now have:
+
+```
+deps - - eleven
+       - plus1
+       - add
+```
+
+How do we know not to add the call to @ int? Because it is a call to eleven : int. Since eleven is a prefix of that path, no need.
+
+Now, what if we had this?
+
+eleven @ plus1 @ value
+
+Then, we'd really have to have these deps:
+
+```
+deps - - eleven
+       - value
+       - plus1
+       - add
+```
+
+What would it be on sizzbuzz?
+
+```
+sizzbuzz @ do n - @ put : output ""
+                - @ if cond @ mod - @ n
+                                  - 3
+                       else @ push output sizz
+                - @ if cond @ mod - @ n
+                                  - 5
+                       else @ push output buzz
+                - @ output
+"sizzbuzz 15" @ sizzbuzz 15
+```
+
+```
+deps - - "sizzbuzz 15"
+       - sizzbuzz
+       - put
+       - if
+       - mod
+```
+
+The idea and even vision of a value being valid until it is removed is very, very strong. There's no staleness: the moment that something is stale, it is removed, and then, the new results, like water flowing down, come up.
+
+I am struggling with two things:
+
+1. Figure out an algorithm that is self-similar (and doesn't really batch) when computing deps.
+2. Figure out when, if a sequence changes, changes propagate properly.
+
+To remind ourselves why this is worthwhile, let's look at [lith](https://github.com/fpereiro/lith) (or a part of it) if it was done in cell rather than in js.
+
+```
+html tags all @ list "!DOCTYPE HTML" LITERAL a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption cite code col colgroup command datalist dd del details dfn div dl dt em embed fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 head header hgroup hr html i iframe img input ins kbd keygen label legend li link map mark menu meta meter nav noscript object ol optgroup option output p param pre progress q rp rt ruby s samp script section select small source span strong style sub summary sup table tbody td textarea tfoot th thead time title tr track u ul var video wbr
+          void @ list "!DOCTYPE HTML" area base br col command embed hr img input keygen link meta param source track wbr
+     entiyify @ do text - @ loop do pair - @ put text @ replace from @ pair 1
+                                                                to @ pair 2
+                                                                v @ text
+                                 paths 1
+                                 v & &amp;
+                                   < &lt;
+                                   > &gt;
+                                   "/"" &quot;
+                                   ' &#39;
+                                   ` &#96;
+                        - @ text
+     generate @ do input - @ put : output ""
+                         - @ put : t @ type input
+                         - @ if cond @ eq number @ t
+                                do @ push p output
+                                          v @ input
+                         - @ if cond @ eq text @ t
+                                do @ push p output
+                                          v @ html entityify @ input
+                         - @ if cond @ eq list @ t
+                                do @ loop do item @ push p output
+                                                         v @ html generate @ item
+                                          v @ input
+                         - @ if cond @ eq hash @ t
+                                do - @ push p output
+                                            v - <
+                                              - , @ list @ input , 1
+                                              - @ loop do attribute - if cond @ eq _ @ attribute 1
+                                                                         do stop
+                                                                    - stop - " "
+                                                                           - @ lith entityify attribute 1
+                                                                           - "=/""
+                                                                           - @ lith entityify attribute 2
+                                                                           - "/""
+                                                       v @ list @ input , @ list @ input , 1
+                                              - >
+                                              - @ loop do @ lith generate
+                                                        v @ input _
+                                              - @ if cond @ contains p @ html tags void
+                                                                     v , @ list @ input , 1
+                                                     do stop - </
+                                                             - , @ list @ input , 1
+                                                             - >
+                         - output
+```
+
 ### 2025-01-20
 
 Nested queries give you relational-like fetching! And if this is combined with @ rule, you can express relations, like saying that this field contains an id of one of the entities of the other kind.

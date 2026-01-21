@@ -1,0 +1,3 @@
+Thirty-second episode of season 4! I'm building a programming substrate from scratch while recording myself. Grabbed the bull by the horns and got stuck and depressed mid-way. This substrate business is definitely a journey of discovery. Patience.
+
+https://github.com/altocodenl/cell
