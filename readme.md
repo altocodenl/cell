@@ -205,6 +205,89 @@ view
 
 ## Development notes
 
+### 2025-01-24
+
+https://www.jsoftware.com/papers/perlis77.htm
+"It is important to recognize that no matter how complicated the task, the APL functions will usually be anywhere from 1/5 to 1/10 the number of statements or lines, or what have you, of a FBAPP (FORTRAN or BASIC or ALGOL or PL/I or Pascal) program. Since APL distributes, through its primitive functions, control that the other languages explicate via sequences of statements dominated by explicit control statements, errors in APL programs tend to be far fewer in number than in their correspondents in FBAPP."
+"Above all, remember what we must provide is a pou sto to last the student for 40 years, not a handbook for tomorrow’s employment."
+
+TODO for new cell.respond:
+1. Figure out how to build dependency graph.
+2. Figure out if deleting results is a good way to trigger recomputation.
+3. How do we recompute dependencies when things change? Do we also delete the dependencies and recreate them anew?
+
+I think that's the answer, to 3. Dependencies are also data, They should also be deleted and recreated.
+
+```
+1 dataspace eleven @ plus1 10
+            plus1 @ do int - @ add - @ int
+                                   - 1
+  path eleven @ plus1 10
+  op do destination plus1
+        message 10
+        op "put message in expansion"
+  deps - eleven
+       - plus1
+```
+
+How do we know this? Because we found that the destination is plus1. Whatever the destination is, that's the dependency. And the dependency of what? Of whatever is before the @ we're expanding at the moment.
+
+What are the options, really?
+- @ if
+- @ do (definition)
+- @ do (execution)
+- reference
+- native
+
+That's it, there's only five options, no more.
+
+I want to avoid the "looking inside". I want that, if I have x @ if ..., x depends on @ if and that's it. But no, that will never work. You do have to look at what's there. You have to walk it. If it's an if: what's in the cond, and what's in the branch that you hit. But you don't depend on what's on the other branch.
+
+For the sequence definition, you don't depend on anything! It should be done dynamically by the execution. The execution enables the context.
+
+If we could just build dependencies on the fly if they are not there, and delete them when things change, it would really just be two things. Well, three, but 2 and 3 are about calculating results and dependencies.
+
+Then, again, computing dependencies:
+1. @ if: what's in the cond + what's on the matched branch
+2. @ do def: only @ do itself
+3. @ do ex: @ do plus the message (if there's a reference there) & any calls on the steps of the expansion
+4. ref: the whole path (jumping over =s), which is a destination. This is the easy one.
+5. @ native: the native call, plus the message (if there's a reference there)
+
+Constants don't change.
+
+Why would it make sense to put these dependencies when expanding a sequence, wouldn't it all change always and we'd throw away this work? Not really. Think of this: if one of the steps depends on a reference outside, and that reference changes, we can update the whole thing. It gives us a trigger.
+
+Now for an uncomfortable question: do inner parts of a sequence also have their dependencies? Self-similarity says we must. If we do that, then the expansion HAS to have dependencies. But the expansion can just be the call itself, since the expansion affects its result. So why be concerned with that? Just do that.
+
+However, you can have internal paths inside the sequence that have their own dependencies.
+
+When there's a change, we need to transitively delete two things: results and dependencies. Not all of them, just the ones affected. Whatever you're deleting the result for, you're also deleting its dependency and recomputing it.
+
+Why deep dependencies? If outer things change, everything gets recreated. Sure. But if something deeply internal is affected, and only that is affected, then the whole thing shouldn't change for naught, right? You could have a granular update "inside".
+
+But this is not accurate. If something deep inside a sequence changes, it is to be expected that the overall result of the sequence will also change. You could really think of one call as a unit of recomputation (not just computation). If something inside changes, everything changes. This is surprising. In gotoB views, you can change a child inside a parent and the change is only there, for that child, but with computation that's usually not the case, because you're summarizing the thing into one value (you could make the long analogy that the result of a sequence is like a hash of its expansion). This feels a bit like an ascending funarg, but only in that the data is flowing up and forcing recomputation.
+
+What would be efficient? That if, in step 2, you call @ x foo, and that doesn't change, you do not remove that result. You still keep it. The granular update would be to not throw away results of sequence steps that can be reused.
+
+How to go about this?
+
+Easy cases:
+- 2 (sequence definition) and 4 (reference): just one reference, nothing else.
+- 5 (native): just the native, plus the argument.
+
+BTW, if you change a path in itself, bear in mind a path implicitly depends on itself, so you also need to remove and recompute its dependencies.
+
+Hard cases:
+- 1 (if): we can have a sequence in one of the branches. Also, potentially, we could even have a sequence in the condition. Why not?
+- 3 (sequence execution).
+
+So, the whole problem, really, is about how to compute results and dependencies for sequences. That's it. The entire problem is that. Sequences can contain the other elements there, but they are only "problematic" in that they can also contain sequences. That's all. So, a good self-similar solution can make the whole thing work.
+
+It's just a couple of shapes.
+
+Let's see what happens later with loops, but loops are also essentially sequences. There might be a couple of tricks. But the main problem is this one. Now, let's solve it.
+
 ### 2025-01-21
 
 It feels that the core lang of cell is two parts:

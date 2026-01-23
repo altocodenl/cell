@@ -1,0 +1,3 @@
+Thirty-third episode of season 4! I'm building a programming substrate from scratch while recording myself. A thinking and writing episode. More clarity.
+
+https://github.com/altocodenl/cell
