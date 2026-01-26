@@ -2,17 +2,25 @@
 
 ## Why cell
 
-cell is built atop three ideas:
+cell is a [programming substrate](https://www.youtube.com/live/4GOeYylCMJI?t=2286s) based on a chain of four hypothesis:
 
-1. Building data systems is like writing: a way to reach the world, an essential tool of thought and a way to produce work that transcends the author.
-2. Understanding is the key to building good data systems: a system you understand is the foundation for flow and ownership.
-3. Understanding can be easier if we remove obstacles: most of what makes programming difficult is unnecessary.
+1. **Data systems are essential to the creation of wealth and knowledge**. Data systems are representations of the real world. They are useful and powerful because they allow us to work with the real world in a systematic way that allows us to leverage computers.
+2. **Understanding is the key to making good data systems**. Understanding is a representation of a data system inside a human mind. Understanding is the key to achieve ownership of a system and flow while building it. Ownership comes from being able to fix or change the system understanding the implications of what's going on. Flow comes from knowing what's going on and finding the way towards where the system should go next.
+3. **Simplicity is the key to understanding a system**. Because complexity is exponential, no amount of brainpower can cut through it. The only way to make a system understandable is to make it simple. The aphorism "Keep it simple" is plain wrong. A system is not kept simple, it is *made* simple. The art of system building is to make it more useful while making it simpler.
+4. **A programming substrate is the key to simplicity**. A substrate is a good set of primitives that allow you to build any general purpose data system.
 
-cell is a tool that makes building and understanding [data systems](https://github.com/altocodenl/todis) as easy as possible.
+cell tries to be a good enough substrate, so that you can:
+
+1. Use a simple tool to build your systems.
+2. Through simplicity, you understand your systems with ease.
+3. Through understanding, your systems become really good and you really own them and enjoy working on them.
+4. Through your ownership and flow, your work can better contribute to our collective human wealth and knowledge.
 
 ### AI can now code for us! Do we really need to understand what's going on?
 
-Yes, more than ever. AI coding tools let you build systems with a speed never seen before. But speed without understanding creates systems you don't own, can't control, and can't scale.
+Our understanding is: if AI helps you understand what you build, you're gaining agency. If AI just builds for you and you don't understand, you're losing agency. If you want to build without agency, then cell is probably not going to help you.
+
+AI coding tools let you build systems with a speed never seen before. But speed without understanding creates systems you don't own, can't control, and can't scale.
 
 AI massively increases the *initial speed* of both skilled programmers and novices. If you are a skilled programmer, you can go much faster. If you are not skilled in programming, AI can take your requirements and make them into code, very very quickly. This is really powerful, not a fad.
 
@@ -204,6 +212,42 @@ view
 ```
 
 ## Development notes
+
+### 2026-01-26
+
+Major decision: to run a lambda (anonymous function/sequence), just put a @ in front of a list!
+
+```
+= ...
+@ - @ sum ...
+  - @ ...
+```
+
+We can do this inside a cond or branch of an if, or inside sequences too. It avoids lists of calls just being run, and the @ gives us a natural place to hang the result. I'm very happy about this.
+
+https://x.com/rough__sea/status/2013280952370573666
+"This has been said a thousand times before, but allow me to add my own voice: the era of humans writing code is over. Disturbing for those of us who identify as SWEs, but no less true. That's not to say SWEs don't have work to do, but writing syntax directly is not it." -- Ryan Dahl
+
+Interesting words from Ryan Dahl, who I consider a living legend. I have two objections:
+1. What if code is no longer writing "syntax"? What if code can be as readable as natural language?
+2. How are we supposed to review code if we don't write it? Can you be an editor without being a writer? I don't buy it. I buy that a compiler can generate machine code that I don't have to look at, because the compiler writers probably did a good job on that and the algorithms should be deterministic. But not review what LLMs do amount to not understanding my system and letting it be created by a nondeterministic process.
+
+But Ryan has a strong point and he makes me wonder. Can we consider LLMs to be compilers of natural language descriptions of systems? I don't know. And I admit I might not even want to know. But I'll have to find out anyway.
+
+name for prefix that holds dependencies: chain
+
+name for ai call: @ genai (there could be other types of ai that are not generative). for nondeterministic tasks.
+
+```
+= "..."
+@ genai "Please give me a recipe for making lasagna"
+```
+
+New sequence of hypothesis, and reconsidering AI too.
+
+Definition of relative simplicity: usefulness / complexity. Reminds me of Ryan Dahl's dictum: "The amount of complexity I'm willing to tolerate is proportional to the size of the problem being solved."
+
+Off-topic: AIs have no skin in the game. Because they have no skin.
 
 ### 2025-01-24
 
