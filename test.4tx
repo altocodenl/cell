@@ -1387,11 +1387,11 @@
 
            - c @
              r eleven = 12
-                      : int 10
-                        do - = 12
+                      : do - = 12
                              @ add - = 10
                                      @ int
                                    - 2
+                        int 10
                       @ plus1 10
                plus1 = int 1
                      @ do int - @ add - @ int
