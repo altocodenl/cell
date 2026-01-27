@@ -16,19 +16,15 @@ cell tries to be a good enough substrate, so that you can:
 3. Through understanding, your systems become really good and you really own them and enjoy working on them.
 4. Through your ownership and flow, your work can better contribute to our collective human wealth and knowledge.
 
-### AI can now code for us! Do we really need to understand what's going on?
+## AI can now code for us! Do we really need to understand what's going on?
 
-Our understanding is: if AI helps you understand what you build, you're gaining agency. If AI just builds for you and you don't understand, you're losing agency. If you want to build without agency, then cell is probably not going to help you.
+I had written something else here. But it's January 2026 and am not so sure anymore that you need to look at the code of a system to get use out of it. Programming is now in great flux.
 
-AI coding tools let you build systems with a speed never seen before. But speed without understanding creates systems you don't own, can't control, and can't scale.
+If you still want to look at it to get it directly (and not through a description of it that AI provides, or through an UI you directly see), then cell can be useful.
 
-AI massively increases the *initial speed* of both skilled programmers and novices. If you are a skilled programmer, you can go much faster. If you are not skilled in programming, AI can take your requirements and make them into code, very very quickly. This is really powerful, not a fad.
+If cell works as a good programming substrate, it will be because it's a better description of a system than natural language.
 
-However, the limits to this process are hit quickly: you're building fast, but you're not understanding what you're building. If you're skilled, the AI will write a lot of code that you'll struggle to follow, because of its sheer amount. If you're not skilled in programming, you'll build something you understand only very superficially. In both cases, understanding is missing.
-
-For many, this initial speed quickly wears off; for those skilled programmers, this requires effort to bring the project under control. For novices, it requires bringing in skilled programmers that can either rewrite the proof of concept or build it again from scratch. The overall experience is an arc from breakneck speed to a slog.
-
-If you've been there, cell could be for you. And yes, cell integrates AI too.
+And if it's compact enough, then perhaps you (or AI) can build systems with a lot of power in a few hundred lines instead of hundreds of thousands.
 
 ## How cell tackles the obstacles to understanding
 
@@ -212,6 +208,124 @@ view
 ```
 
 ## Development notes
+
+### 2026-01-27
+
+https://www.jwz.org/doc/java.html
+"Java doesn't have free().
+I have to admit right off that, after that, all else is gravy. That one point makes me able to forgive just about anything else, no matter how egregious. Given this one point, everything else in this document fades nearly to insignificance."
+
+Perhaps that's how I'll feel about cell in that I no longer have to write console.log.
+
+sizzbuzz example:
+
+
+```
+sizzbuzz = n 4
+         @ do n - @ put : output ""
+                - @ if cond @ mod - @ n
+                                  - 3
+                       else @ push output sizz
+                - @ if cond @ mod - @ n
+                                  - 5
+                       else @ push output buzz
+                - @ output
+sizzbuzz15 = sizzbuzz
+           : - = diff + sizzbuzz15 : output ""
+               @ put : output ""
+             - @ if cond = 0
+                         @ mod - = 15
+                                 @ int
+                               - 3
+                    else = diff x sizzbuzz15 : output ""
+                                + sizzbuzz15 : output sizz
+                         @ push output sizz
+             - @ if cond = 0
+                         @ mod - = 15
+                                 @ int
+                               - 5
+                    else = diff x sizzbuzz15 : output sizz
+                                + sizzbuzz15 : output sizzbuzz
+                         @ push output buzz
+           @ sizzbuzz 15
+```
+
+What's the chain?
+
+sizzbuzz doesn't depend on anything except on itself. If it changes, its result is wiped and we set it again.
+
+sizzbuzz15 depends on sizzbuzz, that's it.
+
+Can it be that simple? That sequences depend on their definition and message? Perhaps. That removes the dependency of the result on that of the expansion.
+
+If you're redefining stuff all the time and you have huge sequences and you want to preserve intermediate results, it could make sense to cache some of this. But we're not there yet, and we might never be.
+
+So?
+
+You have a call prefix. The call prefix depends on what comes after it. Any @ after it, you see where it takes you, and that's what you depend on. There could be instances where the rug is pulled from under you, perhaps (if something gets in the way/variable capture) or something goes away one or two steps. But that would also affect the call prefix itself, right? It would. Otherwise, you could not go find x outside of that prefix! So we should be ok. It's like this, exactly like this, for reactive views.
+
+```
+chain - - sizzbuzz15
+        - sizzbuzz
+```
+
+```
+call @ def bar 1
+           foo 2
+def @ do message 1 @ message
+```
+
+```
+chain - - call
+        - def
+```
+
+OK, what did I miss?
+
+```
+chain - - sizzbuzz
+        - if
+        - put
+        - mod
+        - push
+```
+
+So, at defnition time, we do a dependency chain for the call prefix of the sequence. So that we can affect any reference to the sequence itself. This has a few disadvantages, but am ok with it. The disadvantage is to do this eagerly rather than on expansion. But because the expansion depends on things that can change, it's just too dynamic without you having to go and check it anyway.
+
+I think it's cleaner, because then you don't have sizzbuzz15 depending on mod or put, its indirecdt. Also, if there's a reference to the message, that shoul not be a dependency, because if it's a constant, it doesn't change things on recomputation; and if it's a reference (a reference is anything that is not a constant, which, by the way, is a better name than "literal"), then it's a dependency of the call prefix of the expansion.
+
+Rather than saying "sequence execution", we can say "sequence call"? No, because they are both calls. You have the call to define and the call to expand. Let's use the term "expand".
+
+```
+eleven = 11
+       : do - = 11
+              @ add - = 10
+                      : eleven : int
+                      @ int
+         int 10
+       @ plus1 10
+plus1 = int 1
+      @ do int - @ add - @ int
+                       - 1
+```
+
+What if references, plain references, also have expansions that tell us where they come from? Except perhaps for the native ones. Absolute paths that you can look at. This is too experimental even for myself.
+
+What is to be done?
+
+- Build chains for each call prefix. Silly linear search because we cannot use hashes, at least not directly.
+- When putting, use gotoB's logic for every path you're putting to discover what's affected. Wipe the results. Then run things anew.
+- Change respond to skip computing things that are already computed.
+
+How would I do it?
+
+- If there's a chain, there's a result, and viceversa, right? That assumes things come at the same time. I need to check that, actually. But if the result comes before the chain, I'd just look at the result because it's cheaper than finding the chain.
+
+OK, again.
+
+- If there's a result, don't do anything.
+- If it's an if, put if in the chain. Also the stuff inside the if in the chain.
+- If it's a sequence definition, put do in the chain. Then walk the entire definition, without resolving anything... no, wait. You need to resolve the absolute paths of references. You don't know what they are referring to until you get the context! How will you know if there's a nice thing called "mod" inside the message? You can't know it! You can be conservative and assume that the call prefixes inside the sequence point out of it, and find the absolute ones outside, except for the name of the message. Wait, if the message is named, you cannot have other capture there! So never mind my point. You can know if you're referring to the message or not. Well, if on step X you create mod, then you do have to execute it. But you can be conservative and point to outside on all of the call prefixes, and redraw just in case.
 
 ### 2026-01-26
 
