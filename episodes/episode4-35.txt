@@ -1,0 +1,3 @@
+Thirty-fifth episode of season 4! I'm building a programming substrate from scratch while recording myself. I haven't redpilled enough AI, because I got impatient and decided to mindslog it like it's 2023. Slow progress, trying to get alias of sequences right.
+
+https://github.com/altocodenl/cell
