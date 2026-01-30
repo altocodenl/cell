@@ -29,6 +29,8 @@ Now for two objections that go to the crux of the matter:
 
 I would like tho use quality and understandability as the goals for any acceptable framework of LLM programming. Economically, only quality is indefensible as a goal. Understandability might be a romantic dream or a good long term bet (I'm choosing the latter, but you can of course be agnostic).
 
+Now for the quaint: LLMs are far more nondeterministic than previous higher level languages. They also can help you figure out things at the high level (descriptions) in a way that no previous layer could help you dealing with itself.
+
 ## How would this look?
 
 Let's try to find the common elements of how this near-future would look like:
@@ -63,3 +65,9 @@ This all still requires a server for these reasons:
 - Many calls cannot be done directly from the browser for security reasons, so they require a server to make the request.
 
 What about quality and understandability? If instead of a big stack, we use a good substrate, the line count of the LLM output will be much less, and more understandable. If this is the case, we can vastly increase the quality and performance of the systems we build.
+
+The frontend of the system is now the documentation and the agents; the backend is the stack/substrate.
+
+Open questions:
+- How do we store the documentation and dialog alongside the implementation?
+- How do we use version control systems?
