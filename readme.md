@@ -209,6 +209,92 @@ view
 
 ## Development notes
 
+### 2026-02-01
+
+How would an UI for AI agents look like?
+
+- Zero lock in: open source, can run powered by any LLM provider.
+- Browser: both desktop & mobile friendly.
+- Text based: markdown everywhere except for code/data: documentation, tasks, dialogs with agents.
+- Agent roles are based in a ruleset: text that determines the roles. An agent spins up whatever agents are needed to fulfill the roles automatically.
+- Versioned: uses either git or a relational database for history. Agents can't delete history.
+- Main human actions: write/edit the ruleset; review the progress; interact with agents that are waiting for input.
+- "An agent interface for those who love text."
+
+This would require a server, for persistence, managing processes, and hosting the interface.
+
+What is not provided is the installation of the devtools (git, dbs, runtimes), that's supposed to be already there. But eventually this could be also managed by the backend of the UI.
+
+Codename for this new UI: vibey.
+
+What would I like?
+
+- Read/write markdown in the browser. Have dialogs as markdown where you can also contribute.
+- Stream claude code and codex into this markdown.
+
+== Prompt to build it
+
+Hi! Please read docs/llm-high.md; then read the development notes for 2026-02-01 in readme.md.
+
+Create a single vibey-server.js file copying the framework from what's in server.js. Create another file called vibey-client.js, copying the framework from what is in editor.js. By framework I mean the libraries and the basic tooling, not the specific logic.
+
+The goal is to be able to show a page where I can talk to a claude code agent, running locally, and get the responses back.
+
+==
+
+How would it really look?
+
+- Four main tabs:
+   - Documentation
+   - Accretion (system/data, the result, what you make)
+   - Dialogs
+   - Tasks
+
+With the docs:
+
+- See all the docs. They are markdown files saved in `docs`, with the name 1:1 to the file.
+- Switch between UI (dropdown menus, whsiwyg) and text-like markdown modes in each doc.
+- Allow embedding of HTML inside the markdowns to have little windows with tool calling.
+
+With the dialogs:
+
+- Like the docs, but you can enter text below. Shows things slightly to the left (LLM) and the right (you).
+- Can also distinguish between LLM agents, they are named at the top so you can see whose's who.
+- The dialogs are saved under `dialogs`.
+
+With the tasks:
+
+- Each task is a separate markdown file.
+- Tasks can reference each other.
+
+
+What's the main workflow?
+
+- Write the agents.md file, where you specify general rules, as well as 1) the roles of the agents; 2) how many to run of each and on which tool (claude code, codex).
+
+When can I use vibey to build vibey itself? Probably it won't be very long.
+
+==
+
+https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
+"The two alternatives are theoretically equivalent, as each can emulate the other.[1] However, there are practical differences. State-based CRDTs are often simpler to design and to implement; their only requirement from the communication substrate is some kind of gossip protocol. Their drawback is that the entire state of every CRDT must be transmitted eventually to every other replica, which may be costly. In contrast, operation-based CRDTs transmit only the update operations, which are typically small. However, operation-based CRDTs require guarantees from the communication middleware; that the operations are not dropped or duplicated when transmitted to the other replicas, and that they are delivered in causal order.[1]"
+
+If complexity indeed accrues quadratically (as seen in LLMs), then the impact of simplifying is also quadratic.
+
+### 2026-01-31
+
+Thinking about how to grow cell beyond the grid, to work with text and agents:
+
+- Store markdown in the dataspace, split markdown into parts.
+- Tasks are also markdown.
+- For long texts, index chunks by splitting/trimming tokens by whitespace. Do this by default on the db layer.
+
+### 2026-01-30
+
+https://0x1.pt/2025/04/06/the-insanity-of-being-a-software-engineer/
+"And it can always get worse. A recruiter reached out to me a couple of days ago about an engineering position for a secret company. They decided that they required senior level skills in Rails, Hotwire and, incredibly, native mobile development. Why not add kernel and compiler development in there as well for good measure?"
+"Maybe a future where we can build a whole app with a couple of prompts isn’t so bad."
+
 ### 2026-01-28
 
 The static way is wrong. It was a copout. Only think of call prefixes.

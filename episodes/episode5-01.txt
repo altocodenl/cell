@@ -1,0 +1,3 @@
+First episode of season 5! I'm building a programming substrate from scratch while recording myself. The pebble has landed. I'm building Vibey (code name), an UI for agentic coding. I will build with agents and I would like to experiment with something different than cycling through 5 claude code terminals.
+
+https://github.com/altocodenl/cell
