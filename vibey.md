@@ -13,6 +13,8 @@ Think of a text-based agentic system as four things:
 3. **Dialogs**: the stream of consciousness of each agent. Most dialogs are complete, a few are ongoing for those agents that are working/alive *now*. A human can inspect at any time this stream of text, code changes and commands; a human can also enter the dialog. Some dialogs can be waiting for human input. When an agent completes its work, the dialog is no longer alive but it still is accessible.
 4. **Tasks**: a dynamic set of discrete pieces of work, expressed as markdown pages. They should be reconstructable from the documentation + the existing state of the codebase. Tasks should be nestable. They have a status (done, pending, in progress, waiting for human interaction, complete).
 
+The first two things are stocks: things that accumulate with time. The last two are flows: changes that build the stocks.
+
 The core of all this is one document, which is rules.md. This file contains:
 
 - The instructions for the main agent that is in charge of spinning other agents.
