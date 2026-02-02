@@ -16,13 +16,15 @@ B.mrespond ([
 
    ['initialize', [], function (x) {
       B.call (x, 'set', 'workdir', '.');
+      B.call (x, 'set', 'tab', 'dialogs');
+      B.call (x, 'load', 'files');
    }],
 
    ['report', 'error', function (x, error) {
       alert (typeof error === 'string' ? error : JSON.stringify (error));
    }],
 
-   [/^(get|post)$/, [], {match: function (ev, responder) {
+   [/^(get|post|delete)$/, [], {match: function (ev, responder) {
       return B.r.compare (ev.verb, responder.verb);
    }}, function (x, headers, body, cb) {
       c.ajax (x.verb, x.path [0], headers, body, function (error, rs) {
@@ -110,14 +112,103 @@ B.mrespond ([
       }
    }],
 
-   ['answer', 'question', function (x, answer) {
-      B.call (x, 'set', 'input', answer);
-      B.call (x, 'send', 'message');
+   ['answer', 'question', function (x, answer, toolUseId) {
+      if (toolUseId) {
+         // Send as tool_result
+         var session = B.get ('session');
+         if (! session) return;
+
+         B.call (x, 'set', 'sending', true);
+         B.call (x, 'post', 'session/' + session.id + '/send', {}, {message: answer, toolUseId: toolUseId}, function (x, error, rs) {
+            B.call (x, 'set', 'sending', false);
+            if (error) return B.call (x, 'report', 'error', error.responseText || 'Failed to send answer');
+         });
+      }
+      else {
+         B.call (x, 'set', 'input', answer);
+         B.call (x, 'send', 'message');
+      }
    }],
 
    ['focus', 'input', function (x) {
       var textarea = document.querySelector ('.message-input');
       if (textarea) textarea.focus ();
+   }],
+
+   // *** FILES ***
+
+   ['load', 'files', function (x) {
+      B.call (x, 'get', 'files', {}, '', function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to load files');
+         B.call (x, 'set', 'files', rs.body);
+      });
+   }],
+
+   ['load', 'file', function (x, name) {
+      B.call (x, 'set', 'loadingFile', true);
+      B.call (x, 'get', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+         B.call (x, 'set', 'loadingFile', false);
+         if (error) return B.call (x, 'report', 'error', 'Failed to load file');
+         B.call (x, 'set', 'currentFile', {
+            name: rs.body.name,
+            content: rs.body.content,
+            original: rs.body.content
+         });
+      });
+   }],
+
+   ['save', 'file', function (x) {
+      var file = B.get ('currentFile');
+      if (! file) return;
+
+      B.call (x, 'set', 'savingFile', true);
+      B.call (x, 'post', 'file/' + encodeURIComponent (file.name), {}, {content: file.content}, function (x, error, rs) {
+         B.call (x, 'set', 'savingFile', false);
+         if (error) return B.call (x, 'report', 'error', 'Failed to save file');
+         B.call (x, 'set', ['currentFile', 'original'], file.content);
+         B.call (x, 'load', 'files');
+      });
+   }],
+
+   ['create', 'file', function (x) {
+      var name = prompt ('File name (must end in .md):');
+      if (! name) return;
+      if (! name.endsWith ('.md')) name += '.md';
+
+      B.call (x, 'post', 'file/' + encodeURIComponent (name), {}, {content: '# ' + name.replace ('.md', '') + '\n\n'}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to create file');
+         B.call (x, 'load', 'files');
+         B.call (x, 'load', 'file', name);
+      });
+   }],
+
+   ['delete', 'file', function (x, name) {
+      if (! confirm ('Delete ' + name + '?')) return;
+
+      B.call (x, 'delete', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to delete file');
+         var currentFile = B.get ('currentFile');
+         if (currentFile && currentFile.name === name) {
+            B.call (x, 'set', 'currentFile', null);
+         }
+         B.call (x, 'load', 'files');
+      });
+   }],
+
+   ['close', 'file', function (x) {
+      var file = B.get ('currentFile');
+      if (file && file.content !== file.original) {
+         if (! confirm ('Discard unsaved changes?')) return;
+      }
+      B.call (x, 'set', 'currentFile', null);
+   }],
+
+   ['keydown', 'editor', function (x, ev) {
+      // Cmd/Ctrl+S to save
+      if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') {
+         ev.preventDefault ();
+         B.call (x, 'save', 'file');
+      }
    }],
 ]);
 
@@ -381,6 +472,150 @@ views.css = [
       'border-style': 'dashed',
       color: '#888',
    }],
+   // Tabs
+   ['.tabs', {
+      display: 'flex',
+      gap: '0.5rem',
+      'margin-bottom': '1rem',
+   }],
+   ['.tab', {
+      padding: '0.5rem 1rem',
+      'border-radius': '8px 8px 0 0',
+      border: 'none',
+      cursor: 'pointer',
+      'background-color': '#16213e',
+      color: '#888',
+      'font-weight': 'bold',
+      transition: 'all 0.2s',
+   }],
+   ['.tab:hover', {
+      'background-color': '#1a2a4a',
+      color: '#aaa',
+   }],
+   ['.tab-active', {
+      'background-color': '#4a69bd',
+      color: 'white',
+   }],
+   ['.tab-active:hover', {
+      'background-color': '#4a69bd',
+      color: 'white',
+   }],
+   // Files view
+   ['.files-container', {
+      display: 'flex',
+      flex: 1,
+      gap: '1rem',
+      'min-height': 0,
+   }],
+   ['.file-list', {
+      width: '250px',
+      'background-color': '#16213e',
+      'border-radius': '8px',
+      padding: '1rem',
+      'overflow-y': 'auto',
+   }],
+   ['.file-list-header', {
+      display: 'flex',
+      'justify-content': 'space-between',
+      'align-items': 'center',
+      'margin-bottom': '0.75rem',
+      'padding-bottom': '0.5rem',
+      'border-bottom': '1px solid #333',
+   }],
+   ['.file-list-title', {
+      'font-weight': 'bold',
+      color: '#888',
+      'font-size': '12px',
+      'text-transform': 'uppercase',
+   }],
+   ['.file-item', {
+      padding: '0.5rem 0.75rem',
+      'border-radius': '4px',
+      cursor: 'pointer',
+      display: 'flex',
+      'justify-content': 'space-between',
+      'align-items': 'center',
+      'margin-bottom': '0.25rem',
+      transition: 'background-color 0.2s',
+   }],
+   ['.file-item:hover', {
+      'background-color': '#1a2a4a',
+   }],
+   ['.file-item-active', {
+      'background-color': '#4a69bd',
+   }],
+   ['.file-item-active:hover', {
+      'background-color': '#4a69bd',
+   }],
+   ['.file-name', {
+      'white-space': 'nowrap',
+      overflow: 'hidden',
+      'text-overflow': 'ellipsis',
+   }],
+   ['.file-delete', {
+      opacity: 0,
+      color: '#ff8b94',
+      cursor: 'pointer',
+      padding: '0.25rem',
+      transition: 'opacity 0.2s',
+   }],
+   ['.file-item:hover .file-delete', {
+      opacity: 1,
+   }],
+   ['.btn-small', {
+      padding: '0.25rem 0.5rem',
+      'font-size': '12px',
+   }],
+   // Editor
+   ['.editor-container', {
+      flex: 1,
+      display: 'flex',
+      'flex-direction': 'column',
+      'min-width': 0,
+   }],
+   ['.editor-header', {
+      display: 'flex',
+      'justify-content': 'space-between',
+      'align-items': 'center',
+      'margin-bottom': '0.5rem',
+   }],
+   ['.editor-filename', {
+      'font-weight': 'bold',
+      color: '#94b8ff',
+   }],
+   ['.editor-dirty', {
+      color: '#ffd93d',
+      'margin-left': '0.5rem',
+   }],
+   ['.editor-actions', {
+      display: 'flex',
+      gap: '0.5rem',
+   }],
+   ['.editor-textarea', {
+      flex: 1,
+      width: '100%',
+      padding: '1rem',
+      'border-radius': '8px',
+      border: 'none',
+      'background-color': '#16213e',
+      color: '#eee',
+      'font-family': 'Monaco, Consolas, monospace',
+      'font-size': '14px',
+      'line-height': 1.6,
+      resize: 'none',
+   }],
+   ['.editor-textarea:focus', {
+      outline: '2px solid #4a69bd',
+   }],
+   ['.editor-empty', {
+      flex: 1,
+      display: 'flex',
+      'align-items': 'center',
+      'justify-content': 'center',
+      color: '#888',
+      'background-color': '#16213e',
+      'border-radius': '8px',
+   }],
 ];
 
 var parseClaudeOutput = function (entry) {
@@ -428,7 +663,7 @@ var parseClaudeOutput = function (entry) {
          dale.go (json.message.content, function (block) {
             if (block.type === 'text') textParts.push (block.text);
             if (block.type === 'tool_use' && block.name === 'AskUserQuestion') {
-               questions = block.input.questions;
+               questions = {questions: block.input.questions, toolUseId: block.id};
             }
             else if (block.type === 'tool_use') {
                textParts.push ('[Using tool: ' + block.name + ']');
@@ -456,8 +691,66 @@ var parseClaudeOutput = function (entry) {
    }
 };
 
+views.files = function () {
+   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['savingFile']], function (files, currentFile, loadingFile, savingFile) {
+      var isDirty = currentFile && currentFile.content !== currentFile.original;
+
+      return ['div', {class: 'files-container'}, [
+         // File list sidebar
+         ['div', {class: 'file-list'}, [
+            ['div', {class: 'file-list-header'}, [
+               ['span', {class: 'file-list-title'}, 'Files'],
+               ['button', {class: 'primary btn-small', onclick: B.ev ('create', 'file')}, '+ New']
+            ]],
+            files && files.length > 0
+               ? dale.go (files, function (name) {
+                  var isActive = currentFile && currentFile.name === name;
+                  return ['div', {
+                     class: 'file-item' + (isActive ? ' file-item-active' : ''),
+                     onclick: B.ev ('load', 'file', name)
+                  }, [
+                     ['span', {class: 'file-name'}, name],
+                     ['span', {
+                        class: 'file-delete',
+                        onclick: B.ev ('delete', 'file', name, {stopPropagation: true})
+                     }, '×']
+                  ]];
+               })
+               : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, 'No files yet']
+         ]],
+         // Editor
+         ['div', {class: 'editor-container'}, currentFile ? [
+            ['div', {class: 'editor-header'}, [
+               ['div', [
+                  ['span', {class: 'editor-filename'}, currentFile.name],
+                  isDirty ? ['span', {class: 'editor-dirty'}, '(unsaved)'] : ''
+               ]],
+               ['div', {class: 'editor-actions'}, [
+                  ['button', {
+                     class: 'primary btn-small',
+                     onclick: B.ev ('save', 'file'),
+                     disabled: savingFile || ! isDirty
+                  }, savingFile ? 'Saving...' : 'Save'],
+                  ['button', {
+                     class: 'btn-small',
+                     style: style ({'background-color': '#444'}),
+                     onclick: B.ev ('close', 'file')
+                  }, 'Close']
+               ]]
+            ]],
+            ['textarea', {
+               class: 'editor-textarea',
+               value: currentFile.content,
+               oninput: B.ev ('set', ['currentFile', 'content']),
+               onkeydown: B.ev ('keydown', 'editor', {raw: 'event'})
+            }]
+         ] : ['div', {class: 'editor-empty'}, loadingFile ? 'Loading...' : 'Select a file to edit']]
+      ]];
+   });
+};
+
 views.main = function () {
-   return B.view ([['session'], ['input'], ['workdir'], ['starting'], ['sending']], function (session, input, workdir, starting, sending) {
+   return B.view ([['tab'], ['session'], ['input'], ['workdir'], ['starting'], ['sending']], function (tab, session, input, workdir, starting, sending) {
 
       var outputHtml = [];
       var pendingQuestions = null;
@@ -548,13 +841,14 @@ views.main = function () {
       // Render pending questions with clickable options
       var questionsHtml = [];
       if (pendingQuestions && ! session.closed) {
-         dale.go (pendingQuestions, function (q) {
+         var toolUseId = pendingQuestions.toolUseId;
+         dale.go (pendingQuestions.questions, function (q) {
             questionsHtml.push (['div', {class: 'question-block'}, [
                ['div', {class: 'question-text'}, q.question],
                ['div', {class: 'question-options'}, dale.go (q.options, function (opt) {
                   return ['button', {
                      class: 'option-button',
-                     onclick: B.ev ('answer', 'question', opt.label)
+                     onclick: B.ev ('answer', 'question', opt.label, toolUseId)
                   }, [
                      ['span', {class: 'option-label'}, opt.label],
                      opt.description ? ['span', {class: 'option-desc'}, opt.description] : ''
@@ -568,33 +862,27 @@ views.main = function () {
          });
       }
 
-      return ['div', {class: 'container'}, [
-         ['style', views.css],
-
-         ['div', {class: 'header'}, [
-            ['h1', {style: style ({margin: 0, 'font-size': '1.5rem'})}, 'vibey'],
-            session ? ['div', [
-               ['span', {class: 'status ' + (session.closed ? 'status-closed' : 'status-active')},
-                  session.closed ? 'closed' : 'active'],
-               ! session.closed ? ['button', {
-                  class: 'danger',
-                  style: style ({'margin-left': '0.5rem'}),
-                  onclick: B.ev ('stop', 'session')
-               }, 'Stop'] : ''
-            ]] : ['div', [
-               ['input', {
-                  class: 'workdir-input',
-                  placeholder: 'Working directory',
-                  value: workdir || '.',
-                  onchange: B.ev ('set', 'workdir'),
-                  oninput: B.ev ('set', 'workdir'),
-               }],
-               ['button', {
-                  class: 'primary',
-                  onclick: B.ev ('start', 'session'),
-                  disabled: starting
-               }, starting ? 'Starting...' : 'Start Claude Code']
-            ]]
+      var dialogsView = [
+         session ? ['div', {style: style ({display: 'flex', 'align-items': 'center', gap: '0.5rem', 'margin-bottom': '0.5rem'})}, [
+            ['span', {class: 'status ' + (session.closed ? 'status-closed' : 'status-active')},
+               session.closed ? 'closed' : 'active'],
+            ! session.closed ? ['button', {
+               class: 'danger btn-small',
+               onclick: B.ev ('stop', 'session')
+            }, 'Stop'] : ''
+         ]] : ['div', {style: style ({display: 'flex', 'align-items': 'center', gap: '0.5rem', 'margin-bottom': '0.5rem'})}, [
+            ['input', {
+               class: 'workdir-input',
+               placeholder: 'Working directory',
+               value: workdir || '.',
+               onchange: B.ev ('set', 'workdir'),
+               oninput: B.ev ('set', 'workdir'),
+            }],
+            ['button', {
+               class: 'primary btn-small',
+               onclick: B.ev ('start', 'session'),
+               disabled: starting
+            }, starting ? 'Starting...' : 'Start Claude Code']
          ]],
 
          ['div', {
@@ -622,6 +910,27 @@ views.main = function () {
                disabled: sending || ! (input && input.trim ())
             }, sending ? 'Sending...' : 'Send']
          ]] : ''
+      ];
+
+      return ['div', {class: 'container'}, [
+         ['style', views.css],
+
+         ['div', {class: 'header'}, [
+            ['h1', {style: style ({margin: 0, 'font-size': '1.5rem'})}, 'vibey'],
+         ]],
+
+         ['div', {class: 'tabs'}, [
+            ['button', {
+               class: 'tab' + (tab === 'dialogs' ? ' tab-active' : ''),
+               onclick: B.ev ('set', 'tab', 'dialogs')
+            }, 'Dialogs'],
+            ['button', {
+               class: 'tab' + (tab === 'files' ? ' tab-active' : ''),
+               onclick: B.ev ('set', 'tab', 'files')
+            }, 'Files'],
+         ]],
+
+         tab === 'files' ? views.files () : dialogsView
       ]];
    });
 };

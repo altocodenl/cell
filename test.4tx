@@ -1419,6 +1419,27 @@
 
            - c @ wipe
 
+           - c @ put alias @ plus1
+                     eleven @ alias 10
+                     plus1 @ do int - @ add - @ int
+                                            - 1
+
+           - c @ ?
+             r ""
+             FIX THIS
+             R alias = = int 1
+                       @ do int 1 @ add - @ int
+                                        - 1
+                     @ plus1
+               eleven = ??
+                      @ alias 10
+               plus1 = int 1
+                     @ do int - @ add - @ int
+                                      - 1
+             tag "Alias of a sequence"
+
+           - c @ wipe
+
            - c @ put call @ def bar 1
                                 foo 2
                      def @ do message 1 @ message

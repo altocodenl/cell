@@ -1,0 +1,3 @@
+First episode of season 5! I'm building a programming substrate from scratch while recording myself. Building vibey. Everything is a (markdown) file. Having a lot of fun telling the LLM to shove dirt around instead of doing it myself. Dangerously fun.
+
+https://github.com/altocodenl/cell
