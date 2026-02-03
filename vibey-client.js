@@ -34,11 +34,13 @@ B.mrespond ([
 
    // *** SESSION ***
 
-   ['start', 'session', function (x) {
+   ['start', 'session', function (x, agent) {
       var workdir = B.get ('workdir') || '.';
 
       B.call (x, 'set', 'starting', true);
-      B.call (x, 'post', 'session/start', {}, {workdir: workdir}, function (x, error, rs) {
+      var payload = {workdir: workdir};
+      if (agent) payload.agent = agent;
+      B.call (x, 'post', 'session/start', {}, payload, function (x, error, rs) {
          B.call (x, 'set', 'starting', false);
          if (error) return B.call (x, 'report', 'error', error.responseText || 'Failed to start session');
 
@@ -618,6 +620,8 @@ views.css = [
    }],
 ];
 
+var openAIToolCalls = {};
+
 var parseClaudeOutput = function (entry) {
    if (entry.type === 'exit') return {type: 'system', text: '[Process exited with code ' + entry.code + ']'};
    if (entry.type === 'error') return {type: 'error', text: '[Error: ' + entry.error + ']'};
@@ -626,6 +630,83 @@ var parseClaudeOutput = function (entry) {
    var text = entry.text || '';
    try {
       var json = JSON.parse (text);
+
+      // *** OpenAI Responses streaming events ***
+      if (json.type && typeof json.type === 'string' && json.type.indexOf ('response.') === 0) {
+
+         if (json.type === 'response.output_text.delta') {
+            return {type: 'delta', text: json.delta || ''};
+         }
+
+         if (json.type === 'response.output_audio_transcript.delta') {
+            return {type: 'delta', text: json.delta || ''};
+         }
+
+         if (json.type === 'response.reasoning_text.delta') {
+            return {type: 'thinking', text: json.delta || ''};
+         }
+
+         if (json.type === 'response.reasoning_text.done') {
+            return {type: 'thinking', text: json.text || ''};
+         }
+
+         if (json.type === 'response.created') {
+            return {type: 'status', text: 'Session started (OpenAI Responses).'};
+         }
+
+         if (json.type === 'response.done' || json.type === 'response.completed') {
+            return {type: 'status', text: 'Response completed.'};
+         }
+
+         if (json.type === 'response.output_item.added' && json.item) {
+            if (json.item.type === 'function_call' || json.item.type === 'custom_tool_call') {
+               openAIToolCalls [json.item.id] = {
+                  id: json.item.id,
+                  name: json.item.name || 'tool',
+                  callId: json.item.call_id || json.item.id,
+                  input: json.item.arguments || json.item.input || '',
+                  ready: false
+               };
+            }
+            return null;
+         }
+
+         if (json.type === 'response.function_call_arguments.delta') {
+            var item = openAIToolCalls [json.item_id] || {id: json.item_id, name: 'tool', callId: json.call_id || json.item_id, input: '', ready: false};
+            item.input = (item.input || '') + (json.delta || '');
+            openAIToolCalls [json.item_id] = item;
+            return null;
+         }
+
+         if (json.type === 'response.function_call_arguments.done') {
+            var item = openAIToolCalls [json.item_id] || {id: json.item_id, name: 'tool', callId: json.call_id || json.item_id, input: '', ready: false};
+            item.input = json.arguments || item.input || '';
+            if (! item.ready) {
+               item.ready = true;
+               openAIToolCalls [json.item_id] = item;
+               return {type: 'tool_call', tool: item};
+            }
+            return null;
+         }
+
+         if (json.type === 'response.custom_tool_call_input.delta') {
+            var item = openAIToolCalls [json.item_id] || {id: json.item_id, name: 'tool', callId: json.item_id, input: '', ready: false};
+            item.input = (item.input || '') + (json.delta || '');
+            openAIToolCalls [json.item_id] = item;
+            return null;
+         }
+
+         if (json.type === 'response.custom_tool_call_input.done') {
+            var item = openAIToolCalls [json.item_id] || {id: json.item_id, name: 'tool', callId: json.item_id, input: '', ready: false};
+            item.input = json.input || item.input || '';
+            if (! item.ready) {
+               item.ready = true;
+               openAIToolCalls [json.item_id] = item;
+               return {type: 'tool_call', tool: item};
+            }
+            return null;
+         }
+      }
 
       if (json.type === 'system' && json.subtype === 'init') {
          return {type: 'system', text: 'Session started. Model: ' + json.model};
@@ -809,6 +890,21 @@ views.main = function () {
             if (parsed.type === 'assistant' && parsed.questions) {
                pendingQuestions = parsed.questions;
             }
+            else if (parsed.type === 'tool_call' && parsed.tool) {
+               var tool = parsed.tool;
+               var questionText = 'Approve tool call: ' + tool.name;
+               if (tool.input) questionText += '\n\n' + tool.input;
+               pendingQuestions = {
+                  toolUseId: tool.callId || tool.id,
+                  questions: [{
+                     question: questionText,
+                     options: [
+                        {label: 'Approve', description: 'Run this tool call'},
+                        {label: 'Reject', description: 'Do not run'}
+                     ]
+                  }]
+               };
+            }
             else if (parsed.type === 'result' || parsed.type === 'user') {
                pendingQuestions = null;
             }
@@ -880,9 +976,15 @@ views.main = function () {
             }],
             ['button', {
                class: 'primary btn-small',
-               onclick: B.ev ('start', 'session'),
+               onclick: B.ev ('start', 'session', 'claude'),
                disabled: starting
-            }, starting ? 'Starting...' : 'Start Claude Code']
+            }, starting ? 'Starting...' : 'Start Claude Code'],
+            ['button', {
+               class: 'btn-small',
+               style: style ({'background-color': '#0f4c5c', color: 'white'}),
+               onclick: B.ev ('start', 'session', 'openai'),
+               disabled: starting
+            }, starting ? 'Starting...' : 'Start OpenAI']
          ]],
 
          ['div', {

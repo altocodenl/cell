@@ -29,6 +29,9 @@ var dialogs = {}; // Track interactive dialogs by filename
 // *** HELPERS ***
 
 var VIBEY_DIR = Path.join (__dirname, 'vibey');
+var OPENAI_API_KEY = process.env.OPENAI_API_KEY || CONFIG.openaiApiKey;
+var OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+var OPENAI_RESPONSES_URL = process.env.OPENAI_RESPONSES_URL || 'https://api.openai.com/v1/responses';
 
 // Ensure vibey directory exists
 if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR);
@@ -55,6 +58,287 @@ var generateDialogFilename = function (role) {
    return 'dialog-' + timestamp + '-' + role + '.md';
 }
 
+var renderClaudeOutput = function (output) {
+   var textParts = [];
+   dale.go (output, function (entry) {
+      if (entry.type !== 'stdout') return;
+      try {
+         var json = JSON.parse (entry.text);
+         if (json.type === 'assistant' && json.message && json.message.content) {
+            dale.go (json.message.content, function (block) {
+               if (block.type === 'text') textParts.push (block.text);
+               else if (block.type === 'tool_use') textParts.push ('[Tool: ' + block.name + ']');
+            });
+         }
+         else if (json.type === 'user' && json.message) {
+            textParts.push ('\n\n**User:** ' + json.message.content + '\n\n');
+         }
+      }
+      catch (e) {}
+   });
+   return textParts.join ('');
+}
+
+var renderCodexOutput = function (output) {
+   var textParts = [];
+   dale.go (output, function (entry) {
+      if (entry.type === 'user') {
+         textParts.push ('\n\n**User:** ' + entry.text + '\n\n');
+         return;
+      }
+      if (entry.type !== 'stdout') return;
+      try {
+         var json = JSON.parse (entry.text);
+         if (json.type === 'assistant' && json.message && json.message.content) {
+            dale.go (json.message.content, function (block) {
+               if (block.type === 'text') textParts.push (block.text);
+               else if (block.type === 'tool_use') textParts.push ('[Tool: ' + block.name + ']');
+            });
+            return;
+         }
+         if (json.type === 'output_text' && json.text) {
+            textParts.push (json.text);
+            return;
+         }
+         if (json.type === 'final' && json.output_text) {
+            textParts.push (json.output_text);
+            return;
+         }
+         if (json.content && typeof json.content === 'string') {
+            textParts.push (json.content);
+            return;
+         }
+         textParts.push (entry.text);
+      }
+      catch (e) {
+         textParts.push (entry.text);
+      }
+   });
+   return textParts.join ('');
+}
+
+var openaiTools = function () {
+   return [
+      {
+         type: 'function',
+         name: 'shell_exec',
+         description: 'Run a shell command on the local machine. Requires user approval before execution.',
+         parameters: {
+            type: 'object',
+            properties: {
+               command: {type: 'string', description: 'Shell command to execute'},
+               cwd: {type: 'string', description: 'Working directory (optional)'}
+            },
+            required: ['command'],
+            additionalProperties: false
+         }
+      },
+      {
+         type: 'function',
+         name: 'http_fetch',
+         description: 'Perform an HTTP request. Requires user approval before execution.',
+         parameters: {
+            type: 'object',
+            properties: {
+               url: {type: 'string', description: 'URL to fetch'},
+               method: {type: 'string', description: 'HTTP method, e.g., GET, POST'},
+               headers: {type: 'object', description: 'Request headers'},
+               body: {type: 'string', description: 'Request body'}
+            },
+            required: ['url'],
+            additionalProperties: false
+         }
+      }
+   ];
+}
+
+var pushSessionOutput = function (session, obj) {
+   session.output.push ({type: 'stdout', text: JSON.stringify (obj), t: Date.now ()});
+   if (session.waiting) {
+      var cb = session.waiting;
+      session.waiting = null;
+      cb ();
+   }
+}
+
+var openaiStream = async function (session, inputItems) {
+   if (! OPENAI_API_KEY) {
+      pushSessionOutput (session, {type: 'error', message: 'OPENAI_API_KEY not set'});
+      session.closed = true;
+      return;
+   }
+
+   if (session.streaming) return;
+   session.streaming = true;
+
+   var body = {
+      model: session.model || OPENAI_MODEL,
+      input: inputItems,
+      stream: true,
+      tools: openaiTools (),
+      tool_choice: 'auto'
+   };
+
+   if (session.lastResponseId) body.previous_response_id = session.lastResponseId;
+
+   var controller = new AbortController ();
+   session.abortController = controller;
+
+   var res;
+   try {
+      res = await fetch (OPENAI_RESPONSES_URL, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + OPENAI_API_KEY
+         },
+         body: JSON.stringify (body),
+         signal: controller.signal
+      });
+   }
+   catch (e) {
+      session.streaming = false;
+      pushSessionOutput (session, {type: 'error', message: 'OpenAI request failed: ' + e.message});
+      return;
+   }
+
+   if (! res.ok) {
+      var errText = '';
+      try { errText = await res.text (); } catch (e) {}
+      session.streaming = false;
+      pushSessionOutput (session, {type: 'error', message: 'OpenAI error: ' + res.status + ' ' + errText});
+      return;
+   }
+
+   var reader = res.body.getReader ();
+   var decoder = new TextDecoder ('utf-8');
+   var buffer = '';
+
+   var handleEvent = function (event) {
+      if (! event || ! event.type) return;
+
+      // Track response id when available
+      if (event.response && event.response.id) session.lastResponseId = event.response.id;
+      if (event.response_id) session.lastResponseId = event.response_id;
+
+      // Track tool calls
+      if (event.type === 'response.output_item.added' && event.item && event.item.type === 'function_call') {
+         session.toolItems [event.item.id] = event.item.call_id || event.item.id;
+         session.pendingTools [event.item.call_id || event.item.id] = {
+            id: event.item.id,
+            callId: event.item.call_id || event.item.id,
+            name: event.item.name,
+            arguments: ''
+         };
+      }
+      if (event.type === 'response.function_call_arguments.delta') {
+         var callId = session.toolItems [event.item_id] || event.call_id || event.item_id;
+         var tool = session.pendingTools [callId] || {id: event.item_id, callId: callId, name: event.name, arguments: ''};
+         tool.arguments = (tool.arguments || '') + (event.delta || '');
+         session.pendingTools [callId] = tool;
+      }
+      if (event.type === 'response.function_call_arguments.done') {
+         var callId = event.call_id || session.toolItems [event.item_id] || event.item_id;
+         var tool = session.pendingTools [callId] || {id: event.item_id, callId: callId, name: event.name, arguments: ''};
+         tool.arguments = event.arguments || tool.arguments || '';
+         tool.name = event.name || tool.name;
+         session.pendingTools [callId] = tool;
+      }
+
+      // Push the event through to the client
+      pushSessionOutput (session, event);
+   };
+
+   var processSSE = function (chunk) {
+      buffer += chunk;
+      var parts = buffer.split ('\n\n');
+      buffer = parts.pop ();
+      dale.go (parts, function (part) {
+         var lines = part.split ('\n');
+         var dataLines = dale.fil (lines, undefined, function (line) {
+            if (line.indexOf ('data:') === 0) return line.slice (5).trim ();
+         });
+         if (! dataLines.length) return;
+         var data = dataLines.join ('');
+         if (data === '[DONE]') return;
+         try {
+            var event = JSON.parse (data);
+            handleEvent (event);
+         }
+         catch (e) {}
+      });
+   };
+
+   try {
+      while (true) {
+         var r = await reader.read ();
+         if (r.done) break;
+         processSSE (decoder.decode (r.value, {stream: true}));
+      }
+   }
+   catch (e) {
+      pushSessionOutput (session, {type: 'error', message: 'OpenAI stream error: ' + e.message});
+   }
+   finally {
+      session.streaming = false;
+      session.abortController = null;
+   }
+}
+
+var runTool = function (session, tool, cb) {
+   if (! tool || ! tool.name) return cb ('Unknown tool');
+   var args = {};
+   try { args = JSON.parse (tool.arguments || '{}'); }
+   catch (e) { return cb ('Invalid tool arguments JSON'); }
+
+   if (tool.name === 'shell_exec') {
+      if (! args.command || typeof args.command !== 'string') return cb ('Missing command');
+      var cwd = typeof args.cwd === 'string' ? args.cwd : session.workdir;
+      var proc = spawn (args.command, [], {cwd: cwd, shell: true});
+      var stdout = '';
+      var stderr = '';
+      var done = false;
+
+      var finish = function (code) {
+         if (done) return;
+         done = true;
+         cb (null, {
+            exitCode: code,
+            stdout: stdout,
+            stderr: stderr
+         });
+      };
+
+      proc.stdout.on ('data', function (d) { stdout += d.toString (); });
+      proc.stderr.on ('data', function (d) { stderr += d.toString (); });
+      proc.on ('error', function (e) { cb ('Command failed: ' + e.message); });
+      proc.on ('close', function (code) { finish (code); });
+      return;
+   }
+
+   if (tool.name === 'http_fetch') {
+      if (! args.url || typeof args.url !== 'string') return cb ('Missing url');
+      var method = typeof args.method === 'string' ? args.method : 'GET';
+      var headers = args.headers && typeof args.headers === 'object' ? args.headers : {};
+      var body = typeof args.body === 'string' ? args.body : undefined;
+      fetch (args.url, {method: method, headers: headers, body: body}).then (function (res) {
+         return res.text ().then (function (text) {
+            cb (null, {
+               status: res.status,
+               statusText: res.statusText,
+               headers: Object.fromEntries (res.headers.entries ()),
+               body: text
+            });
+         });
+      }).catch (function (e) {
+         cb ('Fetch failed: ' + e.message);
+      });
+      return;
+   }
+
+   cb ('Unsupported tool: ' + tool.name);
+}
+
 // Claude-specific spawn - fully interactive
 var spinClaude = function (role, prompt, dialogPath, cb) {
    var dialogFile = Path.basename (dialogPath);
@@ -73,6 +357,7 @@ var spinClaude = function (role, prompt, dialogPath, cb) {
       proc: proc,
       output: output,
       closed: false,
+      agent: 'claude',
       role: role,
       prompt: prompt,
       path: dialogPath,
@@ -100,26 +385,7 @@ var spinClaude = function (role, prompt, dialogPath, cb) {
       content += '**Status:** ' + (dialog.closed ? 'ended' : 'active') + '\n\n';
       content += '## Prompt\n\n' + prompt + '\n\n';
       content += '## Output\n\n';
-
-      var textParts = [];
-      dale.go (output, function (entry) {
-         if (entry.type !== 'stdout') return;
-         try {
-            var json = JSON.parse (entry.text);
-            if (json.type === 'assistant' && json.message && json.message.content) {
-               dale.go (json.message.content, function (block) {
-                  if (block.type === 'text') textParts.push (block.text);
-                  else if (block.type === 'tool_use') textParts.push ('[Tool: ' + block.name + ']');
-               });
-            }
-            else if (json.type === 'user' && json.message) {
-               textParts.push ('\n\n**User:** ' + json.message.content + '\n\n');
-            }
-         }
-         catch (e) {}
-      });
-
-      content += textParts.join ('') + '\n\n';
+      content += renderClaudeOutput (output) + '\n\n';
       if (dialog.closed) content += '<ENDED>\n';
       fs.writeFile (dialogPath, content, 'utf8', function () {});
    };
@@ -181,31 +447,100 @@ var spinClaude = function (role, prompt, dialogPath, cb) {
 
 // Codex-specific spawn
 var spinCodex = function (role, prompt, dialogPath, cb) {
-   var proc = spawn ('codex', ['--quiet', '--prompt', prompt], {
+   var dialogFile = Path.basename (dialogPath);
+
+   var proc = spawn ('codex', ['exec', '--json', prompt], {
       cwd: VIBEY_DIR,
       env: Object.assign ({}, process.env, {FORCE_COLOR: '0'}),
       stdio: ['pipe', 'pipe', 'pipe']
    });
 
-   var buffer = '';
+   var output = [];
+   var stdoutBuffer = '';
+
+   var dialog = {
+      proc: proc,
+      output: output,
+      closed: false,
+      agent: 'codex',
+      role: role,
+      prompt: prompt,
+      path: dialogPath,
+      started: Date.now (),
+      waiting: null
+   };
+
+   dialogs [dialogFile] = dialog;
+
+   var processBuffer = function (buffer, type) {
+      var lines = buffer.split ('\n');
+      var incomplete = lines.pop ();
+      dale.go (lines, function (line) {
+         if (line.trim ()) {
+            output.push ({type: type, text: line, t: Date.now ()});
+         }
+      });
+      return incomplete;
+   };
+
+   var updateDialogFile = function () {
+      var content = '# Dialog: ' + role + '\n\n';
+      content += '**Agent:** codex\n';
+      content += '**Started:** ' + new Date (dialog.started).toISOString () + '\n';
+      content += '**Status:** ' + (dialog.closed ? 'ended' : 'active') + '\n\n';
+      content += '## Prompt\n\n' + prompt + '\n\n';
+      content += '## Output\n\n';
+      content += renderCodexOutput (output) + '\n\n';
+      if (dialog.closed) content += '<ENDED>\n';
+      fs.writeFile (dialogPath, content, 'utf8', function () {});
+   };
+   dialog.updateDialogFile = updateDialogFile;
 
    proc.stdout.on ('data', function (data) {
-      buffer += data.toString ();
+      stdoutBuffer += data.toString ();
+      stdoutBuffer = processBuffer (stdoutBuffer, 'stdout');
+      updateDialogFile ();
+      if (dialog.waiting) {
+         var waitingCb = dialog.waiting;
+         dialog.waiting = null;
+         waitingCb ();
+      }
    });
 
    proc.stderr.on ('data', function (data) {
-      buffer += '[stderr] ' + data.toString ();
+      output.push ({type: 'stderr', text: data.toString (), t: Date.now ()});
+      if (dialog.waiting) {
+         var waitingCb = dialog.waiting;
+         dialog.waiting = null;
+         waitingCb ();
+      }
    });
 
    proc.on ('close', function (code) {
-      cb (null, buffer, code);
+      dialog.closed = true;
+      dialog.exitCode = code;
+      output.push ({type: 'exit', code: code, t: Date.now ()});
+      updateDialogFile ();
+      if (dialog.waiting) {
+         var waitingCb = dialog.waiting;
+         dialog.waiting = null;
+         waitingCb ();
+      }
    });
 
    proc.on ('error', function (error) {
+      dialog.closed = true;
+      output.push ({type: 'error', error: error.message, t: Date.now ()});
+      updateDialogFile ();
+      if (dialog.waiting) {
+         var waitingCb = dialog.waiting;
+         dialog.waiting = null;
+         waitingCb ();
+      }
       cb ('Failed to spawn codex: ' + error.message);
    });
 
-   proc.stdin.end ();
+   cb (null, dialogFile);
 }
 
 // General spin function: agent is 'claude' or 'codex', role is 'main' or 'worker'
@@ -219,28 +554,8 @@ var spinAgent = function (agent, role, prompt, cb) {
       spinClaude (role, prompt, dialogPath, cb);
    }
    else if (agent === 'codex') {
-      // Codex remains non-interactive for now
-      var initialContent = '# Dialog: ' + role + '\n\n';
-      initialContent += '**Agent:** ' + agent + '\n';
-      initialContent += '**Started:** ' + new Date ().toISOString () + '\n\n';
-      initialContent += '## Prompt\n\n' + prompt + '\n\n';
-      initialContent += '## Output\n\n*Running...*\n';
-      fs.writeFileSync (dialogPath, initialContent, 'utf8');
-
-      spinCodex (role, prompt, dialogPath, function (error, output, code) {
-         if (error) return cb (error);
-
-         var content = '# Dialog: ' + role + '\n\n';
-         content += '**Agent:** ' + agent + '\n';
-         content += '**Started:** ' + new Date ().toISOString () + '\n';
-         content += '**Exit code:** ' + code + '\n\n';
-         content += '## Prompt\n\n' + prompt + '\n\n';
-         content += '## Output\n\n```\n' + output + '\n```\n\n';
-         content += '<ENDED>\n';
-         fs.writeFile (dialogPath, content, 'utf8', function () {});
-      });
-
-      cb (null, dialogFile);
+      // Codex is now streamed into the dialog file similarly to Claude
+      spinCodex (role, prompt, dialogPath, cb);
    }
    else {
       cb ('Unknown agent: ' + agent);
@@ -348,6 +663,26 @@ var routes = [
 
       var id = Date.now () + '-' + Math.random ().toString (36).slice (2, 8);
 
+      var agent = rq.body.agent || 'claude';
+
+      if (agent === 'openai') {
+         sessions [id] = {
+            id: id,
+            type: 'openai',
+            workdir: rq.body.workdir,
+            model: rq.body.model || OPENAI_MODEL,
+            output: [],
+            waiting: null,
+            started: Date.now (),
+            streaming: false,
+            lastResponseId: null,
+            pendingTools: {},
+            toolItems: {},
+            abortController: null
+         };
+         return reply (rs, 200, {id: id});
+      }
+
       var proc = spawn ('claude', ['--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'], {
          cwd: rq.body.workdir,
          env: Object.assign ({}, process.env, {
@@ -358,6 +693,7 @@ var routes = [
 
       sessions [id] = {
          id: id,
+         type: 'claude',
          workdir: rq.body.workdir,
          proc: proc,
          output: [],
@@ -433,6 +769,42 @@ var routes = [
          ['message', rq.body.message, 'string'],
       ])) return;
 
+      if (session.type === 'openai') {
+         if (session.streaming) return reply (rs, 429, {error: 'Session is busy'});
+
+         if (rq.body.toolUseId) {
+            var tool = session.pendingTools [rq.body.toolUseId];
+            if (! tool) return reply (rs, 400, {error: 'Unknown tool call'});
+
+            var decision = rq.body.message;
+            if (decision === 'Reject') {
+               openaiStream (session, [{
+                  type: 'function_call_output',
+                  call_id: rq.body.toolUseId,
+                  output: JSON.stringify ({error: 'rejected_by_user'})
+               }]);
+               return reply (rs, 200, {ok: true});
+            }
+
+            if (decision === 'Approve') {
+               return runTool (session, tool, function (error, result) {
+                  var output = error ? {error: error} : result;
+                  openaiStream (session, [{
+                     type: 'function_call_output',
+                     call_id: rq.body.toolUseId,
+                     output: JSON.stringify (output)
+                  }]);
+                  reply (rs, 200, {ok: true});
+               });
+            }
+
+            return reply (rs, 400, {error: 'Unknown decision'});
+         }
+
+         openaiStream (session, [{type: 'input_text', text: rq.body.message}]);
+         return reply (rs, 200, {ok: true});
+      }
+
       var jsonMessage;
       if (rq.body.toolUseId) {
          // Send as tool_result for AskUserQuestion responses
@@ -501,7 +873,13 @@ var routes = [
       if (! session) return reply (rs, 404, {error: 'Session not found'});
 
       if (! session.closed) {
-         session.proc.kill ('SIGTERM');
+         if (session.type === 'openai') {
+            if (session.abortController) session.abortController.abort ();
+            session.closed = true;
+         }
+         else if (session.proc) {
+            session.proc.kill ('SIGTERM');
+         }
       }
 
       reply (rs, 200, {ok: true});
@@ -585,22 +963,32 @@ var routes = [
          ['message', rq.body.message, 'string'],
       ])) return;
 
-      var jsonMessage;
-      if (rq.body.toolUseId) {
-         // Send as tool_result for AskUserQuestion responses
-         jsonMessage = JSON.stringify ({
-            type: 'tool_result',
-            tool_use_id: rq.body.toolUseId,
-            content: rq.body.message
-         });
+      if (dialog.agent === 'claude') {
+         var jsonMessage;
+         if (rq.body.toolUseId) {
+            // Send as tool_result for AskUserQuestion responses
+            jsonMessage = JSON.stringify ({
+               type: 'tool_result',
+               tool_use_id: rq.body.toolUseId,
+               content: rq.body.message
+            });
+         }
+         else {
+            jsonMessage = JSON.stringify ({
+               type: 'user',
+               message: {role: 'user', content: rq.body.message}
+            });
+         }
+         dialog.proc.stdin.write (jsonMessage + '\n');
+      }
+      else if (dialog.agent === 'codex') {
+         dialog.output.push ({type: 'user', text: rq.body.message, t: Date.now ()});
+         if (dialog.updateDialogFile) dialog.updateDialogFile ();
+         dialog.proc.stdin.write (rq.body.message + '\n');
       }
       else {
-         jsonMessage = JSON.stringify ({
-            type: 'user',
-            message: {role: 'user', content: rq.body.message}
-         });
+         return reply (rs, 400, {error: 'Dialog does not support input'});
       }
-      dialog.proc.stdin.write (jsonMessage + '\n');
 
       reply (rs, 200, {ok: true});
    }],
@@ -648,5 +1036,5 @@ var spinMain = function () {
    });
 };
 
-setInterval (spinMain, 5000);
+//setInterval (spinMain, 5000);
 clog ('Main agent loop started (every 5s)');

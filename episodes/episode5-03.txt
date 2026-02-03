@@ -1,0 +1,12 @@
+Third episode of season 5! I'm building a programming substrate from scratch while recording myself. Flustered by claude hitting the limit and codex having bad auth defaults, I stumbled upon the idea of just using API calls instead of reverse engineering how to stream these LLM clients. This could show promise. I'll find out soon. MCP really opens the gates.
+
+https://github.com/altocodenl/cell
+
+Codex config:
+
+[sandbox_workspace_write]
+sandbox_mode = "workspace-write"
+
+network_access = true
+
+web_search = "live"

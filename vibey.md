@@ -51,6 +51,12 @@ Yeah, this can be done with files, not even directories:
 
 For the students of humanities stranded in the digital age: this is your chance to build a world with your words. Not cryptic commands, without the tens of hours of practice that are required to figure out misplaced semicolons. Describe your world and see it come to life, somewhat expensively.
 
+There has to be one main of each:
+
+- One main doc, doc-main.md, which describes the project. And links to the other docs.
+- One main dialog, that of the main agent currently running.
+- One main task, which is updated by the main agent (perhaps).
+
 ## Moar notes
 
 Fun thing: the main agent also has their own dialog. If another main agent is spun, it can check that there's already a main agent going, and just stop.
@@ -72,3 +78,28 @@ Goal: be able to build vibey with vibey itself.
 - If a dialog receives a message from a human or another agent, it is also placed in its markdown file.
 - Dialogs handle stdin when claude code or codex ask for options. They should be VERY tty-like, except that they're still markdown. Decisions registered look like text.
 - Put timestamps on the chunks of the dialogs, so we know more or less where we are: remember, there's no state outside of the text files.
+
+
+
+
+Hi! Suppose you don't have claude code, or codex. Can you have an MCP-like local experience where you send API calls to get inference, and the LLM makes the commands in your computer with your authorization?
+
+Let me think. I want a claude code or codex experience just with api calls. You'd have to support:
+- network calls
+- os calls
+- reading files would be catting or grepping, so also os calls.
+
+Could you set it up so that we use the openai API and then the node server in vibey-server provides this mcp tooling? Is that even possible?
+
+THe LLM response needs to be streamed, so we can see it live.
+
+I want nothing whitelisted at the beginning, ask me through stdin.
+
+That stdin should be compatible with what we have in vibey-client.js.
+
+codex:
+"If you want, I can do one of these next:
+
+  1. Add “Other” to submit as tool output tied to the pending tool call.
+  2. Add a model selector input in the UI.
+  3. Add a “busy / streaming” indicator so it’s clear when the model is mid-stream."

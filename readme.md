@@ -209,6 +209,24 @@ view
 
 ## Development notes
 
+### 2026-02-03
+
+New idea: what if instead of running claude code or codex locally and have that in vibey, we just use the API? If the LLM can call local tools, we'd be doing quite well, except for pupeteer, but perhaps even that is possible.
+
+I feel I'm fighting the tools to stream this, whereas the API calls would be cleaner and still get the job done.
+
+Let me think. I want a claude code or codex experience just with api calls. You'd have to support:
+- network calls
+- os calls
+- reading files would be catting or grepping, so also os calls.
+- making and applying diffs on files (also os call?)
+
+I want nothing whitelisted at the beginning, ask me through stdin.
+
+I'm getting mindblown by the idea of MCP as XMLHTTPRequest, and LLMs as high-level glue. You can just say "get me X data from salesforce", and the LLM will get it, and it will do a nice little ad-hoc visualization of it wherever you want it, in a doc page, or another page of your application. It's truly the end of the silo.
+
+Vibey could circumvent claude code and codex. Just get an API token and get going. Really pay per token. Wow.
+
 ### 2026-02-02
 
 Concepts as interfaces to representations.
