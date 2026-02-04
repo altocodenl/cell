@@ -209,6 +209,80 @@ view
 
 ## Development notes
 
+### 2026-02-04
+
+If LLM models are roughly as good as their data, and big LLM models already are trained on *all* the data, then why are they still becoming better? Is it because they are being fed with their failure modes and they're learning from them?
+
+Claude suggests it's that, plus three more things:
+- More compute
+- Better data selection
+- Architecture/algorithmic improvements
+
+"The base pretrained model gets you ~80% there. The remaining improvement comes from understanding how the model fails and systematically addressing those patterns through post-training."
+
+Merge conflicts can be explained by the CAP theorem, when your team has more than one member and you have to work on related things at the same time. If the work is not partitioned, you'll generate a consistency issue.
+
+Understanding bootstrapping through the call and response paradigm:
+- The base layer (could be opcodes, assembler, C, whatever powers your implementation) has a number of calls.
+- You don't have a way of transforming the calls of your language to the calls on the system.
+- Using the calls of the underlying layer, you implement some of your language calls. This is the bootstrapped layer.
+- Then, to express all the calls in your language, you use the calls of your language that are in the bootstrapped layer.
+- If you needed all the calls in your language to express any call in your language, your language would have to be bootstrapped completely, which is meaningless as a term. The notion of bootstrapping implies that there are two parts of your language, essential calls and then calls that can be expressed in terms of the essential calls.
+
+Understanding functional programming and side effects through call and response in the dataspace: a pure function is one that doesn't read anything "from the left" and doesn't write anything "to the left" (only in its result). But still, this implies native calls that are still to the left, but since they are considered unchanging, they don't represent mutable state. You could think of this dual purity as read-purity and write-purity. Kind of reminds me of both funarg problems.
+
+Refactoring is changing the implementation of a call without changing its interface.
+
+Main takeaways of Vibe Coding (the book):
+- Vibe coding is worth it. 2-10x potential. It enables FAAFO: faster, ambitious, autonomous, fun and optionality.
+- It's not less work, it's just different work.
+- Continuum: from chat to multiple autonomous agents. Work in parallel with several agents, giving them autonomy but not abdicating responsibility.
+- You can converge onto good code by interacting.
+- Manage the context window: context increases quadratically with every interaction, because you need to send the entire thing back.
+- Count your babies: validate what the LLM does. Set clear standards for code and tests.
+- Planning: tasks and tracer bullets.
+- Make agents give a summary of what they did once they're done, and save that for following sessions.
+
+== Prompts:
+
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js.
+
+Please clean up all the claude and openai code we have in the server and the client, just keep the reference to the API keys. Also keep the dialog part of the UI, but gut the respondres. And verify that the markdown functionality is present. We'll do the agent/MCP stuff later.
+
+Summary:
+
+⏺ The cleanup is complete and the markdown functionality is working. Here's a summary:
+
+  Server (vibey-server.js) - Reduced from ~1040 lines to ~130 lines:
+  - Kept: Static routes, file CRUD routes (GET/POST/DELETE /file/:name, GET /files)
+  - Kept: API key references as env vars (for future use)
+  - Removed: All session/dialog routes, Claude/Codex spawning, OpenAI streaming, tool execution, agent loops
+
+  Client (vibey-client.js) - Reduced from ~1050 lines to ~310 lines:
+  - Kept: Files responders (load, save, create, delete, close, Ctrl+S shortcut)
+  - Kept: Files view with list sidebar and editor
+  - Kept: Tab switching between Dialogs and Files
+  - Added: Simple placeholder for Dialogs tab ("Dialogs coming soon")
+  - Removed: All session/output handling, Claude/OpenAI output parsing, tool call UI, question blocks
+  - Default tab changed to 'files' instead of 'dialogs'
+
+  Verified working:
+  - File list loads correctly
+  - Clicking a file opens it in the editor with content visible
+  - The textarea properly displays file content (using content as child element, not value attribute)
+
+==
+
+Please test this:
+- Allow the server to write and read markdown files locally, all against a folder `vibey` (done)
+- Allow the client to list the markdown files in that folder, open them, edit them in whsiwyg with some standard and good markdown editor that can be loaded from the client side. (done)
+
+There's pupeteer installed.
+
+==
+
+It's "define", not "refine".
+
 ### 2026-02-03
 
 New idea: what if instead of running claude code or codex locally and have that in vibey, we just use the API? If the LLM can call local tools, we'd be doing quite well, except for pupeteer, but perhaps even that is possible.

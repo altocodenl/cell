@@ -4,7 +4,6 @@ var CONFIG = require ('./config.js');
 
 var fs    = require ('fs');
 var Path  = require ('path');
-var spawn = require ('child_process').spawn;
 
 var dale   = require ('dale');
 var teishi = require ('teishi');
@@ -21,17 +20,623 @@ var stop = function (rs, rules) {
    }, true);
 }
 
-// *** STATE ***
-
-var sessions = {};
-var dialogs = {}; // Track interactive dialogs by filename
-
 // *** HELPERS ***
 
 var VIBEY_DIR = Path.join (__dirname, 'vibey');
-var OPENAI_API_KEY = process.env.OPENAI_API_KEY || CONFIG.openaiApiKey;
-var OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
-var OPENAI_RESPONSES_URL = process.env.OPENAI_RESPONSES_URL || 'https://api.openai.com/v1/responses';
+var SECRET = require ('./secret.js');
+
+// API keys
+var OPENAI_API_KEY = SECRET.openai;
+var CLAUDE_API_KEY = SECRET.claude;
+
+// *** MCP TOOLS ***
+
+// Tool definitions for Claude
+var CLAUDE_TOOLS = [
+   {
+      name: 'run_command',
+      description: 'Run a shell command on the local system. Use this to execute bash commands, read files, list directories, etc.',
+      input_schema: {
+         type: 'object',
+         properties: {
+            command: {
+               type: 'string',
+               description: 'The shell command to execute'
+            }
+         },
+         required: ['command']
+      }
+   },
+   {
+      name: 'read_file',
+      description: 'Read the contents of a file from the local filesystem.',
+      input_schema: {
+         type: 'object',
+         properties: {
+            path: {
+               type: 'string',
+               description: 'The path to the file to read'
+            }
+         },
+         required: ['path']
+      }
+   },
+   {
+      name: 'write_file',
+      description: 'Write content to a file on the local filesystem.',
+      input_schema: {
+         type: 'object',
+         properties: {
+            path: {
+               type: 'string',
+               description: 'The path to the file to write'
+            },
+            content: {
+               type: 'string',
+               description: 'The content to write to the file'
+            }
+         },
+         required: ['path', 'content']
+      }
+   },
+   {
+      name: 'list_directory',
+      description: 'List the contents of a directory.',
+      input_schema: {
+         type: 'object',
+         properties: {
+            path: {
+               type: 'string',
+               description: 'The path to the directory to list'
+            }
+         },
+         required: ['path']
+      }
+   }
+];
+
+// Tool definitions for OpenAI
+var OPENAI_TOOLS = [
+   {
+      type: 'function',
+      function: {
+         name: 'run_command',
+         description: 'Run a shell command on the local system. Use this to execute bash commands, read files, list directories, etc.',
+         parameters: {
+            type: 'object',
+            properties: {
+               command: {
+                  type: 'string',
+                  description: 'The shell command to execute'
+               }
+            },
+            required: ['command']
+         }
+      }
+   },
+   {
+      type: 'function',
+      function: {
+         name: 'read_file',
+         description: 'Read the contents of a file from the local filesystem.',
+         parameters: {
+            type: 'object',
+            properties: {
+               path: {
+                  type: 'string',
+                  description: 'The path to the file to read'
+               }
+            },
+            required: ['path']
+         }
+      }
+   },
+   {
+      type: 'function',
+      function: {
+         name: 'write_file',
+         description: 'Write content to a file on the local filesystem.',
+         parameters: {
+            type: 'object',
+            properties: {
+               path: {
+                  type: 'string',
+                  description: 'The path to the file to write'
+               },
+               content: {
+                  type: 'string',
+                  description: 'The content to write to the file'
+               }
+            },
+            required: ['path', 'content']
+         }
+      }
+   },
+   {
+      type: 'function',
+      function: {
+         name: 'list_directory',
+         description: 'List the contents of a directory.',
+         parameters: {
+            type: 'object',
+            properties: {
+               path: {
+                  type: 'string',
+                  description: 'The path to the directory to list'
+               }
+            },
+            required: ['path']
+         }
+      }
+   }
+];
+
+// Store pending tool calls awaiting user approval
+// {dialogId: {messages, toolCalls, provider, model, metadata}}
+var pendingToolCalls = {};
+
+// Execute a tool locally
+var executeTool = async function (toolName, toolInput) {
+   var exec = require ('child_process').exec;
+
+   return new Promise (function (resolve) {
+      if (toolName === 'run_command') {
+         exec (toolInput.command, {timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
+            if (error) {
+               resolve ({success: false, error: error.message, stderr: stderr});
+            }
+            else {
+               resolve ({success: true, stdout: stdout, stderr: stderr});
+            }
+         });
+      }
+      else if (toolName === 'read_file') {
+         fs.readFile (toolInput.path, 'utf8', function (error, content) {
+            if (error) {
+               resolve ({success: false, error: error.message});
+            }
+            else {
+               resolve ({success: true, content: content});
+            }
+         });
+      }
+      else if (toolName === 'write_file') {
+         fs.writeFile (toolInput.path, toolInput.content, 'utf8', function (error) {
+            if (error) {
+               resolve ({success: false, error: error.message});
+            }
+            else {
+               resolve ({success: true, message: 'File written successfully'});
+            }
+         });
+      }
+      else if (toolName === 'list_directory') {
+         fs.readdir (toolInput.path, {withFileTypes: true}, function (error, entries) {
+            if (error) {
+               resolve ({success: false, error: error.message});
+            }
+            else {
+               var items = dale.go (entries, function (entry) {
+                  return {name: entry.name, isDirectory: entry.isDirectory ()};
+               });
+               resolve ({success: true, entries: items});
+            }
+         });
+      }
+      else {
+         resolve ({success: false, error: 'Unknown tool: ' + toolName});
+      }
+   });
+};
+
+// *** LLM FUNCTIONS ***
+
+// Parse markdown dialog into messages array
+var parseDialog = function (markdown) {
+   var messages = [];
+   var lines = markdown.split ('\n');
+   var currentRole = null;
+   var currentContent = [];
+
+   dale.go (lines, function (line) {
+      if (line.startsWith ('## User')) {
+         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         currentRole = 'user';
+         currentContent = [];
+      }
+      else if (line.startsWith ('## Assistant')) {
+         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         currentRole = 'assistant';
+         currentContent = [];
+      }
+      else if (currentRole) {
+         currentContent.push (line);
+      }
+   });
+
+   if (currentRole && currentContent.join ('').trim ()) {
+      messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+   }
+
+   return messages;
+};
+
+// Convert messages array to markdown
+var dialogToMarkdown = function (messages, metadata) {
+   var md = '# Dialog\n\n';
+   if (metadata) {
+      md += '> Provider: ' + metadata.provider + ' | Model: ' + metadata.model + '\n\n';
+   }
+   dale.go (messages, function (msg) {
+      var role = msg.role === 'user' ? 'User' : 'Assistant';
+      md += '## ' + role + '\n\n' + msg.content + '\n\n';
+   });
+   return md;
+};
+
+// Load or create dialog file, returns {messages, filepath}
+var loadDialog = function (dialogId) {
+   var filename = 'dialog-' + dialogId + '.md';
+   var filepath = Path.join (VIBEY_DIR, filename);
+
+   if (fs.existsSync (filepath)) {
+      var content = fs.readFileSync (filepath, 'utf8');
+      return {messages: parseDialog (content), filepath: filepath, filename: filename};
+   }
+   return {messages: [], filepath: filepath, filename: filename};
+};
+
+// Save dialog to markdown file
+var saveDialog = function (filepath, messages, metadata) {
+   var markdown = dialogToMarkdown (messages, metadata);
+   fs.writeFileSync (filepath, markdown, 'utf8');
+};
+
+// Implementation function for Claude (streaming with tool support)
+var chatWithClaude = async function (messages, model, onChunk, useTools) {
+   model = model || 'claude-sonnet-4-20250514';
+
+   var requestBody = {
+      model: model,
+      max_tokens: 64000,
+      stream: true,
+      messages: messages
+   };
+
+   if (useTools) {
+      requestBody.tools = CLAUDE_TOOLS;
+   }
+
+   var response = await fetch ('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+         'x-api-key': CLAUDE_API_KEY,
+         'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify (requestBody)
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('Claude API error: ' + response.status + ' - ' + error);
+   }
+
+   var fullContent = '';
+   var toolCalls = [];
+   var currentToolUse = null;
+   var reader = response.body.getReader ();
+   var decoder = new TextDecoder ();
+   var buffer = '';
+
+   while (true) {
+      var result = await reader.read ();
+      if (result.done) break;
+
+      buffer += decoder.decode (result.value, {stream: true});
+      var lines = buffer.split ('\n');
+      buffer = lines.pop ();
+
+      dale.go (lines, function (line) {
+         if (line.startsWith ('data: ')) {
+            var data = line.slice (6);
+            if (data === '[DONE]') return;
+            try {
+               var parsed = JSON.parse (data);
+
+               // Text content
+               if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
+                  fullContent += parsed.delta.text;
+                  if (onChunk) onChunk (parsed.delta.text);
+               }
+
+               // Tool use start
+               if (parsed.type === 'content_block_start' && parsed.content_block && parsed.content_block.type === 'tool_use') {
+                  currentToolUse = {
+                     id: parsed.content_block.id,
+                     name: parsed.content_block.name,
+                     input: ''
+                  };
+               }
+
+               // Tool use input delta
+               if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.type === 'input_json_delta') {
+                  if (currentToolUse) {
+                     currentToolUse.input += parsed.delta.partial_json;
+                  }
+               }
+
+               // Tool use stop
+               if (parsed.type === 'content_block_stop' && currentToolUse) {
+                  try {
+                     currentToolUse.input = JSON.parse (currentToolUse.input);
+                  }
+                  catch (e) {
+                     currentToolUse.input = {};
+                  }
+                  toolCalls.push (currentToolUse);
+                  currentToolUse = null;
+               }
+            }
+            catch (e) {}
+         }
+      });
+   }
+
+   return {
+      provider: 'claude',
+      model: model,
+      content: fullContent,
+      toolCalls: toolCalls.length > 0 ? toolCalls : null
+   };
+};
+
+// Implementation function for OpenAI (streaming with tool support)
+var chatWithOpenAI = async function (messages, model, onChunk, useTools) {
+   model = model || 'gpt-4o';
+
+   var requestBody = {
+      model: model,
+      stream: true,
+      messages: messages
+   };
+
+   if (useTools) {
+      requestBody.tools = OPENAI_TOOLS;
+   }
+
+   var response = await fetch ('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json',
+         'Authorization': 'Bearer ' + OPENAI_API_KEY
+      },
+      body: JSON.stringify (requestBody)
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('OpenAI API error: ' + response.status + ' - ' + error);
+   }
+
+   var fullContent = '';
+   var toolCalls = [];
+   var toolCallsInProgress = {}; // {index: {id, name, arguments}}
+   var reader = response.body.getReader ();
+   var decoder = new TextDecoder ();
+   var buffer = '';
+
+   while (true) {
+      var result = await reader.read ();
+      if (result.done) break;
+
+      buffer += decoder.decode (result.value, {stream: true});
+      var lines = buffer.split ('\n');
+      buffer = lines.pop ();
+
+      dale.go (lines, function (line) {
+         if (line.startsWith ('data: ')) {
+            var data = line.slice (6);
+            if (data === '[DONE]') return;
+            try {
+               var parsed = JSON.parse (data);
+               var delta = parsed.choices && parsed.choices [0] && parsed.choices [0].delta;
+               if (! delta) return;
+
+               // Text content
+               if (delta.content) {
+                  fullContent += delta.content;
+                  if (onChunk) onChunk (delta.content);
+               }
+
+               // Tool calls
+               if (delta.tool_calls) {
+                  dale.go (delta.tool_calls, function (tc) {
+                     var idx = tc.index;
+                     if (! toolCallsInProgress [idx]) {
+                        toolCallsInProgress [idx] = {id: tc.id, name: '', arguments: ''};
+                     }
+                     if (tc.id) toolCallsInProgress [idx].id = tc.id;
+                     if (tc.function && tc.function.name) toolCallsInProgress [idx].name += tc.function.name;
+                     if (tc.function && tc.function.arguments) toolCallsInProgress [idx].arguments += tc.function.arguments;
+                  });
+               }
+            }
+            catch (e) {}
+         }
+      });
+   }
+
+   // Convert in-progress tool calls to final format
+   dale.go (toolCallsInProgress, function (tc) {
+      try {
+         toolCalls.push ({
+            id: tc.id,
+            name: tc.name,
+            input: JSON.parse (tc.arguments)
+         });
+      }
+      catch (e) {
+         toolCalls.push ({id: tc.id, name: tc.name, input: {}});
+      }
+   });
+
+   return {
+      provider: 'openai',
+      model: model,
+      content: fullContent,
+      toolCalls: toolCalls.length > 0 ? toolCalls : null
+   };
+};
+
+// Main function that chooses provider, manages dialog, and streams response
+// dialogId: identifier for the dialog (used for filename)
+// provider: 'claude' or 'openai'
+// prompt: the user's message (can be null if continuing from tool results)
+// model: optional model override
+// onChunk: callback for streaming chunks
+// useTools: whether to enable MCP tools
+// existingMessages: optional messages to use instead of loading (for tool continuation)
+var chat = async function (dialogId, provider, prompt, model, onChunk, useTools, existingMessages) {
+   if (provider !== 'claude' && provider !== 'openai') {
+      throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
+   }
+
+   // Load existing dialog or use provided messages
+   var dialog = loadDialog (dialogId);
+   var messages = existingMessages || dialog.messages;
+
+   // Add user message if provided
+   if (prompt) {
+      messages.push ({role: 'user', content: prompt});
+   }
+
+   // Call appropriate provider
+   var result;
+   if (provider === 'claude') {
+      result = await chatWithClaude (messages, model, onChunk, useTools);
+   }
+   else {
+      result = await chatWithOpenAI (messages, model, onChunk, useTools);
+   }
+
+   // Add assistant response to messages (for display)
+   if (result.content) {
+      messages.push ({role: 'assistant', content: result.content});
+   }
+
+   // Save dialog to markdown
+   saveDialog (dialog.filepath, messages, {provider: provider, model: result.model});
+
+   // If there are tool calls, store them for approval
+   if (result.toolCalls) {
+      pendingToolCalls [dialogId] = {
+         messages: messages,
+         toolCalls: result.toolCalls,
+         provider: provider,
+         model: result.model,
+         metadata: {provider: provider, model: result.model},
+         filepath: dialog.filepath,
+         filename: dialog.filename,
+         assistantContent: result.content
+      };
+   }
+
+   return {
+      dialogId: dialogId,
+      filename: dialog.filename,
+      provider: result.provider,
+      model: result.model,
+      content: result.content,
+      toolCalls: result.toolCalls
+   };
+};
+
+// Continue a dialog after tool results are submitted
+var continueWithToolResults = async function (dialogId, toolResults, onChunk) {
+   var pending = pendingToolCalls [dialogId];
+   if (! pending) {
+      throw new Error ('No pending tool calls for dialog: ' + dialogId);
+   }
+
+   var messages = pending.messages.slice (); // Copy
+   var provider = pending.provider;
+   var model = pending.model;
+
+   // Build the messages with tool results based on provider format
+   if (provider === 'claude') {
+      // For Claude: assistant message with tool_use blocks, then user message with tool_result blocks
+      // Remove the plain text assistant message we added earlier (if any)
+      if (messages.length > 0 && messages [messages.length - 1].role === 'assistant') {
+         messages.pop ();
+      }
+
+      // Add assistant message with tool_use content
+      var assistantContent = [];
+      if (pending.assistantContent) {
+         assistantContent.push ({type: 'text', text: pending.assistantContent});
+      }
+      dale.go (pending.toolCalls, function (tc) {
+         assistantContent.push ({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.input
+         });
+      });
+      messages.push ({role: 'assistant', content: assistantContent});
+
+      // Add user message with tool_result blocks
+      var toolResultContent = [];
+      dale.go (toolResults, function (tr) {
+         toolResultContent.push ({
+            type: 'tool_result',
+            tool_use_id: tr.id,
+            content: tr.error ? ('Error: ' + tr.error) : JSON.stringify (tr.result)
+         });
+      });
+      messages.push ({role: 'user', content: toolResultContent});
+   }
+   else {
+      // For OpenAI: assistant message with tool_calls, then tool role messages
+      // Remove the plain text assistant message we added earlier (if any)
+      if (messages.length > 0 && messages [messages.length - 1].role === 'assistant') {
+         messages.pop ();
+      }
+
+      // Add assistant message with tool_calls
+      messages.push ({
+         role: 'assistant',
+         content: pending.assistantContent || null,
+         tool_calls: dale.go (pending.toolCalls, function (tc) {
+            return {
+               id: tc.id,
+               type: 'function',
+               function: {
+                  name: tc.name,
+                  arguments: JSON.stringify (tc.input)
+               }
+            };
+         })
+      });
+
+      // Add tool result messages
+      dale.go (toolResults, function (tr) {
+         messages.push ({
+            role: 'tool',
+            tool_call_id: tr.id,
+            content: tr.error ? ('Error: ' + tr.error) : JSON.stringify (tr.result)
+         });
+      });
+   }
+
+   // Clear pending
+   delete pendingToolCalls [dialogId];
+
+   // Continue the conversation
+   var result = await chat (dialogId, provider, null, model, onChunk, true, messages);
+   return result;
+};
 
 // Ensure vibey directory exists
 if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR);
@@ -43,523 +648,6 @@ var validFilename = function (name) {
    if (! name.endsWith ('.md')) return false;
    if (name.includes ('..')) return false;
    return true;
-}
-
-// Generate dialog filename: dialog-YYYYMMDD-HHMMSS-<role>.md
-var generateDialogFilename = function (role) {
-   var now = new Date ();
-   var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
-   var timestamp = now.getUTCFullYear () +
-      pad (now.getUTCMonth () + 1) +
-      pad (now.getUTCDate ()) + '-' +
-      pad (now.getUTCHours ()) +
-      pad (now.getUTCMinutes ()) +
-      pad (now.getUTCSeconds ());
-   return 'dialog-' + timestamp + '-' + role + '.md';
-}
-
-var renderClaudeOutput = function (output) {
-   var textParts = [];
-   dale.go (output, function (entry) {
-      if (entry.type !== 'stdout') return;
-      try {
-         var json = JSON.parse (entry.text);
-         if (json.type === 'assistant' && json.message && json.message.content) {
-            dale.go (json.message.content, function (block) {
-               if (block.type === 'text') textParts.push (block.text);
-               else if (block.type === 'tool_use') textParts.push ('[Tool: ' + block.name + ']');
-            });
-         }
-         else if (json.type === 'user' && json.message) {
-            textParts.push ('\n\n**User:** ' + json.message.content + '\n\n');
-         }
-      }
-      catch (e) {}
-   });
-   return textParts.join ('');
-}
-
-var renderCodexOutput = function (output) {
-   var textParts = [];
-   dale.go (output, function (entry) {
-      if (entry.type === 'user') {
-         textParts.push ('\n\n**User:** ' + entry.text + '\n\n');
-         return;
-      }
-      if (entry.type !== 'stdout') return;
-      try {
-         var json = JSON.parse (entry.text);
-         if (json.type === 'assistant' && json.message && json.message.content) {
-            dale.go (json.message.content, function (block) {
-               if (block.type === 'text') textParts.push (block.text);
-               else if (block.type === 'tool_use') textParts.push ('[Tool: ' + block.name + ']');
-            });
-            return;
-         }
-         if (json.type === 'output_text' && json.text) {
-            textParts.push (json.text);
-            return;
-         }
-         if (json.type === 'final' && json.output_text) {
-            textParts.push (json.output_text);
-            return;
-         }
-         if (json.content && typeof json.content === 'string') {
-            textParts.push (json.content);
-            return;
-         }
-         textParts.push (entry.text);
-      }
-      catch (e) {
-         textParts.push (entry.text);
-      }
-   });
-   return textParts.join ('');
-}
-
-var openaiTools = function () {
-   return [
-      {
-         type: 'function',
-         name: 'shell_exec',
-         description: 'Run a shell command on the local machine. Requires user approval before execution.',
-         parameters: {
-            type: 'object',
-            properties: {
-               command: {type: 'string', description: 'Shell command to execute'},
-               cwd: {type: 'string', description: 'Working directory (optional)'}
-            },
-            required: ['command'],
-            additionalProperties: false
-         }
-      },
-      {
-         type: 'function',
-         name: 'http_fetch',
-         description: 'Perform an HTTP request. Requires user approval before execution.',
-         parameters: {
-            type: 'object',
-            properties: {
-               url: {type: 'string', description: 'URL to fetch'},
-               method: {type: 'string', description: 'HTTP method, e.g., GET, POST'},
-               headers: {type: 'object', description: 'Request headers'},
-               body: {type: 'string', description: 'Request body'}
-            },
-            required: ['url'],
-            additionalProperties: false
-         }
-      }
-   ];
-}
-
-var pushSessionOutput = function (session, obj) {
-   session.output.push ({type: 'stdout', text: JSON.stringify (obj), t: Date.now ()});
-   if (session.waiting) {
-      var cb = session.waiting;
-      session.waiting = null;
-      cb ();
-   }
-}
-
-var openaiStream = async function (session, inputItems) {
-   if (! OPENAI_API_KEY) {
-      pushSessionOutput (session, {type: 'error', message: 'OPENAI_API_KEY not set'});
-      session.closed = true;
-      return;
-   }
-
-   if (session.streaming) return;
-   session.streaming = true;
-
-   var body = {
-      model: session.model || OPENAI_MODEL,
-      input: inputItems,
-      stream: true,
-      tools: openaiTools (),
-      tool_choice: 'auto'
-   };
-
-   if (session.lastResponseId) body.previous_response_id = session.lastResponseId;
-
-   var controller = new AbortController ();
-   session.abortController = controller;
-
-   var res;
-   try {
-      res = await fetch (OPENAI_RESPONSES_URL, {
-         method: 'POST',
-         headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + OPENAI_API_KEY
-         },
-         body: JSON.stringify (body),
-         signal: controller.signal
-      });
-   }
-   catch (e) {
-      session.streaming = false;
-      pushSessionOutput (session, {type: 'error', message: 'OpenAI request failed: ' + e.message});
-      return;
-   }
-
-   if (! res.ok) {
-      var errText = '';
-      try { errText = await res.text (); } catch (e) {}
-      session.streaming = false;
-      pushSessionOutput (session, {type: 'error', message: 'OpenAI error: ' + res.status + ' ' + errText});
-      return;
-   }
-
-   var reader = res.body.getReader ();
-   var decoder = new TextDecoder ('utf-8');
-   var buffer = '';
-
-   var handleEvent = function (event) {
-      if (! event || ! event.type) return;
-
-      // Track response id when available
-      if (event.response && event.response.id) session.lastResponseId = event.response.id;
-      if (event.response_id) session.lastResponseId = event.response_id;
-
-      // Track tool calls
-      if (event.type === 'response.output_item.added' && event.item && event.item.type === 'function_call') {
-         session.toolItems [event.item.id] = event.item.call_id || event.item.id;
-         session.pendingTools [event.item.call_id || event.item.id] = {
-            id: event.item.id,
-            callId: event.item.call_id || event.item.id,
-            name: event.item.name,
-            arguments: ''
-         };
-      }
-      if (event.type === 'response.function_call_arguments.delta') {
-         var callId = session.toolItems [event.item_id] || event.call_id || event.item_id;
-         var tool = session.pendingTools [callId] || {id: event.item_id, callId: callId, name: event.name, arguments: ''};
-         tool.arguments = (tool.arguments || '') + (event.delta || '');
-         session.pendingTools [callId] = tool;
-      }
-      if (event.type === 'response.function_call_arguments.done') {
-         var callId = event.call_id || session.toolItems [event.item_id] || event.item_id;
-         var tool = session.pendingTools [callId] || {id: event.item_id, callId: callId, name: event.name, arguments: ''};
-         tool.arguments = event.arguments || tool.arguments || '';
-         tool.name = event.name || tool.name;
-         session.pendingTools [callId] = tool;
-      }
-
-      // Push the event through to the client
-      pushSessionOutput (session, event);
-   };
-
-   var processSSE = function (chunk) {
-      buffer += chunk;
-      var parts = buffer.split ('\n\n');
-      buffer = parts.pop ();
-      dale.go (parts, function (part) {
-         var lines = part.split ('\n');
-         var dataLines = dale.fil (lines, undefined, function (line) {
-            if (line.indexOf ('data:') === 0) return line.slice (5).trim ();
-         });
-         if (! dataLines.length) return;
-         var data = dataLines.join ('');
-         if (data === '[DONE]') return;
-         try {
-            var event = JSON.parse (data);
-            handleEvent (event);
-         }
-         catch (e) {}
-      });
-   };
-
-   try {
-      while (true) {
-         var r = await reader.read ();
-         if (r.done) break;
-         processSSE (decoder.decode (r.value, {stream: true}));
-      }
-   }
-   catch (e) {
-      pushSessionOutput (session, {type: 'error', message: 'OpenAI stream error: ' + e.message});
-   }
-   finally {
-      session.streaming = false;
-      session.abortController = null;
-   }
-}
-
-var runTool = function (session, tool, cb) {
-   if (! tool || ! tool.name) return cb ('Unknown tool');
-   var args = {};
-   try { args = JSON.parse (tool.arguments || '{}'); }
-   catch (e) { return cb ('Invalid tool arguments JSON'); }
-
-   if (tool.name === 'shell_exec') {
-      if (! args.command || typeof args.command !== 'string') return cb ('Missing command');
-      var cwd = typeof args.cwd === 'string' ? args.cwd : session.workdir;
-      var proc = spawn (args.command, [], {cwd: cwd, shell: true});
-      var stdout = '';
-      var stderr = '';
-      var done = false;
-
-      var finish = function (code) {
-         if (done) return;
-         done = true;
-         cb (null, {
-            exitCode: code,
-            stdout: stdout,
-            stderr: stderr
-         });
-      };
-
-      proc.stdout.on ('data', function (d) { stdout += d.toString (); });
-      proc.stderr.on ('data', function (d) { stderr += d.toString (); });
-      proc.on ('error', function (e) { cb ('Command failed: ' + e.message); });
-      proc.on ('close', function (code) { finish (code); });
-      return;
-   }
-
-   if (tool.name === 'http_fetch') {
-      if (! args.url || typeof args.url !== 'string') return cb ('Missing url');
-      var method = typeof args.method === 'string' ? args.method : 'GET';
-      var headers = args.headers && typeof args.headers === 'object' ? args.headers : {};
-      var body = typeof args.body === 'string' ? args.body : undefined;
-      fetch (args.url, {method: method, headers: headers, body: body}).then (function (res) {
-         return res.text ().then (function (text) {
-            cb (null, {
-               status: res.status,
-               statusText: res.statusText,
-               headers: Object.fromEntries (res.headers.entries ()),
-               body: text
-            });
-         });
-      }).catch (function (e) {
-         cb ('Fetch failed: ' + e.message);
-      });
-      return;
-   }
-
-   cb ('Unsupported tool: ' + tool.name);
-}
-
-// Claude-specific spawn - fully interactive
-var spinClaude = function (role, prompt, dialogPath, cb) {
-   var dialogFile = Path.basename (dialogPath);
-
-   var proc = spawn ('claude', ['--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'], {
-      cwd: VIBEY_DIR,
-      env: Object.assign ({}, process.env, {FORCE_COLOR: '0'}),
-      stdio: ['pipe', 'pipe', 'pipe']
-   });
-
-   var output = [];
-   var stdoutBuffer = '';
-   var closed = false;
-
-   var dialog = {
-      proc: proc,
-      output: output,
-      closed: false,
-      agent: 'claude',
-      role: role,
-      prompt: prompt,
-      path: dialogPath,
-      started: Date.now (),
-      waiting: null
-   };
-
-   dialogs [dialogFile] = dialog;
-
-   var processBuffer = function (buffer, type) {
-      var lines = buffer.split ('\n');
-      var incomplete = lines.pop ();
-      dale.go (lines, function (line) {
-         if (line.trim ()) {
-            output.push ({type: type, text: line, t: Date.now ()});
-         }
-      });
-      return incomplete;
-   };
-
-   var updateDialogFile = function () {
-      var content = '# Dialog: ' + role + '\n\n';
-      content += '**Agent:** claude\n';
-      content += '**Started:** ' + new Date (dialog.started).toISOString () + '\n';
-      content += '**Status:** ' + (dialog.closed ? 'ended' : 'active') + '\n\n';
-      content += '## Prompt\n\n' + prompt + '\n\n';
-      content += '## Output\n\n';
-      content += renderClaudeOutput (output) + '\n\n';
-      if (dialog.closed) content += '<ENDED>\n';
-      fs.writeFile (dialogPath, content, 'utf8', function () {});
-   };
-
-   proc.stdout.on ('data', function (data) {
-      stdoutBuffer += data.toString ();
-      stdoutBuffer = processBuffer (stdoutBuffer, 'stdout');
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.stderr.on ('data', function (data) {
-      output.push ({type: 'stderr', text: data.toString (), t: Date.now ()});
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.on ('close', function (code) {
-      dialog.closed = true;
-      dialog.exitCode = code;
-      output.push ({type: 'exit', code: code, t: Date.now ()});
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.on ('error', function (error) {
-      dialog.closed = true;
-      output.push ({type: 'error', error: error.message, t: Date.now ()});
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-      cb ('Failed to spawn claude: ' + error.message);
-   });
-
-   // Send the initial prompt as a JSON message
-   var jsonMessage = JSON.stringify ({
-      type: 'user',
-      message: {role: 'user', content: prompt}
-   });
-   proc.stdin.write (jsonMessage + '\n');
-
-   // Return immediately - dialog is now interactive
-   cb (null, dialogFile);
-}
-
-// Codex-specific spawn
-var spinCodex = function (role, prompt, dialogPath, cb) {
-   var dialogFile = Path.basename (dialogPath);
-
-   var proc = spawn ('codex', ['exec', '--json', prompt], {
-      cwd: VIBEY_DIR,
-      env: Object.assign ({}, process.env, {FORCE_COLOR: '0'}),
-      stdio: ['pipe', 'pipe', 'pipe']
-   });
-
-   var output = [];
-   var stdoutBuffer = '';
-
-   var dialog = {
-      proc: proc,
-      output: output,
-      closed: false,
-      agent: 'codex',
-      role: role,
-      prompt: prompt,
-      path: dialogPath,
-      started: Date.now (),
-      waiting: null
-   };
-
-   dialogs [dialogFile] = dialog;
-
-   var processBuffer = function (buffer, type) {
-      var lines = buffer.split ('\n');
-      var incomplete = lines.pop ();
-      dale.go (lines, function (line) {
-         if (line.trim ()) {
-            output.push ({type: type, text: line, t: Date.now ()});
-         }
-      });
-      return incomplete;
-   };
-
-   var updateDialogFile = function () {
-      var content = '# Dialog: ' + role + '\n\n';
-      content += '**Agent:** codex\n';
-      content += '**Started:** ' + new Date (dialog.started).toISOString () + '\n';
-      content += '**Status:** ' + (dialog.closed ? 'ended' : 'active') + '\n\n';
-      content += '## Prompt\n\n' + prompt + '\n\n';
-      content += '## Output\n\n';
-      content += renderCodexOutput (output) + '\n\n';
-      if (dialog.closed) content += '<ENDED>\n';
-      fs.writeFile (dialogPath, content, 'utf8', function () {});
-   };
-   dialog.updateDialogFile = updateDialogFile;
-
-   proc.stdout.on ('data', function (data) {
-      stdoutBuffer += data.toString ();
-      stdoutBuffer = processBuffer (stdoutBuffer, 'stdout');
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.stderr.on ('data', function (data) {
-      output.push ({type: 'stderr', text: data.toString (), t: Date.now ()});
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.on ('close', function (code) {
-      dialog.closed = true;
-      dialog.exitCode = code;
-      output.push ({type: 'exit', code: code, t: Date.now ()});
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-   });
-
-   proc.on ('error', function (error) {
-      dialog.closed = true;
-      output.push ({type: 'error', error: error.message, t: Date.now ()});
-      updateDialogFile ();
-      if (dialog.waiting) {
-         var waitingCb = dialog.waiting;
-         dialog.waiting = null;
-         waitingCb ();
-      }
-      cb ('Failed to spawn codex: ' + error.message);
-   });
-
-   cb (null, dialogFile);
-}
-
-// General spin function: agent is 'claude' or 'codex', role is 'main' or 'worker'
-// Returns the dialog filename. For claude, spawns an interactive dialog.
-var spinAgent = function (agent, role, prompt, cb) {
-   var dialogFile = generateDialogFilename (role);
-   var dialogPath = Path.join (VIBEY_DIR, dialogFile);
-
-   if (agent === 'claude') {
-      // Claude is fully interactive - it handles its own dialog file
-      spinClaude (role, prompt, dialogPath, cb);
-   }
-   else if (agent === 'codex') {
-      // Codex is now streamed into the dialog file similarly to Claude
-      spinCodex (role, prompt, dialogPath, cb);
-   }
-   else {
-      cb ('Unknown agent: ' + agent);
-   }
 }
 
 // *** ROUTES ***
@@ -653,388 +741,180 @@ var routes = [
       });
    }],
 
-   // *** SESSIONS ***
+   // *** LLM ***
 
-   ['post', 'session/start', function (rq, rs) {
-
+   // Streaming chat endpoint using Server-Sent Events
+   ['post', 'chat', async function (rq, rs) {
       if (stop (rs, [
-         ['workdir', rq.body.workdir, 'string'],
+         ['dialogId', rq.body.dialogId, 'string'],
+         ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
+         ['prompt', rq.body.prompt, 'string'],
       ])) return;
 
-      var id = Date.now () + '-' + Math.random ().toString (36).slice (2, 8);
-
-      var agent = rq.body.agent || 'claude';
-
-      if (agent === 'openai') {
-         sessions [id] = {
-            id: id,
-            type: 'openai',
-            workdir: rq.body.workdir,
-            model: rq.body.model || OPENAI_MODEL,
-            output: [],
-            waiting: null,
-            started: Date.now (),
-            streaming: false,
-            lastResponseId: null,
-            pendingTools: {},
-            toolItems: {},
-            abortController: null
-         };
-         return reply (rs, 200, {id: id});
+      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') {
+         return reply (rs, 400, {error: 'model must be a string'});
       }
 
-      var proc = spawn ('claude', ['--input-format', 'stream-json', '--output-format', 'stream-json', '--include-partial-messages', '--verbose'], {
-         cwd: rq.body.workdir,
-         env: Object.assign ({}, process.env, {
-            FORCE_COLOR: '0',
-         }),
-         stdio: ['pipe', 'pipe', 'pipe']
+      var useTools = rq.body.useTools === true;
+
+      // Set up SSE headers
+      rs.writeHead (200, {
+         'Content-Type': 'text/event-stream',
+         'Cache-Control': 'no-cache',
+         'Connection': 'keep-alive'
       });
 
-      sessions [id] = {
-         id: id,
-         type: 'claude',
-         workdir: rq.body.workdir,
-         proc: proc,
-         output: [],
-         waiting: null,
-         started: Date.now (),
-         stdoutBuffer: '',
-         stderrBuffer: ''
-      };
+      try {
+         var result = await chat (
+            rq.body.dialogId,
+            rq.body.provider,
+            rq.body.prompt,
+            rq.body.model,
+            function (chunk) {
+               // Send each chunk as an SSE event
+               rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
+            },
+            useTools
+         );
 
-      var session = sessions [id];
-
-      var processBuffer = function (buffer, type) {
-         var lines = buffer.split ('\n');
-         // Keep the last incomplete line in the buffer
-         var incomplete = lines.pop ();
-         dale.go (lines, function (line) {
-            if (line.trim ()) {
-               session.output.push ({type: type, text: line, t: Date.now ()});
-            }
-         });
-         return incomplete;
-      };
-
-      proc.stdout.on ('data', function (data) {
-         session.stdoutBuffer += data.toString ();
-         session.stdoutBuffer = processBuffer (session.stdoutBuffer, 'stdout');
-         if (session.waiting) {
-            var cb = session.waiting;
-            session.waiting = null;
-            cb ();
+         // If there are tool calls, send them for approval
+         if (result.toolCalls) {
+            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, content: result.content}) + '\n\n');
          }
-      });
 
-      proc.stderr.on ('data', function (data) {
-         session.stderrBuffer += data.toString ();
-         session.stderrBuffer = processBuffer (session.stderrBuffer, 'stderr');
-         if (session.waiting) {
-            var cb = session.waiting;
-            session.waiting = null;
-            cb ();
-         }
-      });
-
-      proc.on ('close', function (code) {
-         session.output.push ({type: 'exit', code: code, t: Date.now ()});
-         session.closed = true;
-         if (session.waiting) {
-            var cb = session.waiting;
-            session.waiting = null;
-            cb ();
-         }
-      });
-
-      proc.on ('error', function (error) {
-         session.output.push ({type: 'error', error: error.message, t: Date.now ()});
-         if (session.waiting) {
-            var cb = session.waiting;
-            session.waiting = null;
-            cb ();
-         }
-      });
-
-      reply (rs, 200, {id: id});
+         // Send final message with full result
+         rs.write ('data: ' + JSON.stringify ({type: 'done', result: result}) + '\n\n');
+         rs.end ();
+      }
+      catch (error) {
+         clog ('Chat error:', error.message);
+         rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
+         rs.end ();
+      }
    }],
 
-   ['post', 'session/:id/send', function (rq, rs) {
-
-      var session = sessions [rq.data.params.id];
-      if (! session) return reply (rs, 404, {error: 'Session not found'});
-      if (session.closed) return reply (rs, 400, {error: 'Session is closed'});
-
+   // Submit tool results after user approval
+   ['post', 'chat/tool-result', async function (rq, rs) {
       if (stop (rs, [
-         ['message', rq.body.message, 'string'],
+         ['dialogId', rq.body.dialogId, 'string'],
+         ['toolResults', rq.body.toolResults, 'array'],
       ])) return;
 
-      if (session.type === 'openai') {
-         if (session.streaming) return reply (rs, 429, {error: 'Session is busy'});
-
-         if (rq.body.toolUseId) {
-            var tool = session.pendingTools [rq.body.toolUseId];
-            if (! tool) return reply (rs, 400, {error: 'Unknown tool call'});
-
-            var decision = rq.body.message;
-            if (decision === 'Reject') {
-               openaiStream (session, [{
-                  type: 'function_call_output',
-                  call_id: rq.body.toolUseId,
-                  output: JSON.stringify ({error: 'rejected_by_user'})
-               }]);
-               return reply (rs, 200, {ok: true});
-            }
-
-            if (decision === 'Approve') {
-               return runTool (session, tool, function (error, result) {
-                  var output = error ? {error: error} : result;
-                  openaiStream (session, [{
-                     type: 'function_call_output',
-                     call_id: rq.body.toolUseId,
-                     output: JSON.stringify (output)
-                  }]);
-                  reply (rs, 200, {ok: true});
-               });
-            }
-
-            return reply (rs, 400, {error: 'Unknown decision'});
-         }
-
-         openaiStream (session, [{type: 'input_text', text: rq.body.message}]);
-         return reply (rs, 200, {ok: true});
-      }
-
-      var jsonMessage;
-      if (rq.body.toolUseId) {
-         // Send as tool_result for AskUserQuestion responses
-         jsonMessage = JSON.stringify ({
-            type: 'tool_result',
-            tool_use_id: rq.body.toolUseId,
-            content: rq.body.message
-         });
-      }
-      else {
-         jsonMessage = JSON.stringify ({
-            type: 'user',
-            message: {role: 'user', content: rq.body.message}
-         });
-      }
-      session.proc.stdin.write (jsonMessage + '\n');
-
-      reply (rs, 200, {ok: true});
-   }],
-
-   ['get', 'session/:id/output', function (rq, rs) {
-
-      var session = sessions [rq.data.params.id];
-      if (! session) return reply (rs, 404, {error: 'Session not found'});
-
-      var since = parseInt (rq.data.query.since) || 0;
-
-      var output = dale.fil (session.output, undefined, function (entry, k) {
-         if (k >= since) return entry;
+      // Set up SSE headers
+      rs.writeHead (200, {
+         'Content-Type': 'text/event-stream',
+         'Cache-Control': 'no-cache',
+         'Connection': 'keep-alive'
       });
 
-      if (output.length > 0 || session.closed) {
-         return reply (rs, 200, {
-            output: output,
-            nextIndex: session.output.length,
-            closed: session.closed
-         });
+      try {
+         var result = await continueWithToolResults (
+            rq.body.dialogId,
+            rq.body.toolResults,
+            function (chunk) {
+               rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
+            }
+         );
+
+         // If there are more tool calls, send them for approval
+         if (result.toolCalls) {
+            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, content: result.content}) + '\n\n');
+         }
+
+         rs.write ('data: ' + JSON.stringify ({type: 'done', result: result}) + '\n\n');
+         rs.end ();
+      }
+      catch (error) {
+         clog ('Tool result error:', error.message);
+         rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
+         rs.end ();
+      }
+   }],
+
+   // Execute a tool (called after user approves)
+   ['post', 'tool/execute', async function (rq, rs) {
+      if (stop (rs, [
+         ['toolName', rq.body.toolName, 'string'],
+         ['toolInput', rq.body.toolInput, 'object'],
+      ])) return;
+
+      try {
+         var result = await executeTool (rq.body.toolName, rq.body.toolInput);
+         reply (rs, 200, result);
+      }
+      catch (error) {
+         clog ('Tool execution error:', error.message);
+         reply (rs, 500, {success: false, error: error.message});
+      }
+   }],
+
+   // Get pending tool calls for a dialog
+   ['get', 'chat/pending/:dialogId', function (rq, rs) {
+      var dialogId = rq.data.params.dialogId;
+      var pending = pendingToolCalls [dialogId];
+      if (! pending) {
+         return reply (rs, 404, {error: 'No pending tool calls'});
+      }
+      reply (rs, 200, {
+         dialogId: dialogId,
+         toolCalls: pending.toolCalls,
+         assistantContent: pending.assistantContent
+      });
+   }],
+
+   // Get dialog by ID
+   ['get', 'dialog/:id', function (rq, rs) {
+      var dialogId = rq.data.params.id;
+      var dialog = loadDialog (dialogId);
+
+      if (dialog.messages.length === 0 && ! fs.existsSync (dialog.filepath)) {
+         return reply (rs, 404, {error: 'Dialog not found'});
       }
 
-      // Long polling: wait for new output
-      var timeout = setTimeout (function () {
-         session.waiting = null;
+      fs.readFile (dialog.filepath, 'utf8', function (error, content) {
+         if (error) return reply (rs, 500, {error: 'Failed to read dialog'});
          reply (rs, 200, {
-            output: [],
-            nextIndex: session.output.length,
-            closed: session.closed
+            dialogId: dialogId,
+            filename: dialog.filename,
+            messages: dialog.messages,
+            markdown: content
          });
-      }, 30000);
-
-      session.waiting = function () {
-         clearTimeout (timeout);
-         var output = dale.fil (session.output, undefined, function (entry, k) {
-            if (k >= since) return entry;
-         });
-         reply (rs, 200, {
-            output: output,
-            nextIndex: session.output.length,
-            closed: session.closed
-         });
-      };
+      });
    }],
 
-   ['post', 'session/:id/stop', function (rq, rs) {
-
-      var session = sessions [rq.data.params.id];
-      if (! session) return reply (rs, 404, {error: 'Session not found'});
-
-      if (! session.closed) {
-         if (session.type === 'openai') {
-            if (session.abortController) session.abortController.abort ();
-            session.closed = true;
-         }
-         else if (session.proc) {
-            session.proc.kill ('SIGTERM');
-         }
-      }
-
-      reply (rs, 200, {ok: true});
-   }],
-
-   ['get', 'sessions', function (rq, rs) {
-      reply (rs, 200, dale.go (sessions, function (session, id) {
-         return {
-            id: id,
-            workdir: session.workdir,
-            closed: session.closed,
-            started: session.started,
-            outputLength: session.output.length
-         };
-      }));
-   }],
-
-   // *** DIALOGS (interactive) ***
-
+   // List all dialogs
    ['get', 'dialogs', function (rq, rs) {
-      reply (rs, 200, dale.go (dialogs, function (dialog, filename) {
-         return {
-            filename: filename,
-            role: dialog.role,
-            closed: dialog.closed,
-            started: dialog.started,
-            outputLength: dialog.output.length
-         };
-      }));
-   }],
-
-   ['get', 'dialog/:filename/output', function (rq, rs) {
-      var filename = rq.data.params.filename;
-      var dialog = dialogs [filename];
-      if (! dialog) return reply (rs, 404, {error: 'Dialog not found'});
-
-      var since = parseInt (rq.data.query.since) || 0;
-
-      var output = dale.fil (dialog.output, undefined, function (entry, k) {
-         if (k >= since) return entry;
+      fs.readdir (VIBEY_DIR, function (error, files) {
+         if (error) return reply (rs, 500, {error: 'Failed to read directory'});
+         var dialogFiles = dale.fil (files, undefined, function (file) {
+            if (file.startsWith ('dialog-') && file.endsWith ('.md')) return file;
+         });
+         // Sort by modification time, most recent first
+         var withStats = dale.go (dialogFiles, function (file) {
+            try {
+               var stat = fs.statSync (Path.join (VIBEY_DIR, file));
+               var dialogId = file.replace ('dialog-', '').replace ('.md', '');
+               return {dialogId: dialogId, filename: file, mtime: stat.mtime.getTime ()};
+            }
+            catch (e) {
+               return null;
+            }
+         });
+         withStats = dale.fil (withStats, undefined, function (f) { return f; });
+         withStats.sort (function (a, b) { return b.mtime - a.mtime; });
+         reply (rs, 200, withStats);
       });
-
-      if (output.length > 0 || dialog.closed) {
-         return reply (rs, 200, {
-            output: output,
-            nextIndex: dialog.output.length,
-            closed: dialog.closed
-         });
-      }
-
-      // Long polling: wait for new output
-      var timeout = setTimeout (function () {
-         dialog.waiting = null;
-         reply (rs, 200, {
-            output: [],
-            nextIndex: dialog.output.length,
-            closed: dialog.closed
-         });
-      }, 30000);
-
-      dialog.waiting = function () {
-         clearTimeout (timeout);
-         var output = dale.fil (dialog.output, undefined, function (entry, k) {
-            if (k >= since) return entry;
-         });
-         reply (rs, 200, {
-            output: output,
-            nextIndex: dialog.output.length,
-            closed: dialog.closed
-         });
-      };
-   }],
-
-   ['post', 'dialog/:filename/send', function (rq, rs) {
-      var filename = rq.data.params.filename;
-      var dialog = dialogs [filename];
-      if (! dialog) return reply (rs, 404, {error: 'Dialog not found'});
-      if (dialog.closed) return reply (rs, 400, {error: 'Dialog is closed'});
-
-      if (stop (rs, [
-         ['message', rq.body.message, 'string'],
-      ])) return;
-
-      if (dialog.agent === 'claude') {
-         var jsonMessage;
-         if (rq.body.toolUseId) {
-            // Send as tool_result for AskUserQuestion responses
-            jsonMessage = JSON.stringify ({
-               type: 'tool_result',
-               tool_use_id: rq.body.toolUseId,
-               content: rq.body.message
-            });
-         }
-         else {
-            jsonMessage = JSON.stringify ({
-               type: 'user',
-               message: {role: 'user', content: rq.body.message}
-            });
-         }
-         dialog.proc.stdin.write (jsonMessage + '\n');
-      }
-      else if (dialog.agent === 'codex') {
-         dialog.output.push ({type: 'user', text: rq.body.message, t: Date.now ()});
-         if (dialog.updateDialogFile) dialog.updateDialogFile ();
-         dialog.proc.stdin.write (rq.body.message + '\n');
-      }
-      else {
-         return reply (rs, 400, {error: 'Dialog does not support input'});
-      }
-
-      reply (rs, 200, {ok: true});
-   }],
-
-   ['post', 'dialog/:filename/stop', function (rq, rs) {
-      var filename = rq.data.params.filename;
-      var dialog = dialogs [filename];
-      if (! dialog) return reply (rs, 404, {error: 'Dialog not found'});
-
-      if (! dialog.closed) {
-         dialog.proc.kill ('SIGTERM');
-      }
-
-      reply (rs, 200, {ok: true});
    }],
 ];
 
 // *** SERVER ***
 
-var notify = clog;
-
 process.on ('uncaughtException', function (error, origin) {
-   notify ({priority: 'critical', type: 'server error', error: error, stack: error.stack, origin: origin});
+   clog ({priority: 'critical', type: 'server error', error: error, stack: error.stack, origin: origin});
    process.exit (1);
 });
 
 var port = CONFIG.vibeyPort || 3001;
-var server = cicek.listen ({port: port}, routes);
+cicek.listen ({port: port}, routes);
 
 clog ('vibey server running on port ' + port);
-
-// *** MAIN AGENT LOOP ***
-
-var spinMain = function () {
-   var rulesPath = Path.join (VIBEY_DIR, 'rules.md');
-   fs.readFile (rulesPath, 'utf8', function (error, rules) {
-      if (error) {
-         if (error.code !== 'ENOENT') clog ('Error reading rules.md:', error);
-         return;
-      }
-      spinAgent ('claude', 'main', rules, function (error, dialogFile) {
-         if (error) clog ('Error spinning main agent:', error);
-         else clog ('Spun main agent:', dialogFile);
-      });
-   });
-};
-
-//setInterval (spinMain, 5000);
-clog ('Main agent loop started (every 5s)');

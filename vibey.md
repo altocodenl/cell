@@ -67,8 +67,24 @@ Goal: be able to build vibey with vibey itself.
 
 - Have a vibey-server.js (done)
 - Have a vibey-client.js (done)
-- Allow the server to write and read markdown files locally, all against a folder `vibey`
-- Allow the client to list the markdown files in that folder, open them, edit them in whsiwyg with some standard and good markdown editor that can be loaded from the client side.
+- Allow the server to write and read markdown files locally, all against a folder `vibey` (done)
+- Allow the client to list the markdown files in that folder, open them, edit them in whsiwyg with some standard and good markdown editor that can be loaded from the client side. (done)
+- Allow the server to start a dialog with an LLM (both claude and openai).
+   - Have two implementation functions for this that are called by one function which chooses model and passes a prompt.
+   - Make the function call streaming, so that we get text as soon as possible.
+   - Increase the max_tokens of claude to something as big as possible.
+   - Store the dialog so far as markdown, distinguishing who said what.
+   - When the user writes something, send it to the remote LLM, also put it in the markdown.
+- Allow the client to start a dialog with the LLM through the server, picking a provider and model, sending text, then showing the response.
+   - List dialogs by listing all files, then filtering out those that start with `dialog-`
+   - In my mind, we only need to send something to a dialog as something special that goes to the server, not the file. And, also, once we load it, we need to add quite some markup on top of all the ugly JSONs.
+   - This should be done by getting the correct text file where the dialog is being stored.
+   - Road not taken: use local Claude Code and Codex. Really fighting the tools there, trying to pretend to be a TTY when we're not one.
+- When in a dialog, allow the remote LLM to run local commands through MCP.
+- When in a dialog, allow the client to see the options whether to run the LLM MCP local command or not.
+
+to define:
+
 - Have a server function that spins an agent, reads the vibey/rules.md, and spins whatever needs to be spun.
    - The function takes two arguments: 'claude' or 'codex' (agent), and the prompt. It returns the name of the file where the agent is spinning, which is generated from the convention above. The role is either `main` or `worker`.
 - A main agent that has a no-op should not leave a file behind (perhaps it can delete its own file?)
@@ -81,25 +97,3 @@ Goal: be able to build vibey with vibey itself.
 
 
 
-
-Hi! Suppose you don't have claude code, or codex. Can you have an MCP-like local experience where you send API calls to get inference, and the LLM makes the commands in your computer with your authorization?
-
-Let me think. I want a claude code or codex experience just with api calls. You'd have to support:
-- network calls
-- os calls
-- reading files would be catting or grepping, so also os calls.
-
-Could you set it up so that we use the openai API and then the node server in vibey-server provides this mcp tooling? Is that even possible?
-
-THe LLM response needs to be streamed, so we can see it live.
-
-I want nothing whitelisted at the beginning, ask me through stdin.
-
-That stdin should be compatible with what we have in vibey-client.js.
-
-codex:
-"If you want, I can do one of these next:
-
-  1. Add “Other” to submit as tool output tied to the pending tool call.
-  2. Add a model selector input in the UI.
-  3. Add a “busy / streaming” indicator so it’s clear when the model is mid-stream."
