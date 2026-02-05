@@ -83,8 +83,27 @@ Goal: be able to build vibey with vibey itself.
 - When in a dialog, allow the remote LLM to run local commands through MCP.
 - When in a dialog, allow the client to see the options whether to run the LLM MCP local command or not.
 
-to define:
+Top prompt:
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js. There's pupeteer available if you need it.
 
+We're debugging the MCP flow. It works but 1) I don't see the approve/deny in the history after making the decision; 2) the streaming doesn't seem to appear on the file, are we streaming the data directly to the browser? I want it all to be through the text file.
+
+- Show the message you send before.
+- Hide the files sent in the client.
+- Diff suggest & diff apply.
+
+- Main agent spawner
+   - List active dialogs (any dialog that ends in `.open.md` or `.waiting.md`).
+   - If there's an open active dialog with role `main`, don't do anything.
+   - Otherwise, laungh main agent.
+- Main agent loop
+   - Read `docs/main.md` to pick up instructions about agentic flow.
+   - See the recently finished dialogs, update the todo list accordingly.
+   - Read the todos (as specified in `docs/todo.md`) to see what should be done.
+   - Based on what `main.md` says, spin other agents to start work.
+
+- I'm deciding against a single dialog/main.md to keep track. What if we just do that with filenames? dialog-<role>-<noun>-<date>.open.md, with the `open` showing you if it's open. When it closes, we rename the file. We can have some sugar to paper over that on the UI.
+- `dialog/main.md` has the info on all the agents that are running.
 - Have a server function that spins an agent, reads the vibey/rules.md, and spins whatever needs to be spun.
    - The function takes two arguments: 'claude' or 'codex' (agent), and the prompt. It returns the name of the file where the agent is spinning, which is generated from the convention above. The role is either `main` or `worker`.
 - A main agent that has a no-op should not leave a file behind (perhaps it can delete its own file?)

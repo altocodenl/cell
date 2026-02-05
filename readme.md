@@ -209,6 +209,23 @@ view
 
 ## Development notes
 
+### 2026-02-05
+
+For vibey:
+- I'm deciding against a single dialog/main.md to keep track. What if we just do that with filenames? dialog-<role>-<noun>-<date>.open.md, with the `open` showing you if it's open. When it closes, we rename the file. We can have some sugar to paper over that on the UI.
+
+Debug MCP:
+
+```
+  1. Missing System Message (vibey-server.js)
+
+  The LLMs didn't know they could actually execute tools. Added system prompts to tell them to use the tools:
+
+  2. Checkbox State Not Being Sent (vibey-client.js)
+
+  The toggle pattern ['!', ['useTools']] wasn't working - the value was always false on the server. Fixed by evaluating the negation immediately:
+```
+
 ### 2026-02-04
 
 If LLM models are roughly as good as their data, and big LLM models already are trained on *all* the data, then why are they still becoming better? Is it because they are being fed with their failure modes and they're learning from them?

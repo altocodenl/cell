@@ -754,12 +754,12 @@ var parseDialogContent = function (content) {
 
    dale.go (lines, function (line) {
       if (line.startsWith ('## User')) {
-         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
          currentRole = 'user';
          currentContent = [];
       }
       else if (line.startsWith ('## Assistant')) {
-         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
          currentRole = 'assistant';
          currentContent = [];
       }
@@ -901,7 +901,7 @@ views.dialogs = function () {
                   ['input', {
                      type: 'checkbox',
                      checked: useTools === true,
-                     onchange: B.ev ('set', 'useTools', ['!', ['useTools']]),
+                     onchange: B.ev ('set', 'useTools', ! B.get ('useTools')),
                      disabled: streaming || hasPendingTools
                   }],
                   'MCP Tools'

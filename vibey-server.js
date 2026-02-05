@@ -240,12 +240,12 @@ var parseDialog = function (markdown) {
 
    dale.go (lines, function (line) {
       if (line.startsWith ('## User')) {
-         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
          currentRole = 'user';
          currentContent = [];
       }
       else if (line.startsWith ('## Assistant')) {
-         if (currentRole) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
          currentRole = 'assistant';
          currentContent = [];
       }
@@ -292,6 +292,11 @@ var saveDialog = function (filepath, messages, metadata) {
    fs.writeFileSync (filepath, markdown, 'utf8');
 };
 
+// Append text to dialog file
+var appendToDialog = function (filepath, text) {
+   fs.appendFileSync (filepath, text);
+};
+
 // Implementation function for Claude (streaming with tool support)
 var chatWithClaude = async function (messages, model, onChunk, useTools) {
    model = model || 'claude-sonnet-4-20250514';
@@ -305,6 +310,7 @@ var chatWithClaude = async function (messages, model, onChunk, useTools) {
 
    if (useTools) {
       requestBody.tools = CLAUDE_TOOLS;
+      requestBody.system = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.';
    }
 
    var response = await fetch ('https://api.anthropic.com/v1/messages', {
@@ -395,15 +401,27 @@ var chatWithClaude = async function (messages, model, onChunk, useTools) {
 var chatWithOpenAI = async function (messages, model, onChunk, useTools) {
    model = model || 'gpt-4o';
 
+   // For OpenAI, system message goes as the first message in the array
+   var messagesWithSystem = messages;
+   if (useTools) {
+      messagesWithSystem = [{
+         role: 'system',
+         content: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
+      }].concat (messages);
+   }
+
    var requestBody = {
       model: model,
       stream: true,
-      messages: messages
+      messages: messagesWithSystem
    };
 
    if (useTools) {
       requestBody.tools = OPENAI_TOOLS;
    }
+
+   clog ('OpenAI request - useTools:', useTools, 'tools:', requestBody.tools ? requestBody.tools.length : 0, 'messages:', requestBody.messages.length);
+   clog ('First message role:', requestBody.messages[0]?.role);
 
    var response = await fetch ('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -505,31 +523,51 @@ var chat = async function (dialogId, provider, prompt, model, onChunk, useTools,
    // Load existing dialog or use provided messages
    var dialog = loadDialog (dialogId);
    var messages = existingMessages || dialog.messages;
+   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
 
-   // Add user message if provided
+   // Add user message if provided and save to file immediately
    if (prompt) {
       messages.push ({role: 'user', content: prompt});
+      saveDialog (dialog.filepath, messages, {provider: provider, model: defaultModel});
    }
+
+   // Append assistant header to file before streaming
+   appendToDialog (dialog.filepath, '## Assistant\n\n');
+
+   // Wrap onChunk to also write streaming content to file
+   var wrappedOnChunk = function (chunk) {
+      appendToDialog (dialog.filepath, chunk);
+      if (onChunk) onChunk (chunk);
+   };
 
    // Call appropriate provider
    var result;
    if (provider === 'claude') {
-      result = await chatWithClaude (messages, model, onChunk, useTools);
+      result = await chatWithClaude (messages, model, wrappedOnChunk, useTools);
    }
    else {
-      result = await chatWithOpenAI (messages, model, onChunk, useTools);
+      result = await chatWithOpenAI (messages, model, wrappedOnChunk, useTools);
    }
 
-   // Add assistant response to messages (for display)
+   // Close the assistant section in the file
+   appendToDialog (dialog.filepath, '\n\n');
+
+   // Add assistant response to messages (for API context)
    if (result.content) {
       messages.push ({role: 'assistant', content: result.content});
    }
 
-   // Save dialog to markdown
-   saveDialog (dialog.filepath, messages, {provider: provider, model: result.model});
-
-   // If there are tool calls, store them for approval
+   // If there are tool calls, write them to the file and store for approval
    if (result.toolCalls) {
+      var toolSection = '';
+      dale.go (result.toolCalls, function (tc) {
+         toolSection += '---\n';
+         toolSection += 'Tool request: ' + tc.name + '\n\n';
+         toolSection += '    ' + JSON.stringify (tc.input, null, 2).split ('\n').join ('\n    ') + '\n\n';
+      });
+      toolSection += '---\n\n';
+      appendToDialog (dialog.filepath, toolSection);
+
       pendingToolCalls [dialogId] = {
          messages: messages,
          toolCalls: result.toolCalls,
@@ -558,6 +596,22 @@ var continueWithToolResults = async function (dialogId, toolResults, onChunk) {
    if (! pending) {
       throw new Error ('No pending tool calls for dialog: ' + dialogId);
    }
+
+   // Write tool decisions and results to the dialog file
+   var decisionText = '## User\n\nTool results:\n\n';
+   dale.go (pending.toolCalls, function (tc, k) {
+      var tr = toolResults [k];
+      if (tr && tr.error) {
+         decisionText += '**' + tc.name + ':** Denied\n\n';
+      }
+      else {
+         decisionText += '**' + tc.name + ':** Approved\n\n';
+         if (tr && tr.result) {
+            decisionText += '    ' + JSON.stringify (tr.result, null, 2).split ('\n').join ('\n    ') + '\n\n';
+         }
+      }
+   });
+   appendToDialog (pending.filepath, decisionText);
 
    var messages = pending.messages.slice (); // Copy
    var provider = pending.provider;
