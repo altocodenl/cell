@@ -31,11 +31,13 @@ var CLAUDE_API_KEY = SECRET.claude;
 
 // *** MCP TOOLS ***
 
-// Tool definitions for Claude
-var CLAUDE_TOOLS = [
+var exec = require ('child_process').exec;
+
+// Tool definitions (written once, converted to both provider formats below)
+var TOOLS = [
    {
       name: 'run_command',
-      description: 'Run a shell command on the local system. Use this to execute bash commands, read files, list directories, etc.',
+      description: 'Run a shell command. Use for reading files (cat), listing directories (ls), HTTP requests (curl), git, and anything else the shell can do. 30s timeout.',
       input_schema: {
          type: 'object',
          properties: {
@@ -48,181 +50,106 @@ var CLAUDE_TOOLS = [
       }
    },
    {
-      name: 'read_file',
-      description: 'Read the contents of a file from the local filesystem.',
-      input_schema: {
-         type: 'object',
-         properties: {
-            path: {
-               type: 'string',
-               description: 'The path to the file to read'
-            }
-         },
-         required: ['path']
-      }
-   },
-   {
       name: 'write_file',
-      description: 'Write content to a file on the local filesystem.',
+      description: 'Write content to a file, creating or overwriting it. Use this instead of shell redirects to avoid escaping issues.',
       input_schema: {
          type: 'object',
          properties: {
             path: {
                type: 'string',
-               description: 'The path to the file to write'
+               description: 'The file path to write to'
             },
             content: {
                type: 'string',
-               description: 'The content to write to the file'
+               description: 'The full content to write'
             }
          },
          required: ['path', 'content']
       }
    },
    {
-      name: 'list_directory',
-      description: 'List the contents of a directory.',
+      name: 'edit_file',
+      description: 'Edit a file by replacing an exact string with new content. The old_string must appear exactly once in the file. Read the file first (cat) to see its contents, then specify the exact text to replace. Include enough surrounding context in old_string to make it unique.',
       input_schema: {
          type: 'object',
          properties: {
             path: {
                type: 'string',
-               description: 'The path to the directory to list'
+               description: 'The file path to edit'
+            },
+            old_string: {
+               type: 'string',
+               description: 'The exact text to find (must be unique in the file)'
+            },
+            new_string: {
+               type: 'string',
+               description: 'The replacement text'
             }
          },
-         required: ['path']
+         required: ['path', 'old_string', 'new_string']
       }
    }
 ];
 
-// Tool definitions for OpenAI
-var OPENAI_TOOLS = [
-   {
+// Claude format: as-is
+var CLAUDE_TOOLS = TOOLS;
+
+// OpenAI format: wrapped in {type: 'function', function: {name, description, parameters}}
+var OPENAI_TOOLS = dale.go (TOOLS, function (tool) {
+   return {
       type: 'function',
       function: {
-         name: 'run_command',
-         description: 'Run a shell command on the local system. Use this to execute bash commands, read files, list directories, etc.',
-         parameters: {
-            type: 'object',
-            properties: {
-               command: {
-                  type: 'string',
-                  description: 'The shell command to execute'
-               }
-            },
-            required: ['command']
-         }
+         name: tool.name,
+         description: tool.description,
+         parameters: tool.input_schema
       }
-   },
-   {
-      type: 'function',
-      function: {
-         name: 'read_file',
-         description: 'Read the contents of a file from the local filesystem.',
-         parameters: {
-            type: 'object',
-            properties: {
-               path: {
-                  type: 'string',
-                  description: 'The path to the file to read'
-               }
-            },
-            required: ['path']
-         }
-      }
-   },
-   {
-      type: 'function',
-      function: {
-         name: 'write_file',
-         description: 'Write content to a file on the local filesystem.',
-         parameters: {
-            type: 'object',
-            properties: {
-               path: {
-                  type: 'string',
-                  description: 'The path to the file to write'
-               },
-               content: {
-                  type: 'string',
-                  description: 'The content to write to the file'
-               }
-            },
-            required: ['path', 'content']
-         }
-      }
-   },
-   {
-      type: 'function',
-      function: {
-         name: 'list_directory',
-         description: 'List the contents of a directory.',
-         parameters: {
-            type: 'object',
-            properties: {
-               path: {
-                  type: 'string',
-                  description: 'The path to the directory to list'
-               }
-            },
-            required: ['path']
-         }
-      }
-   }
-];
+   };
+});
 
 // Store pending tool calls awaiting user approval
 // {dialogId: {messages, toolCalls, provider, model, metadata}}
 var pendingToolCalls = {};
 
 // Execute a tool locally
-var executeTool = async function (toolName, toolInput) {
-   var exec = require ('child_process').exec;
-
+var executeTool = function (toolName, toolInput) {
    return new Promise (function (resolve) {
+
       if (toolName === 'run_command') {
          exec (toolInput.command, {timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
-            if (error) {
-               resolve ({success: false, error: error.message, stderr: stderr});
-            }
-            else {
-               resolve ({success: true, stdout: stdout, stderr: stderr});
-            }
+            if (error) resolve ({success: false, error: error.message, stderr: stderr});
+            else       resolve ({success: true, stdout: stdout, stderr: stderr});
          });
       }
-      else if (toolName === 'read_file') {
-         fs.readFile (toolInput.path, 'utf8', function (error, content) {
-            if (error) {
-               resolve ({success: false, error: error.message});
-            }
-            else {
-               resolve ({success: true, content: content});
-            }
-         });
-      }
+
       else if (toolName === 'write_file') {
          fs.writeFile (toolInput.path, toolInput.content, 'utf8', function (error) {
-            if (error) {
-               resolve ({success: false, error: error.message});
-            }
-            else {
-               resolve ({success: true, message: 'File written successfully'});
-            }
+            if (error) resolve ({success: false, error: error.message});
+            else       resolve ({success: true, message: 'File written: ' + toolInput.path});
          });
       }
-      else if (toolName === 'list_directory') {
-         fs.readdir (toolInput.path, {withFileTypes: true}, function (error, entries) {
-            if (error) {
-               resolve ({success: false, error: error.message});
+
+      else if (toolName === 'edit_file') {
+         fs.readFile (toolInput.path, 'utf8', function (error, content) {
+            if (error) return resolve ({success: false, error: error.message});
+
+            var count = content.split (toolInput.old_string).length - 1;
+
+            if (count === 0) {
+               resolve ({success: false, error: 'old_string not found in file'});
+            }
+            else if (count > 1) {
+               resolve ({success: false, error: 'old_string found ' + count + ' times — must be unique. Add more surrounding context.'});
             }
             else {
-               var items = dale.go (entries, function (entry) {
-                  return {name: entry.name, isDirectory: entry.isDirectory ()};
+               var updated = content.replace (toolInput.old_string, toolInput.new_string);
+               fs.writeFile (toolInput.path, updated, 'utf8', function (error) {
+                  if (error) resolve ({success: false, error: error.message});
+                  else       resolve ({success: true, message: 'Edit applied to ' + toolInput.path});
                });
-               resolve ({success: true, entries: items});
             }
          });
       }
+
       else {
          resolve ({success: false, error: 'Unknown tool: ' + toolName});
       }
@@ -298,20 +225,17 @@ var appendToDialog = function (filepath, text) {
 };
 
 // Implementation function for Claude (streaming with tool support)
-var chatWithClaude = async function (messages, model, onChunk, useTools) {
+var chatWithClaude = async function (messages, model, onChunk) {
    model = model || 'claude-sonnet-4-20250514';
 
    var requestBody = {
       model: model,
       max_tokens: 64000,
       stream: true,
-      messages: messages
+      messages: messages,
+      tools: CLAUDE_TOOLS,
+      system: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
    };
-
-   if (useTools) {
-      requestBody.tools = CLAUDE_TOOLS;
-      requestBody.system = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.';
-   }
 
    var response = await fetch ('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -398,30 +322,18 @@ var chatWithClaude = async function (messages, model, onChunk, useTools) {
 };
 
 // Implementation function for OpenAI (streaming with tool support)
-var chatWithOpenAI = async function (messages, model, onChunk, useTools) {
+var chatWithOpenAI = async function (messages, model, onChunk) {
    model = model || 'gpt-4o';
-
-   // For OpenAI, system message goes as the first message in the array
-   var messagesWithSystem = messages;
-   if (useTools) {
-      messagesWithSystem = [{
-         role: 'system',
-         content: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
-      }].concat (messages);
-   }
 
    var requestBody = {
       model: model,
       stream: true,
-      messages: messagesWithSystem
+      messages: [{
+         role: 'system',
+         content: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
+      }].concat (messages),
+      tools: OPENAI_TOOLS
    };
-
-   if (useTools) {
-      requestBody.tools = OPENAI_TOOLS;
-   }
-
-   clog ('OpenAI request - useTools:', useTools, 'tools:', requestBody.tools ? requestBody.tools.length : 0, 'messages:', requestBody.messages.length);
-   clog ('First message role:', requestBody.messages[0]?.role);
 
    var response = await fetch ('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -515,7 +427,7 @@ var chatWithOpenAI = async function (messages, model, onChunk, useTools) {
 // onChunk: callback for streaming chunks
 // useTools: whether to enable MCP tools
 // existingMessages: optional messages to use instead of loading (for tool continuation)
-var chat = async function (dialogId, provider, prompt, model, onChunk, useTools, existingMessages) {
+var chat = async function (dialogId, provider, prompt, model, onChunk, existingMessages) {
    if (provider !== 'claude' && provider !== 'openai') {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
@@ -543,10 +455,10 @@ var chat = async function (dialogId, provider, prompt, model, onChunk, useTools,
    // Call appropriate provider
    var result;
    if (provider === 'claude') {
-      result = await chatWithClaude (messages, model, wrappedOnChunk, useTools);
+      result = await chatWithClaude (messages, model, wrappedOnChunk);
    }
    else {
-      result = await chatWithOpenAI (messages, model, wrappedOnChunk, useTools);
+      result = await chatWithOpenAI (messages, model, wrappedOnChunk);
    }
 
    // Close the assistant section in the file
@@ -688,7 +600,7 @@ var continueWithToolResults = async function (dialogId, toolResults, onChunk) {
    delete pendingToolCalls [dialogId];
 
    // Continue the conversation
-   var result = await chat (dialogId, provider, null, model, onChunk, true, messages);
+   var result = await chat (dialogId, provider, null, model, onChunk, messages);
    return result;
 };
 
@@ -809,8 +721,6 @@ var routes = [
          return reply (rs, 400, {error: 'model must be a string'});
       }
 
-      var useTools = rq.body.useTools === true;
-
       // Set up SSE headers
       rs.writeHead (200, {
          'Content-Type': 'text/event-stream',
@@ -827,8 +737,7 @@ var routes = [
             function (chunk) {
                // Send each chunk as an SSE event
                rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
-            },
-            useTools
+            }
          );
 
          // If there are tool calls, send them for approval

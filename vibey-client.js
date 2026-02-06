@@ -44,7 +44,7 @@ B.mrespond ([
       B.call (x, 'set', 'loadingFile', true);
       B.call (x, 'get', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
          B.call (x, 'set', 'loadingFile', false);
-         if (error) return B.call (x, 'report', 'error', 'Failed to load file');
+         if (error) return B.call (x, 'set', 'currentFile', null);
          B.call (x, 'set', 'currentFile', {
             name: rs.body.name,
             content: rs.body.content,
@@ -81,12 +81,13 @@ B.mrespond ([
    ['delete', 'file', function (x, name) {
       if (! confirm ('Delete ' + name + '?')) return;
 
+      var currentFile = B.get ('currentFile');
+      if (currentFile && currentFile.name === name) {
+         B.call (x, 'set', 'currentFile', null);
+      }
+
       B.call (x, 'delete', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to delete file');
-         var currentFile = B.get ('currentFile');
-         if (currentFile && currentFile.name === name) {
-            B.call (x, 'set', 'currentFile', null);
-         }
          B.call (x, 'load', 'files');
       });
    }],
@@ -126,8 +127,6 @@ B.mrespond ([
       var input = B.get ('chatInput');
       var provider = B.get ('chatProvider') || 'claude';
       var model = B.get ('chatModel') || '';
-      var useTools = B.get ('useTools') === true;
-
       if (! file || ! input || ! input.trim ()) return;
 
       var originalInput = input.trim ();
@@ -145,8 +144,7 @@ B.mrespond ([
             dialogId: dialogId,
             provider: provider,
             prompt: originalInput,
-            model: model || undefined,
-            useTools: useTools
+            model: model || undefined
          })
       }).then (function (response) {
          B.call (x, 'process', 'stream', response, file.name, originalInput);
@@ -674,17 +672,6 @@ views.css = [
    ['.tool-result-error', {
       color: '#e74c3c',
    }],
-   ['.checkbox-label', {
-      display: 'flex',
-      'align-items': 'center',
-      gap: '0.25rem',
-      'font-size': '12px',
-      color: '#888',
-      cursor: 'pointer',
-   }],
-   ['.checkbox-label input', {
-      cursor: 'pointer',
-   }],
 ];
 
 views.files = function () {
@@ -828,7 +815,7 @@ views.toolRequests = function (pendingToolCalls) {
 };
 
 views.dialogs = function () {
-   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['useTools']], function (files, currentFile, loadingFile, chatInput, chatProvider, streaming, streamingContent, pendingToolCalls, useTools) {
+   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['streaming'], ['streamingContent'], ['pendingToolCalls']], function (files, currentFile, loadingFile, chatInput, chatProvider, streaming, streamingContent, pendingToolCalls) {
 
       var dialogFiles = dale.fil (files, undefined, function (f) {
          if (f.startsWith ('dialog-')) return f;
@@ -896,15 +883,6 @@ views.dialogs = function () {
                }, [
                   ['option', {value: 'claude', selected: (chatProvider || 'claude') === 'claude'}, 'Claude'],
                   ['option', {value: 'openai', selected: chatProvider === 'openai'}, 'OpenAI']
-               ]],
-               ['label', {class: 'checkbox-label'}, [
-                  ['input', {
-                     type: 'checkbox',
-                     checked: useTools === true,
-                     onchange: B.ev ('set', 'useTools', ! B.get ('useTools')),
-                     disabled: streaming || hasPendingTools
-                  }],
-                  'MCP Tools'
                ]],
                ['textarea', {
                   class: 'chat-input',
