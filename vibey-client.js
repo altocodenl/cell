@@ -137,7 +137,7 @@ B.mrespond ([
       B.call (x, 'set', 'pendingToolCalls', null);
       B.call (x, 'set', 'chatInput', '');
 
-      fetch ('chat', {
+      fetch ('dialog', {
          method: 'POST',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({
@@ -307,7 +307,7 @@ B.mrespond ([
       B.call (x, 'set', 'streaming', true);
       B.call (x, 'set', 'streamingContent', '');
 
-      fetch ('chat/tool-result', {
+      fetch ('dialog/tool-result', {
          method: 'POST',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({

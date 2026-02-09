@@ -710,7 +710,7 @@ var routes = [
    // *** LLM ***
 
    // Streaming chat endpoint using Server-Sent Events
-   ['post', 'chat', async function (rq, rs) {
+   ['post', 'dialog', async function (rq, rs) {
       if (stop (rs, [
          ['dialogId', rq.body.dialogId, 'string'],
          ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
@@ -757,7 +757,7 @@ var routes = [
    }],
 
    // Submit tool results after user approval
-   ['post', 'chat/tool-result', async function (rq, rs) {
+   ['post', 'dialog/tool-result', async function (rq, rs) {
       if (stop (rs, [
          ['dialogId', rq.body.dialogId, 'string'],
          ['toolResults', rq.body.toolResults, 'array'],
@@ -812,7 +812,7 @@ var routes = [
    }],
 
    // Get pending tool calls for a dialog
-   ['get', 'chat/pending/:dialogId', function (rq, rs) {
+   ['get', 'dialog/pending/:dialogId', function (rq, rs) {
       var dialogId = rq.data.params.dialogId;
       var pending = pendingToolCalls [dialogId];
       if (! pending) {
