@@ -135,6 +135,7 @@ B.mrespond ([
       B.call (x, 'set', 'streaming', true);
       B.call (x, 'set', 'streamingContent', '');
       B.call (x, 'set', 'pendingToolCalls', null);
+      B.call (x, 'set', 'optimisticUserMessage', originalInput);
       B.call (x, 'set', 'chatInput', '');
 
       fetch ('dialog', {
@@ -151,11 +152,12 @@ B.mrespond ([
       }).catch (function (err) {
          B.call (x, 'report', 'error', 'Failed to send: ' + err.message);
          B.call (x, 'set', 'streaming', false);
+         B.call (x, 'set', 'optimisticUserMessage', null);
          B.call (x, 'set', 'chatInput', originalInput);
       });
    }],
 
-   // Process SSE stream from chat or tool-result endpoints
+   // Process SSE stream from /dialog or /dialog/resume
    ['process', 'stream', function (x, response, filename, originalInput) {
       var reader = response.body.getReader ();
       var decoder = new TextDecoder ();
@@ -165,12 +167,11 @@ B.mrespond ([
          reader.read ().then (function (result) {
             if (result.done) {
                var pendingCalls = B.get ('pendingToolCalls');
-               // Only mark streaming done if no pending tool calls
-               if (! pendingCalls || pendingCalls.length === 0) {
-                  B.call (x, 'set', 'streaming', false);
-                  B.call (x, 'load', 'file', filename);
-                  B.call (x, 'load', 'files');
-               }
+               B.call (x, 'set', 'streaming', false);
+               B.call (x, 'set', 'optimisticUserMessage', null);
+               B.call (x, 'load', 'file', filename);
+               B.call (x, 'load', 'files');
+               if (! pendingCalls || pendingCalls.length === 0) B.call (x, 'set', 'pendingToolCalls', null);
                return;
             }
 
@@ -187,13 +188,22 @@ B.mrespond ([
                         B.call (x, 'set', 'streamingContent', current + data.content);
                      }
                      else if (data.type === 'tool_request') {
-                        // Store pending tool calls for user approval
-                        B.call (x, 'set', 'pendingToolCalls', data.toolCalls);
+                        var pendingTools = dale.go (data.toolCalls || [], function (tool) {
+                           return {
+                              id: tool.id,
+                              name: tool.name,
+                              input: tool.input,
+                              approved: null,
+                              alwaysAllow: false
+                           };
+                        });
+                        B.call (x, 'set', 'pendingToolCalls', pendingTools);
                         B.call (x, 'set', 'streaming', false);
                      }
                      else if (data.type === 'error') {
                         B.call (x, 'report', 'error', data.error);
                         B.call (x, 'set', 'streaming', false);
+                        B.call (x, 'set', 'optimisticUserMessage', null);
                         if (originalInput) B.call (x, 'set', 'chatInput', originalInput);
                      }
                   }
@@ -208,64 +218,26 @@ B.mrespond ([
       read ();
    }],
 
-   // Approve a tool call - execute it
+   // Approve a pending tool request
    ['approve', 'tool', function (x, toolIndex) {
       var pendingToolCalls = B.get ('pendingToolCalls');
-      var file = B.get ('currentFile');
-      if (! pendingToolCalls || ! file) return;
-
-      var tool = pendingToolCalls [toolIndex];
-
-      // Mark this tool as executing
-      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'executing'], true);
-
-      // Execute the tool
-      fetch ('tool/execute', {
-         method: 'POST',
-         headers: {'Content-Type': 'application/json'},
-         body: JSON.stringify ({
-            toolName: tool.name,
-            toolInput: tool.input
-         })
-      }).then (function (response) {
-         return response.json ();
-      }).then (function (result) {
-         // Store the result on the tool
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'result'], result);
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'executing'], false);
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'done'], true);
-
-         // Check if all tools are done
-         B.call (x, 'check', 'allToolsDone');
-      }).catch (function (err) {
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'result'], {success: false, error: err.message});
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'executing'], false);
-         B.call (x, 'set', ['pendingToolCalls', toolIndex, 'done'], true);
-         B.call (x, 'check', 'allToolsDone');
-      });
+      if (! pendingToolCalls) return;
+      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'approved'], true);
    }],
 
    // Deny a tool call
    ['deny', 'tool', function (x, toolIndex) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
-
-      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'result'], {success: false, error: 'User denied this tool call'});
-      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'done'], true);
-      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'denied'], true);
-
-      B.call (x, 'check', 'allToolsDone');
+      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'approved'], false);
    }],
 
    // Approve all pending tools at once
    ['approve', 'allTools', function (x) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
-
       dale.go (pendingToolCalls, function (tool, index) {
-         if (! tool.done && ! tool.executing) {
-            B.call (x, 'approve', 'tool', index);
-         }
+         B.call (x, 'approve', 'tool', index);
       });
    }],
 
@@ -273,46 +245,51 @@ B.mrespond ([
    ['deny', 'allTools', function (x) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
-
       dale.go (pendingToolCalls, function (tool, index) {
-         if (! tool.done && ! tool.executing) {
-            B.call (x, 'deny', 'tool', index);
-         }
+         B.call (x, 'deny', 'tool', index);
       });
    }],
 
-   // Check if all tools are done and submit results
-   ['check', 'allToolsDone', function (x) {
+   ['toggle', 'alwaysAllowTool', function (x, toolIndex) {
+      var current = B.get (['pendingToolCalls', toolIndex, 'alwaysAllow']);
+      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'alwaysAllow'], ! current);
+   }],
+
+   // Submit tool decisions to /dialog/resume
+   ['submit', 'toolDecisions', function (x) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       var file = B.get ('currentFile');
       if (! pendingToolCalls || ! file) return;
 
-      var allDone = dale.stop (pendingToolCalls, false, function (tool) {
-         return tool.done === true;
+      var allChosen = dale.stop (pendingToolCalls, false, function (tool) {
+         return tool.approved === true || tool.approved === false;
       });
+      if (allChosen === false) return B.call (x, 'report', 'error', 'Approve or deny each tool request first');
 
-      if (allDone === false) return; // Not all done yet
-
-      // All tools are done, submit results
       var dialogId = file.name.replace ('dialog-', '').replace ('.md', '');
-      var toolResults = dale.go (pendingToolCalls, function (tool) {
+      var decisions = dale.go (pendingToolCalls, function (tool) {
          return {
             id: tool.id,
-            result: tool.result,
-            error: tool.denied ? 'User denied this tool call' : (tool.result && ! tool.result.success ? tool.result.error : null)
+            approved: tool.approved === true
          };
       });
+      var authorizationsMap = {};
+      dale.go (pendingToolCalls, function (tool) {
+         if (tool.approved === true && tool.alwaysAllow) authorizationsMap [tool.name] = true;
+      });
+      var authorizations = dale.go (Object.keys (authorizationsMap), function (name) {return name;});
 
-      B.call (x, 'set', 'pendingToolCalls', null);
       B.call (x, 'set', 'streaming', true);
       B.call (x, 'set', 'streamingContent', '');
+      B.call (x, 'set', 'pendingToolCalls', null);
 
-      fetch ('dialog/tool-result', {
+      fetch ('dialog/resume', {
          method: 'POST',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({
             dialogId: dialogId,
-            toolResults: toolResults
+            decisions: decisions,
+            authorizations: authorizations
          })
       }).then (function (response) {
          B.call (x, 'process', 'stream', response, file.name, null);
@@ -762,22 +739,32 @@ var parseDialogContent = function (content) {
    return messages;
 };
 
+var summarizeToolInput = function (tool) {
+   var input = JSON.parse (JSON.stringify (tool.input || {}));
+
+   if (tool.name === 'write_file' && type (input.content) === 'string') {
+      input.content = '[hidden file content: ' + input.content.length + ' chars]';
+   }
+   if (tool.name === 'edit_file') {
+      if (type (input.old_string) === 'string') input.old_string = '[hidden old_string: ' + input.old_string.length + ' chars]';
+      if (type (input.new_string) === 'string') input.new_string = '[hidden new_string: ' + input.new_string.length + ' chars]';
+   }
+
+   return JSON.stringify (input, null, 2);
+};
+
 // Render tool request UI
 views.toolRequests = function (pendingToolCalls) {
    if (! pendingToolCalls || pendingToolCalls.length === 0) return '';
 
-   var allDone = dale.stop (pendingToolCalls, false, function (tool) {
-      return tool.done === true;
+   var allChosen = dale.stop (pendingToolCalls, false, function (tool) {
+      return tool.approved === true || tool.approved === false;
    }) !== false;
-
-   var anyPending = dale.stop (pendingToolCalls, true, function (tool) {
-      return ! tool.done && ! tool.executing;
-   });
 
    return ['div', {class: 'tool-requests'}, [
       ['div', {class: 'tool-requests-header'}, [
          ['span', {class: 'tool-requests-title'}, 'Tool Requests (' + pendingToolCalls.length + ')'],
-         anyPending ? ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
+         ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
             ['button', {
                class: 'btn-small tool-btn-approve',
                onclick: B.ev ('approve', 'allTools')
@@ -786,14 +773,14 @@ views.toolRequests = function (pendingToolCalls) {
                class: 'btn-small tool-btn-deny',
                onclick: B.ev ('deny', 'allTools')
             }, 'Deny All']
-         ]] : ''
+         ]]
       ]],
       dale.go (pendingToolCalls, function (tool, index) {
          return ['div', {class: 'tool-request'}, [
             ['div', {class: 'tool-request-header'}, [
                ['span', {class: 'tool-name'}, tool.name],
-               tool.executing ? ['span', {class: 'tool-status'}, 'Executing...'] :
-               tool.done ? ['span', {class: 'tool-status'}, tool.denied ? 'Denied' : 'Done'] :
+               tool.approved === true ? ['span', {class: 'tool-status'}, 'Approved'] :
+               tool.approved === false ? ['span', {class: 'tool-status'}, 'Denied'] :
                ['div', {class: 'tool-actions'}, [
                   ['button', {
                      class: 'btn-small tool-btn-approve',
@@ -805,17 +792,29 @@ views.toolRequests = function (pendingToolCalls) {
                   }, 'Deny']
                ]]
             ]],
-            ['div', {class: 'tool-input'}, JSON.stringify (tool.input, null, 2)],
-            tool.result ? ['div', {class: 'tool-result' + (tool.result.success === false ? ' tool-result-error' : '')},
-               JSON.stringify (tool.result, null, 2)
-            ] : ''
+            ['div', {class: 'tool-input'}, summarizeToolInput (tool)],
+            ['label', {style: style ({display: 'flex', gap: '0.4rem', 'align-items': 'center', 'font-size': '12px', color: '#aaa'})}, [
+               ['input', {
+                  type: 'checkbox',
+                  checked: tool.alwaysAllow === true,
+                  onchange: B.ev ('toggle', 'alwaysAllowTool', index)
+               }],
+               'Always allow ' + tool.name + ' in this dialog'
+            ]]
          ]];
-      })
+      }),
+      ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-top': '0.75rem'})}, [
+         ['button', {
+            class: 'primary btn-small',
+            onclick: B.ev ('submit', 'toolDecisions'),
+            disabled: ! allChosen
+         }, allChosen ? 'Resume Dialog' : 'Select all decisions']
+      ]]
    ]];
 };
 
 views.dialogs = function () {
-   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['streaming'], ['streamingContent'], ['pendingToolCalls']], function (files, currentFile, loadingFile, chatInput, chatProvider, streaming, streamingContent, pendingToolCalls) {
+   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['optimisticUserMessage']], function (files, currentFile, loadingFile, chatInput, chatProvider, streaming, streamingContent, pendingToolCalls, optimisticUserMessage) {
 
       var dialogFiles = dale.fil (files, undefined, function (f) {
          if (f.startsWith ('dialog-')) return f;
@@ -867,6 +866,10 @@ views.dialogs = function () {
                      ['div', {class: 'chat-content'}, msg.content]
                   ]];
                }),
+               optimisticUserMessage ? ['div', {class: 'chat-message chat-user'}, [
+                  ['div', {class: 'chat-role'}, 'user'],
+                  ['div', {class: 'chat-content'}, optimisticUserMessage]
+               ]] : '',
                streaming && streamingContent ? ['div', {class: 'chat-message chat-assistant'}, [
                   ['div', {class: 'chat-role'}, 'assistant'],
                   ['div', {class: 'chat-content'}, streamingContent + '▊']

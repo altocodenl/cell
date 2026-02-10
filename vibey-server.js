@@ -106,10 +106,6 @@ var OPENAI_TOOLS = dale.go (TOOLS, function (tool) {
    };
 });
 
-// Store pending tool calls awaiting user approval
-// {dialogId: {messages, toolCalls, provider, model, metadata}}
-var pendingToolCalls = {};
-
 // Execute a tool locally
 var executeTool = function (toolName, toolInput) {
    return new Promise (function (resolve) {
@@ -158,70 +154,259 @@ var executeTool = function (toolName, toolInput) {
 
 // *** LLM FUNCTIONS ***
 
-// Parse markdown dialog into messages array
-var parseDialog = function (markdown) {
-   var messages = [];
-   var lines = markdown.split ('\n');
-   var currentRole = null;
-   var currentContent = [];
+var safeJsonParse = function (text, fallback) {
+   try {
+      return JSON.parse (text);
+   }
+   catch (error) {
+      return fallback;
+   }
+};
 
-   dale.go (lines, function (line) {
-      if (line.startsWith ('## User')) {
-         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
-         currentRole = 'user';
-         currentContent = [];
+var parseMetadata = function (markdown) {
+   var metaMatch = markdown.match (/> Provider:\s*([^|]+)\|\s*Model:\s*([^\n]+)/);
+   if (! metaMatch) return {};
+   return {
+      provider: metaMatch [1].trim (),
+      model: metaMatch [2].trim ()
+   };
+};
+
+var parseAuthorizations = function (markdown) {
+   var authorized = {};
+   var re = /^> Authorized:\s*([a-zA-Z0-9_\-]+)/gm;
+   var match;
+   while ((match = re.exec (markdown)) !== null) {
+      authorized [match [1]] = true;
+   }
+   return authorized;
+};
+
+var parseToolCalls = function (text, includePositions) {
+   var toolCalls = [];
+   var re = /---\nTool request:\s+([^\n\[]+?)(?:\s+\[([^\]]+)\])?\n\n([\s\S]*?)\n---/g;
+   var match;
+   while ((match = re.exec (text)) !== null) {
+      var full = match [0];
+      var name = match [1].trim ();
+      var id = (match [2] || '').trim ();
+      var body = match [3];
+      var decisionMatch = body.match (/\nDecision:\s*(approved|denied)\s*(?:\n|$)/);
+      var decision = decisionMatch ? decisionMatch [1] : null;
+      var decisionIndex = decisionMatch ? decisionMatch.index : -1;
+      var inputPart = decisionIndex >= 0 ? body.slice (0, decisionIndex) : body;
+      var inputText = inputPart.replace (/^\s+|\s+$/g, '').replace (/^    /gm, '');
+      var result = null;
+      var resultMatch = body.match (/\nResult:\n\n([\s\S]*)$/);
+      if (resultMatch) {
+         var resultText = resultMatch [1].replace (/^\s+|\s+$/g, '').replace (/^    /gm, '');
+         result = safeJsonParse (resultText, resultText);
       }
-      else if (line.startsWith ('## Assistant')) {
-         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
-         currentRole = 'assistant';
-         currentContent = [];
+      var parsedInput = safeJsonParse (inputText || '{}', {});
+      var parsed = {
+         id: id || null,
+         name: name,
+         input: parsedInput,
+         decision: decision,
+         result: result
+      };
+      if (includePositions) {
+         parsed.start = match.index;
+         parsed.end = match.index + full.length;
+         parsed.raw = full;
       }
-      else if (currentRole) {
-         currentContent.push (line);
+      toolCalls.push (parsed);
+   }
+   return toolCalls;
+};
+
+var buildToolBlock = function (toolCall, decision, result) {
+   var block = '---\n';
+   block += 'Tool request: ' + toolCall.name + ' [' + toolCall.id + ']\n\n';
+   block += '    ' + JSON.stringify (toolCall.input || {}, null, 2).split ('\n').join ('\n    ') + '\n\n';
+   if (decision) {
+      block += 'Decision: ' + decision + '\n';
+      if (decision === 'approved') {
+         block += 'Result:\n\n';
+         block += '    ' + JSON.stringify (result, null, 2).split ('\n').join ('\n    ') + '\n\n';
+      }
+      else block += '\n';
+   }
+   block += '---';
+   return block;
+};
+
+var parseSections = function (markdown) {
+   var sections = [];
+   var re = /## (User|Assistant)\n\n([\s\S]*?)(?=\n## (?:User|Assistant)\n\n|$)/g;
+   var match;
+   while ((match = re.exec (markdown)) !== null) {
+      sections.push ({
+         role: match [1].toLowerCase (),
+         content: match [2].replace (/\s+$/, '')
+      });
+   }
+   return sections;
+};
+
+var parseDialogForProvider = function (markdown, provider) {
+   var messages = [];
+   dale.go (parseSections (markdown), function (section) {
+      if (section.role === 'user') {
+         var userText = section.content.trim ();
+         if (userText) messages.push ({role: 'user', content: userText});
+         return;
+      }
+
+      var toolCalls = parseToolCalls (section.content, false);
+      var assistantText = section.content.replace (/---\nTool request:\s+[^\n\[]+?(?:\s+\[[^\]]+\])?\n\n[\s\S]*?\n---/g, '').trim ();
+
+      if (! toolCalls.length) {
+         if (assistantText) messages.push ({role: 'assistant', content: assistantText});
+         return;
+      }
+
+      if (provider === 'claude') {
+         var assistantContent = [];
+         if (assistantText) assistantContent.push ({type: 'text', text: assistantText});
+         dale.go (toolCalls, function (tc) {
+            assistantContent.push ({
+               type: 'tool_use',
+               id: tc.id,
+               name: tc.name,
+               input: tc.input
+            });
+         });
+         messages.push ({role: 'assistant', content: assistantContent});
+
+         var decided = dale.fil (toolCalls, undefined, function (tc) {
+            if (tc.decision) return tc;
+         });
+         if (decided.length) {
+            messages.push ({role: 'user', content: dale.go (decided, function (tc) {
+               return {
+                  type: 'tool_result',
+                  tool_use_id: tc.id,
+                  content: tc.decision === 'approved' ? JSON.stringify (tc.result) : 'Denied by user'
+               };
+            })});
+         }
+      }
+      else {
+         messages.push ({
+            role: 'assistant',
+            content: assistantText || null,
+            tool_calls: dale.go (toolCalls, function (tc) {
+               return {
+                  id: tc.id,
+                  type: 'function',
+                  function: {
+                     name: tc.name,
+                     arguments: JSON.stringify (tc.input)
+                  }
+               };
+            })
+         });
+
+         dale.go (toolCalls, function (tc) {
+            if (! tc.decision) return;
+            messages.push ({
+               role: 'tool',
+               tool_call_id: tc.id,
+               content: tc.decision === 'approved' ? JSON.stringify (tc.result) : 'Denied by user'
+            });
+         });
       }
    });
-
-   if (currentRole && currentContent.join ('').trim ()) {
-      messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
-   }
-
    return messages;
 };
 
-// Convert messages array to markdown
-var dialogToMarkdown = function (messages, metadata) {
-   var md = '# Dialog\n\n';
-   if (metadata) {
-      md += '> Provider: ' + metadata.provider + ' | Model: ' + metadata.model + '\n\n';
-   }
-   dale.go (messages, function (msg) {
-      var role = msg.role === 'user' ? 'User' : 'Assistant';
-      md += '## ' + role + '\n\n' + msg.content + '\n\n';
+var findDialogFilename = function (dialogId) {
+   var exact = 'dialog-' + dialogId + '.md';
+   var exactPath = Path.join (VIBEY_DIR, exact);
+   if (fs.existsSync (exactPath)) return exact;
+
+   var files = fs.readdirSync (VIBEY_DIR);
+   var prefix = 'dialog-' + dialogId + '-';
+   var found = dale.stopNot (files, undefined, function (file) {
+      if (file.startsWith (prefix) && file.endsWith ('.md')) return file;
    });
-   return md;
+   return found || exact;
 };
 
-// Load or create dialog file, returns {messages, filepath}
 var loadDialog = function (dialogId) {
-   var filename = 'dialog-' + dialogId + '.md';
+   var filename = findDialogFilename (dialogId);
    var filepath = Path.join (VIBEY_DIR, filename);
-
-   if (fs.existsSync (filepath)) {
-      var content = fs.readFileSync (filepath, 'utf8');
-      return {messages: parseDialog (content), filepath: filepath, filename: filename};
-   }
-   return {messages: [], filepath: filepath, filename: filename};
+   var exists = fs.existsSync (filepath);
+   var markdown = exists ? fs.readFileSync (filepath, 'utf8') : '';
+   return {
+      dialogId: dialogId,
+      filename: filename,
+      filepath: filepath,
+      exists: exists,
+      markdown: markdown,
+      metadata: parseMetadata (markdown)
+   };
 };
 
-// Save dialog to markdown file
-var saveDialog = function (filepath, messages, metadata) {
-   var markdown = dialogToMarkdown (messages, metadata);
+var getGlobalAuthorizations = function () {
+   var docMain = Path.join (VIBEY_DIR, 'doc-main.md');
+   if (! fs.existsSync (docMain)) return [];
+   var auth = parseAuthorizations (fs.readFileSync (docMain, 'utf8'));
+   return Object.keys (auth);
+};
+
+var ensureDialogFile = function (dialog, provider, model) {
+   if (dialog.exists) {
+      if (dialog.metadata.provider && dialog.metadata.model) return;
+      var content = fs.readFileSync (dialog.filepath, 'utf8');
+      var headerLine = '> Provider: ' + provider + ' | Model: ' + model + '\n\n';
+      if (content.startsWith ('# Dialog\n\n')) content = '# Dialog\n\n' + headerLine + content.slice (10);
+      else content = '# Dialog\n\n' + headerLine + content;
+      fs.writeFileSync (dialog.filepath, content, 'utf8');
+      dialog.markdown = content;
+      dialog.metadata = {provider: provider, model: model};
+      return;
+   }
+
+   var header = '# Dialog\n\n';
+   header += '> Provider: ' + provider + ' | Model: ' + model + '\n\n';
+   dale.go (getGlobalAuthorizations (), function (name) {
+      header += '> Authorized: ' + name + '\n';
+   });
+   if (header [header.length - 1] !== '\n') header += '\n';
+   header += '\n';
+   fs.writeFileSync (dialog.filepath, header, 'utf8');
+   dialog.exists = true;
+   dialog.markdown = header;
+};
+
+var appendToDialog = function (filepath, text) {
+   fs.appendFileSync (filepath, text, 'utf8');
+};
+
+var writeToolDecisions = function (filepath, decisionsById) {
+   var markdown = fs.readFileSync (filepath, 'utf8');
+   var toolCalls = parseToolCalls (markdown, true);
+
+   for (var i = toolCalls.length - 1; i >= 0; i--) {
+      var tc = toolCalls [i];
+      if (tc.decision) continue;
+      var decision = decisionsById [tc.id];
+      if (! decision) continue;
+      var replacement = buildToolBlock (tc, decision.decision, decision.result);
+      markdown = markdown.slice (0, tc.start) + replacement + markdown.slice (tc.end);
+   }
+
    fs.writeFileSync (filepath, markdown, 'utf8');
 };
 
-// Append text to dialog file
-var appendToDialog = function (filepath, text) {
-   fs.appendFileSync (filepath, text);
+var getPendingToolCalls = function (filepath) {
+   if (! fs.existsSync (filepath)) return [];
+   var markdown = fs.readFileSync (filepath, 'utf8');
+   return dale.fil (parseToolCalls (markdown, false), undefined, function (tc) {
+      if (! tc.decision) return tc;
+   });
 };
 
 // Implementation function for Claude (streaming with tool support)
@@ -419,189 +604,127 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
    };
 };
 
-// Main function that chooses provider, manages dialog, and streams response
-// dialogId: identifier for the dialog (used for filename)
-// provider: 'claude' or 'openai'
-// prompt: the user's message (can be null if continuing from tool results)
-// model: optional model override
-// onChunk: callback for streaming chunks
-// useTools: whether to enable MCP tools
-// existingMessages: optional messages to use instead of loading (for tool continuation)
-var chat = async function (dialogId, provider, prompt, model, onChunk, existingMessages) {
-   if (provider !== 'claude' && provider !== 'openai') {
-      throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
-   }
+var appendToolCallsToAssistantSection = function (filepath, toolCalls) {
+   if (! toolCalls || ! toolCalls.length) return;
+   dale.go (toolCalls, function (tc) {
+      appendToDialog (filepath, buildToolBlock (tc) + '\n\n');
+   });
+};
 
-   // Load existing dialog or use provided messages
-   var dialog = loadDialog (dialogId);
-   var messages = existingMessages || dialog.messages;
-   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
+var runCompletion = async function (dialog, provider, model, onChunk) {
+   var markdown = fs.readFileSync (dialog.filepath, 'utf8');
+   var messages = parseDialogForProvider (markdown, provider);
 
-   // Add user message if provided and save to file immediately
-   if (prompt) {
-      messages.push ({role: 'user', content: prompt});
-      saveDialog (dialog.filepath, messages, {provider: provider, model: defaultModel});
-   }
-
-   // Append assistant header to file before streaming
    appendToDialog (dialog.filepath, '## Assistant\n\n');
 
-   // Wrap onChunk to also write streaming content to file
-   var wrappedOnChunk = function (chunk) {
+   var writeChunk = function (chunk) {
       appendToDialog (dialog.filepath, chunk);
       if (onChunk) onChunk (chunk);
    };
 
-   // Call appropriate provider
-   var result;
-   if (provider === 'claude') {
-      result = await chatWithClaude (messages, model, wrappedOnChunk);
-   }
-   else {
-      result = await chatWithOpenAI (messages, model, wrappedOnChunk);
-   }
+   var result = provider === 'claude'
+      ? await chatWithClaude (messages, model, writeChunk)
+      : await chatWithOpenAI (messages, model, writeChunk);
 
-   // Close the assistant section in the file
    appendToDialog (dialog.filepath, '\n\n');
+   appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
 
-   // Add assistant response to messages (for API context)
-   if (result.content) {
-      messages.push ({role: 'assistant', content: result.content});
+   var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
+   var decisionsById = {};
+   var autoExecuted = [];
+   var pending = [];
+
+   for (var i = 0; i < (result.toolCalls || []).length; i++) {
+      var tc = result.toolCalls [i];
+      if (authorizations [tc.name]) {
+         var toolResult = await executeTool (tc.name, tc.input);
+         decisionsById [tc.id] = {decision: 'approved', result: toolResult};
+         autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
+      }
+      else pending.push (tc);
    }
 
-   // If there are tool calls, write them to the file and store for approval
-   if (result.toolCalls) {
-      var toolSection = '';
-      dale.go (result.toolCalls, function (tc) {
-         toolSection += '---\n';
-         toolSection += 'Tool request: ' + tc.name + '\n\n';
-         toolSection += '    ' + JSON.stringify (tc.input, null, 2).split ('\n').join ('\n    ') + '\n\n';
-      });
-      toolSection += '---\n\n';
-      appendToDialog (dialog.filepath, toolSection);
-
-      pendingToolCalls [dialogId] = {
-         messages: messages,
-         toolCalls: result.toolCalls,
-         provider: provider,
-         model: result.model,
-         metadata: {provider: provider, model: result.model},
-         filepath: dialog.filepath,
-         filename: dialog.filename,
-         assistantContent: result.content
-      };
-   }
+   if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
 
    return {
-      dialogId: dialogId,
+      dialogId: dialog.dialogId,
       filename: dialog.filename,
-      provider: result.provider,
-      model: result.model,
+      provider: provider,
+      model: model,
       content: result.content,
-      toolCalls: result.toolCalls
+      toolCalls: pending.length ? pending : null,
+      autoExecuted: autoExecuted
    };
 };
 
-// Continue a dialog after tool results are submitted
-var continueWithToolResults = async function (dialogId, toolResults, onChunk) {
-   var pending = pendingToolCalls [dialogId];
-   if (! pending) {
-      throw new Error ('No pending tool calls for dialog: ' + dialogId);
+var startDialogTurn = async function (dialogId, provider, prompt, model, onChunk) {
+   if (provider !== 'claude' && provider !== 'openai') {
+      throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
-   // Write tool decisions and results to the dialog file
-   var decisionText = '## User\n\nTool results:\n\n';
-   dale.go (pending.toolCalls, function (tc, k) {
-      var tr = toolResults [k];
-      if (tr && tr.error) {
-         decisionText += '**' + tc.name + ':** Denied\n\n';
+   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
+   var dialog = loadDialog (dialogId);
+   ensureDialogFile (dialog, provider, defaultModel);
+
+   appendToDialog (dialog.filepath, '## User\n\n' + prompt + '\n\n');
+
+   return await runCompletion (dialog, provider, defaultModel, onChunk);
+};
+
+var resumeDialogTurn = async function (dialogId, decisions, authorizations, provider, model, onChunk) {
+   var dialog = loadDialog (dialogId);
+   if (! dialog.exists) throw new Error ('Dialog not found: ' + dialogId);
+
+   if (authorizations && authorizations.length) {
+      dale.go (authorizations, function (name) {
+         appendToDialog (dialog.filepath, '> Authorized: ' + name + '\n');
+      });
+      appendToDialog (dialog.filepath, '\n');
+   }
+
+   var pending = getPendingToolCalls (dialog.filepath);
+   if (! pending.length) throw new Error ('No pending tool calls for dialog: ' + dialogId);
+
+   var pendingById = {};
+   dale.go (pending, function (tc) {
+      pendingById [tc.id] = tc;
+   });
+
+   var decisionsById = {};
+   dale.go (decisions || [], function (decision) {
+      var tc = pendingById [decision.id];
+      if (! tc) return;
+      if (decision.approved) {
+         decisionsById [tc.id] = {decision: 'approved', result: null, toolCall: tc};
       }
       else {
-         decisionText += '**' + tc.name + ':** Approved\n\n';
-         if (tr && tr.result) {
-            decisionText += '    ' + JSON.stringify (tr.result, null, 2).split ('\n').join ('\n    ') + '\n\n';
-         }
+         decisionsById [tc.id] = {decision: 'denied', result: {success: false, error: 'User denied this tool call'}, toolCall: tc};
       }
    });
-   appendToDialog (pending.filepath, decisionText);
 
-   var messages = pending.messages.slice (); // Copy
-   var provider = pending.provider;
-   var model = pending.model;
-
-   // Build the messages with tool results based on provider format
-   if (provider === 'claude') {
-      // For Claude: assistant message with tool_use blocks, then user message with tool_result blocks
-      // Remove the plain text assistant message we added earlier (if any)
-      if (messages.length > 0 && messages [messages.length - 1].role === 'assistant') {
-         messages.pop ();
-      }
-
-      // Add assistant message with tool_use content
-      var assistantContent = [];
-      if (pending.assistantContent) {
-         assistantContent.push ({type: 'text', text: pending.assistantContent});
-      }
-      dale.go (pending.toolCalls, function (tc) {
-         assistantContent.push ({
-            type: 'tool_use',
-            id: tc.id,
-            name: tc.name,
-            input: tc.input
-         });
-      });
-      messages.push ({role: 'assistant', content: assistantContent});
-
-      // Add user message with tool_result blocks
-      var toolResultContent = [];
-      dale.go (toolResults, function (tr) {
-         toolResultContent.push ({
-            type: 'tool_result',
-            tool_use_id: tr.id,
-            content: tr.error ? ('Error: ' + tr.error) : JSON.stringify (tr.result)
-         });
-      });
-      messages.push ({role: 'user', content: toolResultContent});
-   }
-   else {
-      // For OpenAI: assistant message with tool_calls, then tool role messages
-      // Remove the plain text assistant message we added earlier (if any)
-      if (messages.length > 0 && messages [messages.length - 1].role === 'assistant') {
-         messages.pop ();
-      }
-
-      // Add assistant message with tool_calls
-      messages.push ({
-         role: 'assistant',
-         content: pending.assistantContent || null,
-         tool_calls: dale.go (pending.toolCalls, function (tc) {
-            return {
-               id: tc.id,
-               type: 'function',
-               function: {
-                  name: tc.name,
-                  arguments: JSON.stringify (tc.input)
-               }
-            };
-         })
-      });
-
-      // Add tool result messages
-      dale.go (toolResults, function (tr) {
-         messages.push ({
-            role: 'tool',
-            tool_call_id: tr.id,
-            content: tr.error ? ('Error: ' + tr.error) : JSON.stringify (tr.result)
-         });
-      });
+   for (var i = 0; i < pending.length; i++) {
+      var tc = pending [i];
+      if (! decisionsById [tc.id]) continue;
+      if (decisionsById [tc.id].decision !== 'approved') continue;
+      decisionsById [tc.id].result = await executeTool (tc.name, tc.input);
    }
 
-   // Clear pending
-   delete pendingToolCalls [dialogId];
+   var toWrite = {};
+   dale.go (Object.keys (decisionsById), function (id) {
+      toWrite [id] = {
+         decision: decisionsById [id].decision,
+         result: decisionsById [id].result
+      };
+   });
+   if (Object.keys (toWrite).length) writeToolDecisions (dialog.filepath, toWrite);
 
-   // Continue the conversation
-   var result = await chat (dialogId, provider, null, model, onChunk, messages);
-   return result;
+   var meta = parseMetadata (fs.readFileSync (dialog.filepath, 'utf8'));
+   var resolvedProvider = provider || meta.provider;
+   if (resolvedProvider !== 'claude' && resolvedProvider !== 'openai') {
+      throw new Error ('Unable to determine provider for dialog resume');
+   }
+   var resolvedModel = model || meta.model || (resolvedProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
+   return await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk);
 };
 
 // Ensure vibey directory exists
@@ -729,7 +852,7 @@ var routes = [
       });
 
       try {
-         var result = await chat (
+         var result = await startDialogTurn (
             rq.body.dialogId,
             rq.body.provider,
             rq.body.prompt,
@@ -756,12 +879,22 @@ var routes = [
       }
    }],
 
-   // Submit tool results after user approval
-   ['post', 'dialog/tool-result', async function (rq, rs) {
+   // Resume a dialog by approving/denying tool requests by id
+   ['post', 'dialog/resume', async function (rq, rs) {
       if (stop (rs, [
          ['dialogId', rq.body.dialogId, 'string'],
-         ['toolResults', rq.body.toolResults, 'array'],
+         ['decisions', rq.body.decisions, 'array'],
       ])) return;
+
+      if (rq.body.authorizations !== undefined && type (rq.body.authorizations) !== 'array') {
+         return reply (rs, 400, {error: 'authorizations must be an array'});
+      }
+      if (rq.body.provider !== undefined && (type (rq.body.provider) !== 'string' || ! inc (['claude', 'openai'], rq.body.provider))) {
+         return reply (rs, 400, {error: 'provider must be claude or openai'});
+      }
+      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') {
+         return reply (rs, 400, {error: 'model must be a string'});
+      }
 
       // Set up SSE headers
       rs.writeHead (200, {
@@ -771,9 +904,12 @@ var routes = [
       });
 
       try {
-         var result = await continueWithToolResults (
+         var result = await resumeDialogTurn (
             rq.body.dialogId,
-            rq.body.toolResults,
+            rq.body.decisions,
+            rq.body.authorizations || [],
+            rq.body.provider,
+            rq.body.model,
             function (chunk) {
                rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
             }
@@ -788,7 +924,7 @@ var routes = [
          rs.end ();
       }
       catch (error) {
-         clog ('Tool result error:', error.message);
+         clog ('Dialog resume error:', error.message);
          rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
          rs.end ();
       }
@@ -814,14 +950,15 @@ var routes = [
    // Get pending tool calls for a dialog
    ['get', 'dialog/pending/:dialogId', function (rq, rs) {
       var dialogId = rq.data.params.dialogId;
-      var pending = pendingToolCalls [dialogId];
-      if (! pending) {
+      var dialog = loadDialog (dialogId);
+      if (! dialog.exists) return reply (rs, 404, {error: 'Dialog not found'});
+      var pending = getPendingToolCalls (dialog.filepath);
+      if (! pending.length) {
          return reply (rs, 404, {error: 'No pending tool calls'});
       }
       reply (rs, 200, {
          dialogId: dialogId,
-         toolCalls: pending.toolCalls,
-         assistantContent: pending.assistantContent
+         toolCalls: pending
       });
    }],
 
@@ -830,7 +967,7 @@ var routes = [
       var dialogId = rq.data.params.id;
       var dialog = loadDialog (dialogId);
 
-      if (dialog.messages.length === 0 && ! fs.existsSync (dialog.filepath)) {
+      if (! dialog.exists) {
          return reply (rs, 404, {error: 'Dialog not found'});
       }
 
@@ -839,7 +976,7 @@ var routes = [
          reply (rs, 200, {
             dialogId: dialogId,
             filename: dialog.filename,
-            messages: dialog.messages,
+            messages: parseSections (content),
             markdown: content
          });
       });

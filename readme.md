@@ -209,6 +209,37 @@ view
 
 ## Development notes
 
+### 2026-02-10
+
+Good (LLM) tools are good at fetching a small and effective amount of context to solve the problem.
+
+Mario Zechner: MCP is not composable. I think he's referring to the fact that you can grep an output from the OS whereas you cannot grep what comes back from an API. The goal is to get the relevant context without flooding the window.
+
+So, the goal is to have vibey working!
+
+What am I missing, spec wise? It's not really about the spec. It's about the essentials:
+
+- Write and read markdown docs in your browser.
+- Start and orchestrate agents through markdown files, also in your browser.
+- Be able to start a project as a self-contained thing that doesn't pollute your computer, or the other projects.
+
+pi is mindblowing. I want something like this on my browser. On every browser.
+
+I'd like to get some sort of visual notification that an agent is waiting for my input. Not a ping, just something visual.
+
+Prompts:
+- Let's simplify further: a dialog is active, waiting for authorization, or done. But how do we know we're done-done and don't want to see it any more? We can archive the markdown. Nah, then we have active, waiting (for auth or input), or marked as done. Done is really closed by the user. Then the status can be set to either waiting or done from the endpoint in a `status` flag. If there's a prompt, you continue the thing. The one exception is when you deny, which sets the dialog to waiting too. The decisions are a prompt, see them as text that can be parsed. Same goes for authorizations. No need for mark done.
+- The id is the slug, prepended by `dialog-<date>-` and suffixed by -<status>.md.
+- When usage is unavailable, don't print anything.
+- I want to rationalize the endpoints:
+   - POST /dialog should just receive a model and a prompt to start.
+   - The possible cases for PUT /dialog are to 1) stop it; 2) stop it and say something to continue it; 3) authorize a tool use
+   - I want no separate /resume.
+   - When a tool use is accepted, or already pre-authorized, do we need an endpoint? Can't the server just parse the LLM and make the call?
+- Specify the conventions for tool calling as text. Add a nice sentinel with three schwas.
+- Also the conventions for showing usage.
+- Don't worry about the state transitions. Instead, when we kick off the LLM on an existing dialog, just move it to active.
+
 ### 2026-02-09
 
 https://nolanlawson.com/2026/01/24/ai-tribalism/
@@ -243,7 +274,7 @@ Decisions:
 - What about versioning? Should vibey provide it? I'd rather add a snapshot taking that can include either the docs, dialogs, deed or all three, as a zip file. Save it outside, before an overzealous agent wipes it!
 - Won't having tasks as a markdown file (or several) generate a lot of agents stepping over each other? What if they can communicate in a common area wher e they tail the last n lines? This can be just done as the instructions, it doesn't have to be hardcoded in vibey. Vibey allows you to explore these patterns.
 
-When agents start modifying `doc-main.md`
+When agents start modifying `doc-main.md` liberally, we have an all bets are off type of scenario.
 
 ### 2026-02-06
 
