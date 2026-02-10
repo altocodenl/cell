@@ -336,12 +336,8 @@ Flow #3:
 - I start a new dialog to say "please start".
 - The agent starts working, spawning another agent.
 
-
-- Only show non-dialogs on "docs". It should be "docs", not "files" on the tab.
-- When sending a message, clear it from the bottom box.
-- Make the clanker messages have a slightly reddish background, and the human ones slightly green.
-
-
+- Please make the AI be purplish, rather than reddish.
+- Remove the "apply" button after I clicked on an authorization.
 
 - Interrupting an agent stops the stream. This is done with PUT /dialog
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.

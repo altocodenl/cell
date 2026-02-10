@@ -30,6 +30,16 @@ var defaultModelForProvider = function (provider) {
    return options [0] ? options [0].value : '';
 };
 
+var normalizeDocFilename = function (name) {
+   name = (name || '').trim ();
+   if (name === 'main.md') return 'doc-main.md';
+   return name;
+};
+
+var docDisplayName = function (name) {
+   return name === 'doc-main.md' ? 'main.md' : name;
+};
+
 // *** RESPONDERS ***
 
 B.mrespond ([
@@ -94,8 +104,9 @@ B.mrespond ([
       var name = prompt ('File name (must end in .md):');
       if (! name) return;
       if (! name.endsWith ('.md')) name += '.md';
+      name = normalizeDocFilename (name);
 
-      B.call (x, 'post', 'file/' + encodeURIComponent (name), {}, {content: '# ' + name.replace ('.md', '') + '\n\n'}, function (x, error, rs) {
+      B.call (x, 'post', 'file/' + encodeURIComponent (name), {}, {content: '# ' + docDisplayName (name).replace ('.md', '') + '\n\n'}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to create file');
          B.call (x, 'load', 'files');
          B.call (x, 'load', 'file', name);
@@ -312,11 +323,23 @@ B.mrespond ([
       read ();
    }],
 
+   ['maybe', 'submitToolDecisions', function (x) {
+      if (B.get ('applyingToolDecisions')) return;
+      var pendingToolCalls = B.get ('pendingToolCalls');
+      if (! pendingToolCalls || ! pendingToolCalls.length) return;
+
+      var allChosen = dale.stop (pendingToolCalls, false, function (tool) {
+         return tool.approved === true || tool.approved === false;
+      });
+      if (allChosen !== false) B.call (x, 'submit', 'toolDecisions');
+   }],
+
    // Approve a pending tool request
    ['approve', 'tool', function (x, toolIndex) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
       B.call (x, 'set', ['pendingToolCalls', toolIndex, 'approved'], true);
+      B.call (x, 'maybe', 'submitToolDecisions');
    }],
 
    // Deny a tool call
@@ -324,6 +347,7 @@ B.mrespond ([
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
       B.call (x, 'set', ['pendingToolCalls', toolIndex, 'approved'], false);
+      B.call (x, 'maybe', 'submitToolDecisions');
    }],
 
    // Approve all pending tools at once
@@ -331,8 +355,9 @@ B.mrespond ([
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
       dale.go (pendingToolCalls, function (tool, index) {
-         B.call (x, 'approve', 'tool', index);
+         B.call (x, 'set', ['pendingToolCalls', index, 'approved'], true);
       });
+      B.call (x, 'maybe', 'submitToolDecisions');
    }],
 
    // Deny all pending tools at once
@@ -340,8 +365,9 @@ B.mrespond ([
       var pendingToolCalls = B.get ('pendingToolCalls');
       if (! pendingToolCalls) return;
       dale.go (pendingToolCalls, function (tool, index) {
-         B.call (x, 'deny', 'tool', index);
+         B.call (x, 'set', ['pendingToolCalls', index, 'approved'], false);
       });
+      B.call (x, 'maybe', 'submitToolDecisions');
    }],
 
    ['toggle', 'alwaysAllowTool', function (x, toolIndex) {
@@ -620,7 +646,7 @@ views.css = [
       'margin-left': 'auto',
    }],
    ['.chat-assistant', {
-      'background-color': '#4b2323',
+      'background-color': '#3d2b5a',
    }],
    ['.chat-role', {
       'font-size': '11px',
@@ -778,7 +804,7 @@ views.files = function () {
                      class: 'file-item' + (isActive ? ' file-item-active' : ''),
                      onclick: B.ev ('load', 'file', name)
                   }, [
-                     ['span', {class: 'file-name'}, name],
+                     ['span', {class: 'file-name'}, docDisplayName (name)],
                      ['span', {
                         class: 'file-delete',
                         onclick: B.ev ('delete', 'file', name, {stopPropagation: true})
@@ -791,7 +817,7 @@ views.files = function () {
          ['div', {class: 'editor-container'}, currentFile ? [
             ['div', {class: 'editor-header'}, [
                ['div', [
-                  ['span', {class: 'editor-filename'}, currentFile.name],
+                  ['span', {class: 'editor-filename'}, docDisplayName (currentFile.name)],
                   isDirty ? ['span', {class: 'editor-dirty'}, '(unsaved)'] : ''
                ]],
                ['div', {class: 'editor-actions'}, [
@@ -916,11 +942,13 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
          ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
             ['button', {
                class: 'btn-small tool-btn-approve',
-               onclick: B.ev ('approve', 'allTools')
+               onclick: B.ev ('approve', 'allTools'),
+               disabled: applyingToolDecisions
             }, 'Approve All'],
             ['button', {
                class: 'btn-small tool-btn-deny',
-               onclick: B.ev ('deny', 'allTools')
+               onclick: B.ev ('deny', 'allTools'),
+               disabled: applyingToolDecisions
             }, 'Deny All']
          ]]
       ]],
@@ -933,11 +961,13 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
                ['div', {class: 'tool-actions'}, [
                   ['button', {
                      class: 'btn-small tool-btn-approve',
-                     onclick: B.ev ('approve', 'tool', index)
+                     onclick: B.ev ('approve', 'tool', index),
+                     disabled: applyingToolDecisions
                   }, 'Approve'],
                   ['button', {
                      class: 'btn-small tool-btn-deny',
-                     onclick: B.ev ('deny', 'tool', index)
+                     onclick: B.ev ('deny', 'tool', index),
+                     disabled: applyingToolDecisions
                   }, 'Deny']
                ]]
             ]],
@@ -946,19 +976,16 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
                ['input', {
                   type: 'checkbox',
                   checked: tool.alwaysAllow === true,
-                  onchange: B.ev ('toggle', 'alwaysAllowTool', index)
+                  onchange: B.ev ('toggle', 'alwaysAllowTool', index),
+                  disabled: applyingToolDecisions
                }],
                'Always allow ' + tool.name + ' in this dialog'
             ]]
          ]];
       }),
-      ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-top': '0.75rem'})}, [
-         ['button', {
-            class: 'primary btn-small',
-            onclick: B.ev ('submit', 'toolDecisions'),
-            disabled: ! allChosen || applyingToolDecisions
-         }, applyingToolDecisions ? 'Applying…' : (allChosen ? 'Apply decisions' : 'Select all decisions')]
-      ]]
+      ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-top': '0.75rem', color: '#9aa4bf', 'font-size': '12px'})},
+         applyingToolDecisions ? 'Applying decisions…' : (allChosen ? 'Decisions selected. Sending…' : 'Approve or deny each tool request')
+      ]
    ]];
 };
 

@@ -239,6 +239,14 @@ Prompts:
 - Specify the conventions for tool calling as text. Add a nice sentinel with three schwas.
 - Also the conventions for showing usage.
 - Don't worry about the state transitions. Instead, when we kick off the LLM on an existing dialog, just move it to active.
+- Remove the initial `prompt` on the client: when you start a new dialog, let me type on the box. Also select gpt5-3 from scratch on the dropdown in the client.
+- Showing diffs should be with + and -, green/red, with a few lines shown and the possibility to expand.
+- Tighten up the message timestamps so that every message has one.
+- Only show non-dialogs on "docs". It should be "docs", not "files" on the tab.
+- When sending a message, clear it from the bottom box.
+- Make the clanker messages have a slightly reddish background, and the human ones slightly green.
+- Please make the AI be purplish, rather than reddish.
+- Remove the "apply" button after I clicked on an authorization.
 
 ### 2026-02-09
 
