@@ -1,0 +1,17 @@
+Seventh episode of season 5! I'm building a programming substrate from scratch while recording myself. Having fun with vibey. It's still hard work and I am not sure if I'm starting to atrophy. But it's moving.
+
+Hello Earth! Silent episode today, there's quite some noise around.
+
+Let's continue with vibey.
+
+I'm in love with an AI agent (or harness? I can't tell), called pi. Thank you Mario Zechner for building it and open sourcing it. I now feel dangerous. Not that I really am.
+
+Look at that beauty: how much of the window context is full, how many tokens in and out, and also a cost estimation. It can't get better. I wanted that in vibey and now I see it in pi.
+
+So, the goal is to have vibey working!
+
+Yeah, let's get something running.
+
+I'm going to stop here. But I'm going to let the agent run for a bit further. It's 2026 indeed.
+
+Thanks for watching!

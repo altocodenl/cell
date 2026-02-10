@@ -174,11 +174,16 @@ var parseMetadata = function (markdown) {
 
 var parseAuthorizations = function (markdown) {
    var authorized = {};
-   var re = /^> Authorized:\s*([a-zA-Z0-9_\-]+)/gm;
-   var match;
-   while ((match = re.exec (markdown)) !== null) {
-      authorized [match [1]] = true;
-   }
+   var lines = (markdown || '').split ('\n');
+   dale.go (lines, function (line) {
+      var allow = line.match (/^>\s*Authorized:\s*([a-zA-Z0-9_\-]+)/);
+      if (allow) {
+         authorized [allow [1]] = true;
+         return;
+      }
+      var revoke = line.match (/^>\s*Revoked:\s*([a-zA-Z0-9_\-]+)/);
+      if (revoke) delete authorized [revoke [1]];
+   });
    return authorized;
 };
 
@@ -238,28 +243,98 @@ var buildToolBlock = function (toolCall, decision, result) {
 
 var parseSections = function (markdown) {
    var sections = [];
-   var re = /## (User|Assistant)\n\n([\s\S]*?)(?=\n## (?:User|Assistant)\n\n|$)/g;
+   var re = /## (User|Assistant)\n([\s\S]*?)(?=\n## (?:User|Assistant)\n|$)/g;
    var match;
    while ((match = re.exec (markdown)) !== null) {
       sections.push ({
          role: match [1].toLowerCase (),
-         content: match [2].replace (/\s+$/, '')
+         content: (match [2] || '').replace (/^\n+/, '').replace (/\s+$/, '')
       });
    }
    return sections;
+};
+
+var stripSectionMetadata = function (text) {
+   var lines = (text || '').split ('\n');
+   var kept = [];
+   dale.go (lines, function (line) {
+      if (/^>\s*Time:/.test (line)) return;
+      if (/^>\s*Usage(?: cumulative)?:/.test (line)) return;
+      kept.push (line);
+   });
+   return kept.join ('\n').trim ();
+};
+
+var parseUsageNumbers = function (usage) {
+   if (! usage) return null;
+   var input = usage.input_tokens;
+   if (input === undefined) input = usage.prompt_tokens;
+   if (input === undefined) input = usage.input;
+
+   var output = usage.output_tokens;
+   if (output === undefined) output = usage.completion_tokens;
+   if (output === undefined) output = usage.output;
+
+   if (input === undefined && output === undefined && usage.total_tokens === undefined && usage.total === undefined) return null;
+
+   input = Number (input || 0);
+   output = Number (output || 0);
+   var total = usage.total_tokens !== undefined ? Number (usage.total_tokens) : (usage.total !== undefined ? Number (usage.total) : (input + output));
+
+   return {input: input, output: output, total: total};
+};
+
+var getLastCumulativeUsage = function (filepath) {
+   if (! fs.existsSync (filepath)) return {input: 0, output: 0, total: 0};
+   var text = fs.readFileSync (filepath, 'utf8');
+   var re = /^> Usage cumulative:\s*input=(\d+)\s+output=(\d+)\s+total=(\d+)\s*$/gm;
+   var match, lastMatch = null;
+   while ((match = re.exec (text)) !== null) lastMatch = match;
+   if (! lastMatch) return {input: 0, output: 0, total: 0};
+   return {
+      input: Number (lastMatch [1] || 0),
+      output: Number (lastMatch [2] || 0),
+      total: Number (lastMatch [3] || 0)
+   };
+};
+
+var appendUsageToAssistantSection = function (filepath, usage) {
+   var normalized = parseUsageNumbers (usage);
+   if (! normalized) return;
+
+   var cumulative = getLastCumulativeUsage (filepath);
+   cumulative.input += normalized.input;
+   cumulative.output += normalized.output;
+   cumulative.total += normalized.total;
+
+   appendToDialog (filepath,
+      '> Usage: input=' + normalized.input + ' output=' + normalized.output + ' total=' + normalized.total + '\n' +
+      '> Usage cumulative: input=' + cumulative.input + ' output=' + cumulative.output + ' total=' + cumulative.total + '\n\n'
+   );
+};
+
+var finalizeAssistantTime = function (filepath, startIso, endIso) {
+   var marker = '> Time: ' + startIso + ' - ...';
+   var replacement = '> Time: ' + startIso + ' - ' + endIso;
+   var text = fs.readFileSync (filepath, 'utf8');
+   var index = text.lastIndexOf (marker);
+   if (index < 0) return;
+   text = text.slice (0, index) + replacement + text.slice (index + marker.length);
+   fs.writeFileSync (filepath, text, 'utf8');
 };
 
 var parseDialogForProvider = function (markdown, provider) {
    var messages = [];
    dale.go (parseSections (markdown), function (section) {
       if (section.role === 'user') {
-         var userText = section.content.trim ();
+         var userText = stripSectionMetadata (section.content);
          if (userText) messages.push ({role: 'user', content: userText});
          return;
       }
 
       var toolCalls = parseToolCalls (section.content, false);
-      var assistantText = section.content.replace (/---\nTool request:\s+[^\n\[]+?(?:\s+\[[^\]]+\])?\n\n[\s\S]*?\n---/g, '').trim ();
+      var assistantText = section.content.replace (/---\nTool request:\s+[^\n\[]+?(?:\s+\[[^\]]+\])?\n\n[\s\S]*?\n---/g, '');
+      assistantText = stripSectionMetadata (assistantText);
 
       if (! toolCalls.length) {
          if (assistantText) messages.push ({role: 'assistant', content: assistantText});
@@ -321,32 +396,92 @@ var parseDialogForProvider = function (markdown, provider) {
    return messages;
 };
 
-var findDialogFilename = function (dialogId) {
-   var exact = 'dialog-' + dialogId + '.md';
-   var exactPath = Path.join (VIBEY_DIR, exact);
-   if (fs.existsSync (exactPath)) return exact;
+var DIALOG_STATUSES = ['active', 'waiting', 'done'];
 
+var pad2 = function (n) {return n < 10 ? '0' + n : '' + n;};
+
+var formatDialogTimestamp = function () {
+   var d = new Date ();
+   return d.getUTCFullYear () + '' + pad2 (d.getUTCMonth () + 1) + pad2 (d.getUTCDate ()) + '-' + pad2 (d.getUTCHours ()) + pad2 (d.getUTCMinutes ()) + pad2 (d.getUTCSeconds ());
+};
+
+var slugify = function (text) {
+   text = (text || 'dialog').toLowerCase ().replace (/[^a-z0-9\-]+/g, '-').replace (/\-+/g, '-').replace (/^\-+|\-+$/g, '');
+   return text || 'dialog';
+};
+
+var buildDialogFilename = function (dialogId, status) {
+   return 'dialog-' + dialogId + '-' + status + '.md';
+};
+
+var parseDialogFilename = function (filename) {
+   var match = (filename || '').match (/^dialog\-(.+)\-(active|waiting|done)\.md$/);
+   if (! match) return null;
+   return {dialogId: match [1], status: match [2]};
+};
+
+var findDialogFilename = function (dialogId) {
    var files = fs.readdirSync (VIBEY_DIR);
    var prefix = 'dialog-' + dialogId + '-';
    var found = dale.stopNot (files, undefined, function (file) {
-      if (file.startsWith (prefix) && file.endsWith ('.md')) return file;
+      var parsed = parseDialogFilename (file);
+      if (parsed && parsed.dialogId === dialogId) return file;
    });
-   return found || exact;
+   return found || null;
+};
+
+var createDialogId = function (slug) {
+   var base = formatDialogTimestamp () + '-' + slugify (slug || 'dialog');
+   var candidate = base;
+   var counter = 2;
+   while (findDialogFilename (candidate)) {
+      candidate = base + '-' + counter;
+      counter++;
+   }
+   return candidate;
 };
 
 var loadDialog = function (dialogId) {
    var filename = findDialogFilename (dialogId);
+   if (! filename) {
+      return {
+         dialogId: dialogId,
+         filename: buildDialogFilename (dialogId, 'active'),
+         filepath: Path.join (VIBEY_DIR, buildDialogFilename (dialogId, 'active')),
+         status: 'active',
+         exists: false,
+         markdown: '',
+         metadata: {}
+      };
+   }
+
    var filepath = Path.join (VIBEY_DIR, filename);
-   var exists = fs.existsSync (filepath);
-   var markdown = exists ? fs.readFileSync (filepath, 'utf8') : '';
+   var markdown = fs.readFileSync (filepath, 'utf8');
+   var parsed = parseDialogFilename (filename) || {status: 'active'};
+
    return {
       dialogId: dialogId,
       filename: filename,
       filepath: filepath,
-      exists: exists,
+      status: parsed.status,
+      exists: true,
       markdown: markdown,
       metadata: parseMetadata (markdown)
    };
+};
+
+var setDialogStatus = function (dialog, status) {
+   if (! inc (DIALOG_STATUSES, status)) throw new Error ('Invalid status: ' + status);
+   if (! dialog.exists) throw new Error ('Dialog not found: ' + dialog.dialogId);
+   if (dialog.status === status) return dialog;
+
+   var newFilename = buildDialogFilename (dialog.dialogId, status);
+   var newPath = Path.join (VIBEY_DIR, newFilename);
+   fs.renameSync (dialog.filepath, newPath);
+   dialog.filename = newFilename;
+   dialog.filepath = newPath;
+   dialog.status = status;
+   return dialog;
 };
 
 var getGlobalAuthorizations = function () {
@@ -360,7 +495,9 @@ var ensureDialogFile = function (dialog, provider, model) {
    if (dialog.exists) {
       if (dialog.metadata.provider && dialog.metadata.model) return;
       var content = fs.readFileSync (dialog.filepath, 'utf8');
-      var headerLine = '> Provider: ' + provider + ' | Model: ' + model + '\n\n';
+      var headerLine = '> Provider: ' + provider + ' | Model: ' + model + '\n';
+      if (! /\n> Started:/.test (content)) headerLine += '> Started: ' + new Date ().toISOString () + '\n';
+      headerLine += '\n';
       if (content.startsWith ('# Dialog\n\n')) content = '# Dialog\n\n' + headerLine + content.slice (10);
       else content = '# Dialog\n\n' + headerLine + content;
       fs.writeFileSync (dialog.filepath, content, 'utf8');
@@ -370,7 +507,8 @@ var ensureDialogFile = function (dialog, provider, model) {
    }
 
    var header = '# Dialog\n\n';
-   header += '> Provider: ' + provider + ' | Model: ' + model + '\n\n';
+   header += '> Provider: ' + provider + ' | Model: ' + model + '\n';
+   header += '> Started: ' + new Date ().toISOString () + '\n\n';
    dale.go (getGlobalAuthorizations (), function (name) {
       header += '> Authorized: ' + name + '\n';
    });
@@ -409,6 +547,44 @@ var getPendingToolCalls = function (filepath) {
    });
 };
 
+var parseSentinelLines = function (text) {
+   if (type (text) !== 'string') return [];
+   var block = text;
+   var match = text.match (/əəə\s*([\s\S]*?)\s*əəə/);
+   if (match) block = match [1];
+   return dale.fil (block.split ('\n'), undefined, function (line) {
+      line = line.replace (/\r/g, '').trim ();
+      if (! line || line [0] === '#') return;
+      return line;
+   });
+};
+
+var parseDecisionsInput = function (decisions) {
+   if (! decisions) return [];
+   if (type (decisions) === 'array') return decisions;
+   var parsed = [];
+   dale.go (parseSentinelLines (decisions), function (line) {
+      var match = line.match (/^([^:\s]+)\s*:\s*(approve|deny)$/i);
+      if (! match) return;
+      parsed.push ({id: match [1], approved: match [2].toLowerCase () === 'approve'});
+   });
+   return parsed;
+};
+
+var parseAuthorizationsInput = function (authorizations) {
+   if (! authorizations) return {allow: [], deny: []};
+   if (type (authorizations) === 'array') return {allow: authorizations, deny: []};
+
+   var allow = {}, deny = {};
+   dale.go (parseSentinelLines (authorizations), function (line) {
+      var match = line.match (/^(allow|deny)\s+([a-zA-Z0-9_\-]+)$/i);
+      if (! match) return;
+      if (match [1].toLowerCase () === 'allow') allow [match [2]] = true;
+      else deny [match [2]] = true;
+   });
+   return {allow: Object.keys (allow), deny: Object.keys (deny)};
+};
+
 // Implementation function for Claude (streaming with tool support)
 var chatWithClaude = async function (messages, model, onChunk) {
    model = model || 'claude-sonnet-4-20250514';
@@ -440,6 +616,7 @@ var chatWithClaude = async function (messages, model, onChunk) {
    var fullContent = '';
    var toolCalls = [];
    var currentToolUse = null;
+   var usage = null;
    var reader = response.body.getReader ();
    var decoder = new TextDecoder ();
    var buffer = '';
@@ -481,6 +658,8 @@ var chatWithClaude = async function (messages, model, onChunk) {
                   }
                }
 
+               if (parsed.usage) usage = parsed.usage;
+
                // Tool use stop
                if (parsed.type === 'content_block_stop' && currentToolUse) {
                   try {
@@ -502,17 +681,19 @@ var chatWithClaude = async function (messages, model, onChunk) {
       provider: 'claude',
       model: model,
       content: fullContent,
-      toolCalls: toolCalls.length > 0 ? toolCalls : null
+      toolCalls: toolCalls.length > 0 ? toolCalls : null,
+      usage: parseUsageNumbers (usage)
    };
 };
 
 // Implementation function for OpenAI (streaming with tool support)
 var chatWithOpenAI = async function (messages, model, onChunk) {
-   model = model || 'gpt-4o';
+   model = model || 'gpt-5';
 
    var requestBody = {
       model: model,
       stream: true,
+      stream_options: {include_usage: true},
       messages: [{
          role: 'system',
          content: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
@@ -537,6 +718,7 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
    var fullContent = '';
    var toolCalls = [];
    var toolCallsInProgress = {}; // {index: {id, name, arguments}}
+   var usage = null;
    var reader = response.body.getReader ();
    var decoder = new TextDecoder ();
    var buffer = '';
@@ -555,6 +737,7 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
             if (data === '[DONE]') return;
             try {
                var parsed = JSON.parse (data);
+               if (parsed.usage) usage = parsed.usage;
                var delta = parsed.choices && parsed.choices [0] && parsed.choices [0].delta;
                if (! delta) return;
 
@@ -600,7 +783,8 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
       provider: 'openai',
       model: model,
       content: fullContent,
-      toolCalls: toolCalls.length > 0 ? toolCalls : null
+      toolCalls: toolCalls.length > 0 ? toolCalls : null,
+      usage: parseUsageNumbers (usage)
    };
 };
 
@@ -615,7 +799,8 @@ var runCompletion = async function (dialog, provider, model, onChunk) {
    var markdown = fs.readFileSync (dialog.filepath, 'utf8');
    var messages = parseDialogForProvider (markdown, provider);
 
-   appendToDialog (dialog.filepath, '## Assistant\n\n');
+   var assistantStart = new Date ().toISOString ();
+   appendToDialog (dialog.filepath, '## Assistant\n> Time: ' + assistantStart + ' - ...\n\n');
 
    var writeChunk = function (chunk) {
       appendToDialog (dialog.filepath, chunk);
@@ -627,7 +812,10 @@ var runCompletion = async function (dialog, provider, model, onChunk) {
       : await chatWithOpenAI (messages, model, writeChunk);
 
    appendToDialog (dialog.filepath, '\n\n');
+   appendUsageToAssistantSection (dialog.filepath, result.usage);
    appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
+
+   finalizeAssistantTime (dialog.filepath, assistantStart, new Date ().toISOString ());
 
    var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
    var decisionsById = {};
@@ -657,74 +845,142 @@ var runCompletion = async function (dialog, provider, model, onChunk) {
    };
 };
 
-var startDialogTurn = async function (dialogId, provider, prompt, model, onChunk) {
+var createWaitingDialog = function (provider, model, slug) {
    if (provider !== 'claude' && provider !== 'openai') {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
-   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
-   var dialog = loadDialog (dialogId);
+   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
+   var dialogId = createDialogId (slug || 'dialog');
+   var filename = buildDialogFilename (dialogId, 'waiting');
+   var dialog = {
+      dialogId: dialogId,
+      filename: filename,
+      filepath: Path.join (VIBEY_DIR, filename),
+      status: 'waiting',
+      exists: false,
+      markdown: '',
+      metadata: {}
+   };
+
    ensureDialogFile (dialog, provider, defaultModel);
 
-   appendToDialog (dialog.filepath, '## User\n\n' + prompt + '\n\n');
-
-   return await runCompletion (dialog, provider, defaultModel, onChunk);
+   return {
+      dialogId: dialog.dialogId,
+      filename: dialog.filename,
+      status: dialog.status,
+      provider: provider,
+      model: defaultModel
+   };
 };
 
-var resumeDialogTurn = async function (dialogId, decisions, authorizations, provider, model, onChunk) {
+var startDialogTurn = async function (provider, prompt, model, slug, onChunk) {
+   if (provider !== 'claude' && provider !== 'openai') {
+      throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
+   }
+
+   var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
+   var dialogId = createDialogId (slug);
+   var dialog = {
+      dialogId: dialogId,
+      filename: buildDialogFilename (dialogId, 'active'),
+      filepath: Path.join (VIBEY_DIR, buildDialogFilename (dialogId, 'active')),
+      status: 'active',
+      exists: false,
+      markdown: '',
+      metadata: {}
+   };
+
+   ensureDialogFile (dialog, provider, defaultModel);
+   appendToDialog (dialog.filepath, '## User\n> Time: ' + new Date ().toISOString () + '\n\n' + prompt + '\n\n');
+
+   var result = await runCompletion (dialog, provider, defaultModel, onChunk);
+   if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
+   result.filename = dialog.filename;
+   result.status = dialog.status;
+   return result;
+};
+
+var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk) {
    var dialog = loadDialog (dialogId);
    if (! dialog.exists) throw new Error ('Dialog not found: ' + dialogId);
 
-   if (authorizations && authorizations.length) {
-      dale.go (authorizations, function (name) {
+   var authorizations = parseAuthorizationsInput (authorizationsInput || '');
+   if (authorizations.allow.length || authorizations.deny.length) {
+      dale.go (authorizations.allow, function (name) {
          appendToDialog (dialog.filepath, '> Authorized: ' + name + '\n');
+      });
+      dale.go (authorizations.deny, function (name) {
+         appendToDialog (dialog.filepath, '> Revoked: ' + name + '\n');
       });
       appendToDialog (dialog.filepath, '\n');
    }
 
-   var pending = getPendingToolCalls (dialog.filepath);
-   if (! pending.length) throw new Error ('No pending tool calls for dialog: ' + dialogId);
+   var decisions = parseDecisionsInput (decisionsInput || []);
+   var deniedAny = false;
 
-   var pendingById = {};
-   dale.go (pending, function (tc) {
-      pendingById [tc.id] = tc;
-   });
+   if (decisions.length) {
+      var pending = getPendingToolCalls (dialog.filepath);
+      var pendingById = {};
+      dale.go (pending, function (tc) {
+         pendingById [tc.id] = tc;
+      });
 
-   var decisionsById = {};
-   dale.go (decisions || [], function (decision) {
-      var tc = pendingById [decision.id];
-      if (! tc) return;
-      if (decision.approved) {
-         decisionsById [tc.id] = {decision: 'approved', result: null, toolCall: tc};
+      var decisionsById = {};
+      dale.go (decisions, function (decision) {
+         var tc = pendingById [decision.id];
+         if (! tc) return;
+         if (decision.approved) decisionsById [tc.id] = {decision: 'approved', result: null};
+         else {
+            deniedAny = true;
+            decisionsById [tc.id] = {decision: 'denied', result: {success: false, error: 'User denied this tool call'}};
+         }
+      });
+
+      for (var i = 0; i < pending.length; i++) {
+         var tc = pending [i];
+         if (! decisionsById [tc.id]) continue;
+         if (decisionsById [tc.id].decision !== 'approved') continue;
+         decisionsById [tc.id].result = await executeTool (tc.name, tc.input);
       }
-      else {
-         decisionsById [tc.id] = {decision: 'denied', result: {success: false, error: 'User denied this tool call'}, toolCall: tc};
-      }
-   });
 
-   for (var i = 0; i < pending.length; i++) {
-      var tc = pending [i];
-      if (! decisionsById [tc.id]) continue;
-      if (decisionsById [tc.id].decision !== 'approved') continue;
-      decisionsById [tc.id].result = await executeTool (tc.name, tc.input);
+      if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
    }
 
-   var toWrite = {};
-   dale.go (Object.keys (decisionsById), function (id) {
-      toWrite [id] = {
-         decision: decisionsById [id].decision,
-         result: decisionsById [id].result
-      };
-   });
-   if (Object.keys (toWrite).length) writeToolDecisions (dialog.filepath, toWrite);
+   var shouldContinue = (type (prompt) === 'string' && prompt.trim ()) || decisions.length > 0;
 
-   var meta = parseMetadata (fs.readFileSync (dialog.filepath, 'utf8'));
-   var resolvedProvider = provider || meta.provider;
-   if (resolvedProvider !== 'claude' && resolvedProvider !== 'openai') {
-      throw new Error ('Unable to determine provider for dialog resume');
+   if (shouldContinue) {
+      setDialogStatus (dialog, 'active');
+      if (type (prompt) === 'string' && prompt.trim ()) {
+         appendToDialog (dialog.filepath, '## User\n> Time: ' + new Date ().toISOString () + '\n\n' + prompt.trim () + '\n\n');
+      }
+
+      var meta = parseMetadata (fs.readFileSync (dialog.filepath, 'utf8'));
+      var resolvedProvider = provider || meta.provider;
+      if (resolvedProvider !== 'claude' && resolvedProvider !== 'openai') {
+         throw new Error ('Unable to determine provider for dialog update');
+      }
+      var resolvedModel = model || meta.model || (resolvedProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
+      var result = await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk);
+
+      if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
+      else if (deniedAny) setDialogStatus (dialog, 'waiting');
+      else if (status && inc (['waiting', 'done'], status)) setDialogStatus (dialog, status);
+
+      result.filename = dialog.filename;
+      result.status = dialog.status;
+      return result;
    }
-   var resolvedModel = model || meta.model || (resolvedProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-4o');
-   return await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk);
+
+   if (deniedAny) setDialogStatus (dialog, 'waiting');
+   else if (status && inc (['waiting', 'done'], status)) setDialogStatus (dialog, status);
+
+   return {
+      dialogId: dialog.dialogId,
+      filename: dialog.filename,
+      status: dialog.status,
+      updated: true
+   };
 };
 
 // Ensure vibey directory exists
@@ -832,19 +1088,34 @@ var routes = [
 
    // *** LLM ***
 
-   // Streaming chat endpoint using Server-Sent Events
+   // Create a waiting dialog draft
+   ['post', 'dialog/new', function (rq, rs) {
+      if (stop (rs, [
+         ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
+      ])) return;
+
+      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') return reply (rs, 400, {error: 'model must be a string'});
+      if (rq.body.slug !== undefined && type (rq.body.slug) !== 'string') return reply (rs, 400, {error: 'slug must be a string'});
+
+      try {
+         var created = createWaitingDialog (rq.body.provider, rq.body.model, rq.body.slug || 'dialog');
+         reply (rs, 200, created);
+      }
+      catch (error) {
+         reply (rs, 400, {error: error.message});
+      }
+   }],
+
+   // Create dialog + first turn (SSE)
    ['post', 'dialog', async function (rq, rs) {
       if (stop (rs, [
-         ['dialogId', rq.body.dialogId, 'string'],
          ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
          ['prompt', rq.body.prompt, 'string'],
       ])) return;
 
-      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') {
-         return reply (rs, 400, {error: 'model must be a string'});
-      }
+      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') return reply (rs, 400, {error: 'model must be a string'});
+      if (rq.body.slug !== undefined && type (rq.body.slug) !== 'string') return reply (rs, 400, {error: 'slug must be a string'});
 
-      // Set up SSE headers
       rs.writeHead (200, {
          'Content-Type': 'text/event-stream',
          'Cache-Control': 'no-cache',
@@ -853,22 +1124,19 @@ var routes = [
 
       try {
          var result = await startDialogTurn (
-            rq.body.dialogId,
             rq.body.provider,
             rq.body.prompt,
             rq.body.model,
+            rq.body.slug,
             function (chunk) {
-               // Send each chunk as an SSE event
                rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
             }
          );
 
-         // If there are tool calls, send them for approval
          if (result.toolCalls) {
-            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, content: result.content}) + '\n\n');
+            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, dialogId: result.dialogId, filename: result.filename}) + '\n\n');
          }
 
-         // Send final message with full result
          rs.write ('data: ' + JSON.stringify ({type: 'done', result: result}) + '\n\n');
          rs.end ();
       }
@@ -879,24 +1147,31 @@ var routes = [
       }
    }],
 
-   // Resume a dialog by approving/denying tool requests by id
-   ['post', 'dialog/resume', async function (rq, rs) {
+   // Update dialog (optional SSE when continuing)
+   ['put', 'dialog', async function (rq, rs) {
       if (stop (rs, [
          ['dialogId', rq.body.dialogId, 'string'],
-         ['decisions', rq.body.decisions, 'array'],
       ])) return;
 
-      if (rq.body.authorizations !== undefined && type (rq.body.authorizations) !== 'array') {
-         return reply (rs, 400, {error: 'authorizations must be an array'});
-      }
-      if (rq.body.provider !== undefined && (type (rq.body.provider) !== 'string' || ! inc (['claude', 'openai'], rq.body.provider))) {
-         return reply (rs, 400, {error: 'provider must be claude or openai'});
-      }
-      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') {
-         return reply (rs, 400, {error: 'model must be a string'});
+      if (rq.body.status !== undefined && ! inc (['waiting', 'done'], rq.body.status)) return reply (rs, 400, {error: 'status must be waiting or done'});
+      if (rq.body.prompt !== undefined && type (rq.body.prompt) !== 'string') return reply (rs, 400, {error: 'prompt must be a string'});
+      if (rq.body.decisions !== undefined && type (rq.body.decisions) !== 'string' && type (rq.body.decisions) !== 'array') return reply (rs, 400, {error: 'decisions must be string or array'});
+      if (rq.body.authorizations !== undefined && type (rq.body.authorizations) !== 'string' && type (rq.body.authorizations) !== 'array') return reply (rs, 400, {error: 'authorizations must be string or array'});
+      if (rq.body.provider !== undefined && (type (rq.body.provider) !== 'string' || ! inc (['claude', 'openai'], rq.body.provider))) return reply (rs, 400, {error: 'provider must be claude or openai'});
+      if (rq.body.model !== undefined && type (rq.body.model) !== 'string') return reply (rs, 400, {error: 'model must be a string'});
+
+      var continues = (type (rq.body.prompt) === 'string' && rq.body.prompt.trim ()) || rq.body.decisions !== undefined;
+
+      if (! continues) {
+         try {
+            var result = await updateDialogTurn (rq.body.dialogId, rq.body.status, null, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
+            return reply (rs, 200, result);
+         }
+         catch (error) {
+            return reply (rs, 400, {error: error.message});
+         }
       }
 
-      // Set up SSE headers
       rs.writeHead (200, {
          'Content-Type': 'text/event-stream',
          'Cache-Control': 'no-cache',
@@ -904,10 +1179,12 @@ var routes = [
       });
 
       try {
-         var result = await resumeDialogTurn (
+         var result = await updateDialogTurn (
             rq.body.dialogId,
+            rq.body.status,
+            rq.body.prompt,
             rq.body.decisions,
-            rq.body.authorizations || [],
+            rq.body.authorizations,
             rq.body.provider,
             rq.body.model,
             function (chunk) {
@@ -915,16 +1192,15 @@ var routes = [
             }
          );
 
-         // If there are more tool calls, send them for approval
          if (result.toolCalls) {
-            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, content: result.content}) + '\n\n');
+            rs.write ('data: ' + JSON.stringify ({type: 'tool_request', toolCalls: result.toolCalls, dialogId: result.dialogId, filename: result.filename}) + '\n\n');
          }
 
          rs.write ('data: ' + JSON.stringify ({type: 'done', result: result}) + '\n\n');
          rs.end ();
       }
       catch (error) {
-         clog ('Dialog resume error:', error.message);
+         clog ('Dialog update error:', error.message);
          rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
          rs.end ();
       }
@@ -945,21 +1221,6 @@ var routes = [
          clog ('Tool execution error:', error.message);
          reply (rs, 500, {success: false, error: error.message});
       }
-   }],
-
-   // Get pending tool calls for a dialog
-   ['get', 'dialog/pending/:dialogId', function (rq, rs) {
-      var dialogId = rq.data.params.dialogId;
-      var dialog = loadDialog (dialogId);
-      if (! dialog.exists) return reply (rs, 404, {error: 'Dialog not found'});
-      var pending = getPendingToolCalls (dialog.filepath);
-      if (! pending.length) {
-         return reply (rs, 404, {error: 'No pending tool calls'});
-      }
-      reply (rs, 200, {
-         dialogId: dialogId,
-         toolCalls: pending
-      });
    }],
 
    // Get dialog by ID
@@ -993,8 +1254,9 @@ var routes = [
          var withStats = dale.go (dialogFiles, function (file) {
             try {
                var stat = fs.statSync (Path.join (VIBEY_DIR, file));
-               var dialogId = file.replace ('dialog-', '').replace ('.md', '');
-               return {dialogId: dialogId, filename: file, mtime: stat.mtime.getTime ()};
+               var parsed = parseDialogFilename (file);
+               if (! parsed) return null;
+               return {dialogId: parsed.dialogId, status: parsed.status, filename: file, mtime: stat.mtime.getTime ()};
             }
             catch (e) {
                return null;

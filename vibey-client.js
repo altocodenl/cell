@@ -8,6 +8,28 @@ B.internal.timeout = 500;
 var type = teishi.type;
 var style = lith.css.style;
 
+var parseDialogFilename = function (filename) {
+   var match = (filename || '').match (/^dialog\-(.+)\-(active|waiting|done)\.md$/);
+   if (! match) return null;
+   return {dialogId: match [1], status: match [2]};
+};
+
+var MODEL_OPTIONS = {
+   openai: [
+      {value: 'gpt-5', label: 'gpt-5'},
+      {value: 'gpt-4o', label: 'gpt-4o'}
+   ],
+   claude: [
+      {value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514'}
+   ]
+};
+
+var defaultModelForProvider = function (provider) {
+   provider = provider || 'openai';
+   var options = MODEL_OPTIONS [provider] || [];
+   return options [0] ? options [0].value : '';
+};
+
 // *** RESPONDERS ***
 
 B.mrespond ([
@@ -15,7 +37,9 @@ B.mrespond ([
    // *** SETUP ***
 
    ['initialize', [], function (x) {
-      B.call (x, 'set', 'tab', 'files');
+      B.call (x, 'set', 'tab', 'docs');
+      B.call (x, 'set', 'chatProvider', 'openai');
+      B.call (x, 'set', 'chatModel', 'gpt-5');
       B.call (x, 'load', 'files');
    }],
 
@@ -111,107 +135,177 @@ B.mrespond ([
    // *** DIALOGS ***
 
    ['create', 'dialog', function (x) {
-      var name = prompt ('Dialog name (e.g., test-claude-1):');
-      if (! name) return;
-      name = 'dialog-' + name.replace (/[^a-zA-Z0-9\-_]/g, '-').toLowerCase () + '.md';
+      var name = prompt ('Dialog name:');
+      if (! name || ! name.trim ()) return;
 
-      B.call (x, 'post', 'file/' + encodeURIComponent (name), {}, {content: '# Dialog\n\n'}, function (x, error, rs) {
+      var provider = B.get ('chatProvider') || 'openai';
+      var model = B.get ('chatModel') || defaultModelForProvider (provider);
+
+      B.call (x, 'post', 'dialog/new', {}, {
+         provider: provider,
+         model: model,
+         slug: name.trim ()
+      }, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to create dialog');
+
+         B.call (x, 'set', 'pendingToolCalls', null);
+         B.call (x, 'set', 'streaming', false);
+         B.call (x, 'set', 'applyingToolDecisions', false);
+         B.call (x, 'set', 'streamingContent', '');
+         B.call (x, 'set', 'optimisticUserMessage', null);
+         B.call (x, 'set', 'chatInput', '');
+
          B.call (x, 'load', 'files');
-         B.call (x, 'load', 'file', name);
+         if (rs && rs.body && rs.body.filename) B.call (x, 'load', 'file', rs.body.filename);
       });
+   }],
+
+   ['change', 'chatProvider', function (x, provider) {
+      B.call (x, 'set', 'chatProvider', provider);
+      var model = B.get ('chatModel');
+      var allowed = dale.stopNot ((MODEL_OPTIONS [provider] || []), undefined, function (option) {
+         if (option.value === model) return true;
+      });
+      if (! allowed) B.call (x, 'set', 'chatModel', defaultModelForProvider (provider));
    }],
 
    ['send', 'message', function (x) {
       var file = B.get ('currentFile');
       var input = B.get ('chatInput');
-      var provider = B.get ('chatProvider') || 'claude';
-      var model = B.get ('chatModel') || '';
-      if (! file || ! input || ! input.trim ()) return;
+      var provider = B.get ('chatProvider') || 'openai';
+      var model = B.get ('chatModel') || defaultModelForProvider (provider);
+      if (! input || ! input.trim ()) return;
 
       var originalInput = input.trim ();
-      var dialogId = file.name.replace ('dialog-', '').replace ('.md', '');
 
       B.call (x, 'set', 'streaming', true);
+      B.call (x, 'set', 'applyingToolDecisions', false);
       B.call (x, 'set', 'streamingContent', '');
       B.call (x, 'set', 'pendingToolCalls', null);
       B.call (x, 'set', 'optimisticUserMessage', originalInput);
       B.call (x, 'set', 'chatInput', '');
 
-      fetch ('dialog', {
-         method: 'POST',
-         headers: {'Content-Type': 'application/json'},
-         body: JSON.stringify ({
-            dialogId: dialogId,
+      var parsed = file && parseDialogFilename (file.name);
+      var method = parsed ? 'PUT' : 'POST';
+      var payload = parsed
+         ? {
+            dialogId: parsed.dialogId,
             provider: provider,
             prompt: originalInput,
             model: model || undefined
-         })
+         }
+         : {
+            provider: provider,
+            prompt: originalInput,
+            model: model || undefined
+         };
+
+      fetch ('dialog', {
+         method: method,
+         headers: {'Content-Type': 'application/json'},
+         body: JSON.stringify (payload)
       }).then (function (response) {
-         B.call (x, 'process', 'stream', response, file.name, originalInput);
+         B.call (x, 'process', 'stream', response, file ? file.name : null, originalInput);
       }).catch (function (err) {
          B.call (x, 'report', 'error', 'Failed to send: ' + err.message);
          B.call (x, 'set', 'streaming', false);
+         B.call (x, 'set', 'applyingToolDecisions', false);
          B.call (x, 'set', 'optimisticUserMessage', null);
          B.call (x, 'set', 'chatInput', originalInput);
       });
    }],
 
-   // Process SSE stream from /dialog or /dialog/resume
+   // Process stream response (SSE or JSON fallback)
    ['process', 'stream', function (x, response, filename, originalInput) {
+      var targetFilename = filename;
+      var contentType = (response.headers && response.headers.get ('content-type')) || '';
+
+      var finalize = function () {
+         var pendingCalls = B.get ('pendingToolCalls');
+         B.call (x, 'set', 'streaming', false);
+         B.call (x, 'set', 'applyingToolDecisions', false);
+         B.call (x, 'set', 'optimisticUserMessage', null);
+         if (targetFilename) B.call (x, 'load', 'file', targetFilename);
+         B.call (x, 'load', 'files');
+         if (! pendingCalls || pendingCalls.length === 0) B.call (x, 'set', 'pendingToolCalls', null);
+      };
+
+      if (! response.ok) {
+         return response.text ().then (function (text) {
+            B.call (x, 'report', 'error', 'Request failed: ' + response.status + ' ' + text);
+            B.call (x, 'set', 'streaming', false);
+            B.call (x, 'set', 'applyingToolDecisions', false);
+            B.call (x, 'set', 'optimisticUserMessage', null);
+            if (originalInput) B.call (x, 'set', 'chatInput', originalInput);
+         });
+      }
+
+      if (contentType.indexOf ('text/event-stream') === -1 || ! response.body) {
+         return response.json ().then (function (data) {
+            if (data && data.filename) targetFilename = data.filename;
+            finalize ();
+         }).catch (function () {
+            finalize ();
+         });
+      }
+
       var reader = response.body.getReader ();
       var decoder = new TextDecoder ();
       var buffer = '';
 
       function read () {
          reader.read ().then (function (result) {
-            if (result.done) {
-               var pendingCalls = B.get ('pendingToolCalls');
-               B.call (x, 'set', 'streaming', false);
-               B.call (x, 'set', 'optimisticUserMessage', null);
-               B.call (x, 'load', 'file', filename);
-               B.call (x, 'load', 'files');
-               if (! pendingCalls || pendingCalls.length === 0) B.call (x, 'set', 'pendingToolCalls', null);
-               return;
-            }
+            if (result.done) return finalize ();
 
             buffer += decoder.decode (result.value, {stream: true});
             var lines = buffer.split ('\n');
             buffer = lines.pop ();
 
             dale.go (lines, function (line) {
-               if (line.startsWith ('data: ')) {
-                  try {
-                     var data = JSON.parse (line.slice (6));
-                     if (data.type === 'chunk') {
-                        var current = B.get ('streamingContent') || '';
-                        B.call (x, 'set', 'streamingContent', current + data.content);
-                     }
-                     else if (data.type === 'tool_request') {
-                        var pendingTools = dale.go (data.toolCalls || [], function (tool) {
-                           return {
-                              id: tool.id,
-                              name: tool.name,
-                              input: tool.input,
-                              approved: null,
-                              alwaysAllow: false
-                           };
-                        });
-                        B.call (x, 'set', 'pendingToolCalls', pendingTools);
-                        B.call (x, 'set', 'streaming', false);
-                     }
-                     else if (data.type === 'error') {
-                        B.call (x, 'report', 'error', data.error);
-                        B.call (x, 'set', 'streaming', false);
-                        B.call (x, 'set', 'optimisticUserMessage', null);
-                        if (originalInput) B.call (x, 'set', 'chatInput', originalInput);
-                     }
+               if (! line.startsWith ('data: ')) return;
+
+               try {
+                  var data = JSON.parse (line.slice (6));
+                  if (data.type === 'chunk') {
+                     var current = B.get ('streamingContent') || '';
+                     B.call (x, 'set', 'streamingContent', current + data.content);
                   }
-                  catch (e) {}
+                  else if (data.type === 'tool_request') {
+                     if (data.filename) targetFilename = data.filename;
+                     var pendingTools = dale.go (data.toolCalls || [], function (tool) {
+                        return {
+                           id: tool.id,
+                           name: tool.name,
+                           input: tool.input,
+                           approved: null,
+                           alwaysAllow: false
+                        };
+                     });
+                     B.call (x, 'set', 'pendingToolCalls', pendingTools);
+                     B.call (x, 'set', 'streaming', false);
+                     B.call (x, 'set', 'applyingToolDecisions', false);
+                  }
+                  else if (data.type === 'done') {
+                     if (data.result && data.result.filename) targetFilename = data.result.filename;
+                  }
+                  else if (data.type === 'error') {
+                     B.call (x, 'report', 'error', data.error);
+                     B.call (x, 'set', 'streaming', false);
+                     B.call (x, 'set', 'applyingToolDecisions', false);
+                     B.call (x, 'set', 'optimisticUserMessage', null);
+                     if (originalInput) B.call (x, 'set', 'chatInput', originalInput);
+                  }
                }
+               catch (e) {}
             });
 
             read ();
+         }).catch (function (error) {
+            B.call (x, 'report', 'error', 'Stream error: ' + error.message);
+            B.call (x, 'set', 'streaming', false);
+            B.call (x, 'set', 'applyingToolDecisions', false);
+            B.call (x, 'set', 'optimisticUserMessage', null);
+            if (originalInput) B.call (x, 'set', 'chatInput', originalInput);
          });
       }
 
@@ -255,39 +349,42 @@ B.mrespond ([
       B.call (x, 'set', ['pendingToolCalls', toolIndex, 'alwaysAllow'], ! current);
    }],
 
-   // Submit tool decisions to /dialog/resume
+   // Submit tool decisions to PUT /dialog
    ['submit', 'toolDecisions', function (x) {
       var pendingToolCalls = B.get ('pendingToolCalls');
       var file = B.get ('currentFile');
       if (! pendingToolCalls || ! file) return;
+
+      var parsed = parseDialogFilename (file.name);
+      if (! parsed) return B.call (x, 'report', 'error', 'Current file is not a statused dialog');
 
       var allChosen = dale.stop (pendingToolCalls, false, function (tool) {
          return tool.approved === true || tool.approved === false;
       });
       if (allChosen === false) return B.call (x, 'report', 'error', 'Approve or deny each tool request first');
 
-      var dialogId = file.name.replace ('dialog-', '').replace ('.md', '');
-      var decisions = dale.go (pendingToolCalls, function (tool) {
-         return {
-            id: tool.id,
-            approved: tool.approved === true
-         };
+      var decisionsLines = dale.go (pendingToolCalls, function (tool) {
+         return tool.id + ': ' + (tool.approved === true ? 'approve' : 'deny');
       });
+      var decisions = 'əəə\n' + decisionsLines.join ('\n') + '\nəəə';
+
       var authorizationsMap = {};
       dale.go (pendingToolCalls, function (tool) {
          if (tool.approved === true && tool.alwaysAllow) authorizationsMap [tool.name] = true;
       });
-      var authorizations = dale.go (Object.keys (authorizationsMap), function (name) {return name;});
+      var authLines = dale.go (Object.keys (authorizationsMap), function (name) {return 'allow ' + name;});
+      var authorizations = authLines.length ? ('əəə\n' + authLines.join ('\n') + '\nəəə') : undefined;
 
       B.call (x, 'set', 'streaming', true);
+      B.call (x, 'set', 'applyingToolDecisions', true);
       B.call (x, 'set', 'streamingContent', '');
       B.call (x, 'set', 'pendingToolCalls', null);
 
-      fetch ('dialog/resume', {
-         method: 'POST',
+      fetch ('dialog', {
+         method: 'PUT',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({
-            dialogId: dialogId,
+            dialogId: parsed.dialogId,
             decisions: decisions,
             authorizations: authorizations
          })
@@ -296,6 +393,7 @@ B.mrespond ([
       }).catch (function (err) {
          B.call (x, 'report', 'error', 'Failed to submit tool results: ' + err.message);
          B.call (x, 'set', 'streaming', false);
+         B.call (x, 'set', 'applyingToolDecisions', false);
       });
    }],
 
@@ -518,17 +616,25 @@ views.css = [
       'max-width': '85%',
    }],
    ['.chat-user', {
-      'background-color': '#4a69bd',
+      'background-color': '#1f4d35',
       'margin-left': 'auto',
    }],
    ['.chat-assistant', {
-      'background-color': '#2d3748',
+      'background-color': '#4b2323',
    }],
    ['.chat-role', {
       'font-size': '11px',
       'text-transform': 'uppercase',
       color: '#888',
       'margin-bottom': '0.25rem',
+      display: 'flex',
+      'justify-content': 'space-between',
+      gap: '0.75rem'
+   }],
+   ['.chat-meta', {
+      'text-transform': 'none',
+      'font-size': '11px',
+      color: '#9aa4bf'
    }],
    ['.chat-content', {
       'white-space': 'pre-wrap',
@@ -653,17 +759,20 @@ views.css = [
 
 views.files = function () {
    return B.view ([['files'], ['currentFile'], ['loadingFile'], ['savingFile']], function (files, currentFile, loadingFile, savingFile) {
+      var docFiles = dale.fil (files || [], undefined, function (name) {
+         if (! name.startsWith ('dialog-')) return name;
+      });
       var isDirty = currentFile && currentFile.content !== currentFile.original;
 
       return ['div', {class: 'files-container'}, [
          // File list sidebar
          ['div', {class: 'file-list'}, [
             ['div', {class: 'file-list-header'}, [
-               ['span', {class: 'file-list-title'}, 'Files'],
+               ['span', {class: 'file-list-title'}, 'Docs'],
                ['button', {class: 'primary btn-small', onclick: B.ev ('create', 'file')}, '+ New']
             ]],
-            files && files.length > 0
-               ? dale.go (files, function (name) {
+            docFiles && docFiles.length > 0
+               ? dale.go (docFiles, function (name) {
                   var isActive = currentFile && currentFile.name === name;
                   return ['div', {
                      class: 'file-item' + (isActive ? ' file-item-active' : ''),
@@ -676,7 +785,7 @@ views.files = function () {
                      }, '×']
                   ]];
                })
-               : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, 'No files yet']
+               : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, 'No docs yet']
          ]],
          // Editor
          ['div', {class: 'editor-container'}, currentFile ? [
@@ -703,7 +812,7 @@ views.files = function () {
                oninput: B.ev ('set', ['currentFile', 'content']),
                onkeydown: B.ev ('keydown', 'editor', {raw: 'event'})
             }, currentFile.content]
-         ] : ['div', {class: 'editor-empty'}, loadingFile ? 'Loading...' : 'Select a file to edit']]
+         ] : ['div', {class: 'editor-empty'}, loadingFile ? 'Loading...' : 'Select a doc to edit']]
       ]];
    });
 };
@@ -711,31 +820,71 @@ views.files = function () {
 // Parse markdown dialog into messages
 var parseDialogContent = function (content) {
    if (! content) return [];
+
+   var parseSection = function (role, lines) {
+      var time = null, usage = null, usageCumulative = null;
+      var body = [];
+
+      dale.go (lines, function (line) {
+         var mTime = line.match (/^>\s*Time:\s*(.+)$/);
+         if (mTime) {
+            time = mTime [1].trim ();
+            return;
+         }
+
+         var mUsage = line.match (/^>\s*Usage:\s*input=(\d+)\s+output=(\d+)\s+total=(\d+)\s*$/);
+         if (mUsage) {
+            usage = {input: Number (mUsage [1]), output: Number (mUsage [2]), total: Number (mUsage [3])};
+            return;
+         }
+
+         var mUsageCum = line.match (/^>\s*Usage cumulative:\s*input=(\d+)\s+output=(\d+)\s+total=(\d+)\s*$/);
+         if (mUsageCum) {
+            usageCumulative = {input: Number (mUsageCum [1]), output: Number (mUsageCum [2]), total: Number (mUsageCum [3])};
+            return;
+         }
+
+         body.push (line);
+      });
+
+      var cleaned = body.join ('\n').replace (/^\n+/, '').replace (/\s+$/, '');
+      if (! cleaned) return null;
+
+      return {
+         role: role,
+         content: cleaned,
+         time: time,
+         usage: usage,
+         usageCumulative: usageCumulative
+      };
+   };
+
    var messages = [];
    var lines = content.split ('\n');
    var currentRole = null;
-   var currentContent = [];
+   var currentLines = [];
+
+   var flush = function () {
+      if (! currentRole) return;
+      var parsed = parseSection (currentRole, currentLines);
+      if (parsed) messages.push (parsed);
+   };
 
    dale.go (lines, function (line) {
       if (line.startsWith ('## User')) {
-         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         flush ();
          currentRole = 'user';
-         currentContent = [];
+         currentLines = [];
       }
       else if (line.startsWith ('## Assistant')) {
-         if (currentRole && currentContent.join ('').trim ()) messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
+         flush ();
          currentRole = 'assistant';
-         currentContent = [];
+         currentLines = [];
       }
-      else if (currentRole) {
-         currentContent.push (line);
-      }
+      else if (currentRole) currentLines.push (line);
    });
 
-   if (currentRole && currentContent.join ('').trim ()) {
-      messages.push ({role: currentRole, content: currentContent.join ('\n').trim ()});
-   }
-
+   flush ();
    return messages;
 };
 
@@ -754,7 +903,7 @@ var summarizeToolInput = function (tool) {
 };
 
 // Render tool request UI
-views.toolRequests = function (pendingToolCalls) {
+views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
    if (! pendingToolCalls || pendingToolCalls.length === 0) return '';
 
    var allChosen = dale.stop (pendingToolCalls, false, function (tool) {
@@ -807,14 +956,14 @@ views.toolRequests = function (pendingToolCalls) {
          ['button', {
             class: 'primary btn-small',
             onclick: B.ev ('submit', 'toolDecisions'),
-            disabled: ! allChosen
-         }, allChosen ? 'Resume Dialog' : 'Select all decisions']
+            disabled: ! allChosen || applyingToolDecisions
+         }, applyingToolDecisions ? 'Applying…' : (allChosen ? 'Apply decisions' : 'Select all decisions')]
       ]]
    ]];
 };
 
 views.dialogs = function () {
-   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['optimisticUserMessage']], function (files, currentFile, loadingFile, chatInput, chatProvider, streaming, streamingContent, pendingToolCalls, optimisticUserMessage) {
+   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['chatModel'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['optimisticUserMessage'], ['applyingToolDecisions']], function (files, currentFile, loadingFile, chatInput, chatProvider, chatModel, streaming, streamingContent, pendingToolCalls, optimisticUserMessage, applyingToolDecisions) {
 
       var dialogFiles = dale.fil (files, undefined, function (f) {
          if (f.startsWith ('dialog-')) return f;
@@ -850,22 +999,30 @@ views.dialogs = function () {
                : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, 'No dialogs yet']
          ]],
          // Chat area
-         ['div', {class: 'chat-container'}, isDialog ? [
+         ['div', {class: 'chat-container'}, [
             ['div', {class: 'editor-header'}, [
-               ['span', {class: 'editor-filename'}, currentFile.name.replace ('dialog-', '').replace ('.md', '')],
-               ['button', {
+               ['span', {class: 'editor-filename'}, isDialog ? currentFile.name.replace ('dialog-', '').replace ('.md', '') : 'New dialog'],
+               isDialog ? ['button', {
                   class: 'btn-small',
                   style: style ({'background-color': '#444'}),
                   onclick: B.ev ('close', 'file')
-               }, 'Close']
+               }, 'Close'] : ''
             ]],
             ['div', {class: 'chat-messages'}, [
-               dale.go (messages, function (msg) {
+               messages.length ? dale.go (messages, function (msg) {
+                  var meta = [];
+                  if (msg.time) meta.push (msg.time);
+                  if (msg.usage) meta.push ('tokens: ' + msg.usage.total + ' (in ' + msg.usage.input + ' / out ' + msg.usage.output + ')');
+                  if (msg.usageCumulative) meta.push ('cumulative: ' + msg.usageCumulative.total);
+
                   return ['div', {class: 'chat-message chat-' + msg.role}, [
-                     ['div', {class: 'chat-role'}, msg.role],
+                     ['div', {class: 'chat-role'}, [
+                        ['span', msg.role],
+                        meta.length ? ['span', {class: 'chat-meta'}, meta.join (' · ')] : ''
+                     ]],
                      ['div', {class: 'chat-content'}, msg.content]
                   ]];
-               }),
+               }) : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, loadingFile ? 'Loading...' : 'Start typing below to begin a new dialog'],
                optimisticUserMessage ? ['div', {class: 'chat-message chat-user'}, [
                   ['div', {class: 'chat-role'}, 'user'],
                   ['div', {class: 'chat-content'}, optimisticUserMessage]
@@ -876,17 +1033,24 @@ views.dialogs = function () {
                ]] : ''
             ]],
             // Tool requests panel
-            views.toolRequests (pendingToolCalls),
+            views.toolRequests (pendingToolCalls, applyingToolDecisions),
             // Input area
             ['div', {class: 'chat-input-area'}, [
                ['select', {
                   class: 'provider-select',
-                  onchange: B.ev ('set', 'chatProvider'),
+                  onchange: B.ev ('change', 'chatProvider'),
                   disabled: streaming || hasPendingTools
                }, [
-                  ['option', {value: 'claude', selected: (chatProvider || 'claude') === 'claude'}, 'Claude'],
-                  ['option', {value: 'openai', selected: chatProvider === 'openai'}, 'OpenAI']
+                  ['option', {value: 'openai', selected: (chatProvider || 'openai') === 'openai'}, 'OpenAI'],
+                  ['option', {value: 'claude', selected: chatProvider === 'claude'}, 'Claude']
                ]],
+               ['select', {
+                  class: 'provider-select',
+                  onchange: B.ev ('set', 'chatModel'),
+                  disabled: streaming || hasPendingTools
+               }, dale.go (MODEL_OPTIONS [chatProvider || 'openai'] || [], function (option) {
+                  return ['option', {value: option.value, selected: (chatModel || defaultModelForProvider (chatProvider || 'openai')) === option.value}, option.label];
+               })],
                ['textarea', {
                   class: 'chat-input',
                   rows: 2,
@@ -901,7 +1065,7 @@ views.dialogs = function () {
                   disabled: streaming || hasPendingTools || ! (chatInput && chatInput.trim ())
                }, streaming ? 'Sending...' : 'Send']
             ]]
-         ] : ['div', {class: 'editor-empty'}, loadingFile ? 'Loading...' : 'Select a dialog or create one']]
+         ]]
       ]];
    });
 };
@@ -921,12 +1085,12 @@ views.main = function () {
                onclick: B.ev ('set', 'tab', 'dialogs')
             }, 'Dialogs'],
             ['button', {
-               class: 'tab' + (tab === 'files' ? ' tab-active' : ''),
-               onclick: B.ev ('set', 'tab', 'files')
-            }, 'Files'],
+               class: 'tab' + (tab === 'docs' ? ' tab-active' : ''),
+               onclick: B.ev ('set', 'tab', 'docs')
+            }, 'Docs'],
          ]],
 
-         tab === 'files' ? views.files () : views.dialogs ()
+         tab === 'docs' ? views.files () : views.dialogs ()
       ]];
    });
 };

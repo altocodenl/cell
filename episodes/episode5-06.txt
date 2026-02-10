@@ -1,0 +1,5 @@
+Sixth episode of season 5! I'm building a programming substrate from scratch while recording myself. More vibey. Really thinking it through while one or two agents are working on it. It's 2026, alright.
+
+https://github.com/altocodenl/cell
+
+Fun with vibey! Figuring out what to build.
