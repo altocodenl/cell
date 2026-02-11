@@ -209,6 +209,41 @@ view
 
 ## Development notes
 
+### 2026-02-11
+
+https://mariozechner.at/posts/2025-11-22-armin-is-wrong/
+"Local-first principles can't realistically govern a provider's internal state as long as they keep it hidden. And for closed SaaS LLMs, they will. Exposing full internal state would leak proprietary signals, make it easier to clone or fine-tune competitors, and lock providers into internal architectures they can't freely change. Wishing for "local-first friendly" APIs where all hidden state is exportable is nice in theory. It's just not going to happen with closed providers."
+
+Working with LLM agents is addicting. It's hard to stop. It also allows you to build something more alexandrianly, by seeing it. I wonder if it will help us build systems with more life.
+
+We were drowning in information *before* LLMs. Imagine now.
+
+For vibey:
+- Create projects that are self-contained. Well, perhaps not their own container, but definitely their own folder.
+- You can save a copy of the project either as a .zip or as a project itself, that's listed as a snapshot/backup
+
+Prompts:
+- There is no point on denying all, remove that option.
+- Long tool calls are summarized and can be expanded.
+- Long tool calls are 1) shown only after the LLM responds to them (they should happen immediately) and they are still not autocompacted nor expandable.
+- docs-main.md is injected at the top of each prompt by the server. If it's missing, nothing gets sent. Don't put it in the dialog box.
+- Remove the message from the bottom box as soon as we send it to the LLM.
+- Sorry, it's doc-main.md, not docs-main.md. Also put it in the markdown, but also subject it to compaction.
+- The restoration on error is good, please restore that. The cleanup on send wasn't happening, fix that instead.
+- Implement navigation with hash like I do in tagaway: https://raw.githubusercontent.com/altocodenl/tagaway/refs/heads/master/client.js (look for `'read', 'hash'` and how window.location.hash is changed/read).
+- Why goto tab? Can't you just do like I do in tagaway and just navigate to #/dialogs, for example?
+- Interrupting an agent stops the stream. This is done with PUT /dialog. Please put a stop button too to trigger this.
+- Is this done? Remove pending tool calls from server memory. Have it written down in the markdown. When agreeing to execute from the dialog by human intervention, save that in the markdown of the dialog and resume the dialog.Also save blanket authorizations for the tool (let's say one per type) and have that available at the markdown. When a tool request comes from a dialog, the server checks if it was authorized or not in that dialog. If it was, it goes through, otherwise the dialog goes to pending. Also, when spinning the dialog, if there are global authorizations, put them right there from the beginning.
+- Is this done? Possible dialog states: done, active, waiting (on human). Waiting means that a tool use is proposed. The status of a dialog is in its file name, its suffix is <status>.md. Decided against the LLM asking if we're done or not, let the human decide. The halting problem is solved by the human.
+- Switching between tabs seems to be broken. Can you debug with pupeteer?
+- When landing in dialogs, don't autoselect the first. Same for docs.
+- Hide the stop button if we're not waiting on the LLM.
+- When I navigate away from a doc with unsaved changes, ask me if I want to save before letting me leave and lose my changes.
+- Please now test flow #1 in its entirety, as specified in vibey.md. Use pupeteer. Check for everything, particularly compaction.
+- Diff suggest & diff apply: show them nicely: green for the +, red for the -.
+
+Pupeteer scripts are too one off. It'd be cool to give the LLM a way to run commands interactively in a frontend. Of course, security. But in a localhost context, why not?
+
 ### 2026-02-10
 
 Good (LLM) tools are good at fetching a small and effective amount of context to solve the problem.

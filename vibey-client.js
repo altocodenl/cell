@@ -14,6 +14,21 @@ var parseDialogFilename = function (filename) {
    return {dialogId: match [1], status: match [2]};
 };
 
+var statusIcon = function (status) {
+   if (status === 'active')  return '🟢';
+   if (status === 'waiting') return '🟡';
+   if (status === 'done')    return '⚪';
+   return '•';
+};
+
+var dialogDisplayLabel = function (filename) {
+   var parsed = parseDialogFilename (filename);
+   if (! parsed) return filename;
+
+   var match = parsed.dialogId.match (/^\d{8}\-\d{6}\-(.+)$/);
+   return match ? match [1] : parsed.dialogId;
+};
+
 var MODEL_OPTIONS = {
    openai: [
       {value: 'gpt-5', label: 'gpt-5'},
@@ -40,6 +55,42 @@ var docDisplayName = function (name) {
    return name === 'doc-main.md' ? 'main.md' : name;
 };
 
+var buildHash = function (tab, currentFile) {
+   tab = tab === 'dialogs' ? 'dialogs' : 'docs';
+   if (! currentFile || ! currentFile.name) return '#/' + tab;
+
+   var parsed = parseDialogFilename (currentFile.name);
+
+   if (tab === 'dialogs') {
+      if (! parsed) return '#/dialogs';
+      return '#/dialogs/' + encodeURIComponent (parsed.dialogId);
+   }
+
+   if (parsed) return '#/docs';
+   return '#/docs/' + encodeURIComponent (docDisplayName (currentFile.name));
+};
+
+var readHashTarget = function (hashValue) {
+   var rawHash = hashValue !== undefined ? hashValue : (window.location.hash || '');
+   var raw = rawHash.replace (/^#\/?/, '');
+   if (! raw) return {tab: 'docs', target: null};
+
+   var parts = raw.split ('/');
+   var tab = parts [0] === 'dialogs' ? 'dialogs' : 'docs';
+   var target = parts [1] ? decodeURIComponent (parts [1]) : null;
+
+   if (tab === 'docs' && target) target = normalizeDocFilename (target);
+   return {tab: tab, target: target};
+};
+
+var isDirtyDoc = function (file) {
+   return file && ! file.name.startsWith ('dialog-') && file.content !== file.original;
+};
+
+var isSameDocTarget = function (parsed, file) {
+   return parsed && parsed.tab === 'docs' && parsed.target && file && normalizeDocFilename (parsed.target) === file.name;
+};
+
 // *** RESPONDERS ***
 
 B.mrespond ([
@@ -50,11 +101,96 @@ B.mrespond ([
       B.call (x, 'set', 'tab', 'docs');
       B.call (x, 'set', 'chatProvider', 'openai');
       B.call (x, 'set', 'chatModel', 'gpt-5');
+      B.call (x, 'read', 'hash');
       B.call (x, 'load', 'files');
    }],
 
+   ['read', 'hash', function (x) {
+      var parsed = readHashTarget ();
+      var currentFile = B.get ('currentFile');
+      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile);
+
+      var applyParsed = function () {
+         B.call (x, 'set', 'tab', parsed.tab);
+         B.call (x, 'set', 'hashTarget', parsed);
+         if (! parsed.target) B.call (x, 'set', 'currentFile', null);
+         B.call (x, 'apply', 'hashTarget');
+      };
+
+      if (! leavingDirtyDoc) return applyParsed ();
+
+      B.call (x, 'confirm', 'leaveCurrentDoc', applyParsed, function () {
+         var backHash = buildHash (B.get ('tab') || 'docs', B.get ('currentFile'));
+         if (window.location.hash !== backHash) window.location.hash = backHash;
+      });
+   }],
+
+   ['write', 'hash', function (x) {
+      var tab = B.get ('tab') || 'docs';
+      var currentFile = B.get ('currentFile');
+      var next = buildHash (tab, currentFile);
+      if (window.location.hash !== next) window.location.hash = next;
+   }],
+
+   ['navigate', 'hash', function (x, hash) {
+      var parsed = readHashTarget (hash);
+      var currentFile = B.get ('currentFile');
+      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile);
+
+      var go = function () {
+         if (window.location.hash !== hash) window.location.hash = hash;
+         else B.call (x, 'read', 'hash');
+      };
+
+      if (! leavingDirtyDoc) return go ();
+      B.call (x, 'confirm', 'leaveCurrentDoc', go);
+   }],
+
+   ['apply', 'hashTarget', function (x) {
+      var parsed = B.get ('hashTarget');
+      var files = B.get ('files') || [];
+      if (! parsed || ! parsed.target || ! files.length) return;
+
+      if (parsed.tab === 'dialogs') {
+         var wanted = dale.stopNot (files, undefined, function (file) {
+            var p = parseDialogFilename (file);
+            if (p && p.dialogId === parsed.target) return file;
+         });
+         if (wanted) {
+            B.call (x, 'set', 'hashTarget', null);
+            return B.call (x, 'load', 'file', wanted);
+         }
+         return;
+      }
+
+      if (inc (files, parsed.target)) {
+         B.call (x, 'set', 'hashTarget', null);
+         return B.call (x, 'load', 'file', parsed.target);
+      }
+   }],
+
+
    ['report', 'error', function (x, error) {
       alert (typeof error === 'string' ? error : JSON.stringify (error));
+   }],
+
+   ['confirm', 'leaveCurrentDoc', function (x, onContinue, onCancel) {
+      var currentFile = B.get ('currentFile');
+      if (! isDirtyDoc (currentFile)) return onContinue && onContinue ();
+
+      var name = docDisplayName (currentFile.name);
+      var save = confirm ('You have unsaved changes in ' + name + '. Save before leaving?');
+
+      if (save) {
+         return B.call (x, 'save', 'file', function (x, ok) {
+            if (ok) onContinue && onContinue ();
+            else onCancel && onCancel ();
+         });
+      }
+
+      var discard = confirm ('Discard unsaved changes in ' + name + '?');
+      if (discard) return onContinue && onContinue ();
+      if (onCancel) onCancel ();
    }],
 
    [/^(get|post|delete)$/, [], {match: function (ev, responder) {
@@ -71,32 +207,55 @@ B.mrespond ([
       B.call (x, 'get', 'files', {}, '', function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to load files');
          B.call (x, 'set', 'files', rs.body);
+         B.call (x, 'apply', 'hashTarget');
       });
    }],
 
    ['load', 'file', function (x, name) {
-      B.call (x, 'set', 'loadingFile', true);
-      B.call (x, 'get', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
-         B.call (x, 'set', 'loadingFile', false);
-         if (error) return B.call (x, 'set', 'currentFile', null);
-         B.call (x, 'set', 'currentFile', {
-            name: rs.body.name,
-            content: rs.body.content,
-            original: rs.body.content
+      var currentFile = B.get ('currentFile');
+      var proceed = function () {
+         B.call (x, 'set', 'loadingFile', true);
+         B.call (x, 'get', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+            B.call (x, 'set', 'loadingFile', false);
+            if (error) {
+               B.call (x, 'set', 'currentFile', null);
+               return B.call (x, 'write', 'hash');
+            }
+            B.call (x, 'set', 'currentFile', {
+               name: rs.body.name,
+               content: rs.body.content,
+               original: rs.body.content
+            });
+            B.call (x, 'set', 'tab', rs.body.name.startsWith ('dialog-') ? 'dialogs' : 'docs');
+            B.call (x, 'write', 'hash');
          });
-      });
+      };
+
+      if (isDirtyDoc (currentFile) && currentFile.name !== name) {
+         return B.call (x, 'confirm', 'leaveCurrentDoc', proceed);
+      }
+
+      proceed ();
    }],
 
-   ['save', 'file', function (x) {
+   ['save', 'file', function (x, cb) {
       var file = B.get ('currentFile');
-      if (! file) return;
+      if (! file) {
+         if (cb) cb (x, false);
+         return;
+      }
 
       B.call (x, 'set', 'savingFile', true);
       B.call (x, 'post', 'file/' + encodeURIComponent (file.name), {}, {content: file.content}, function (x, error, rs) {
          B.call (x, 'set', 'savingFile', false);
-         if (error) return B.call (x, 'report', 'error', 'Failed to save file');
+         if (error) {
+            B.call (x, 'report', 'error', 'Failed to save file');
+            if (cb) cb (x, false);
+            return;
+         }
          B.call (x, 'set', ['currentFile', 'original'], file.content);
          B.call (x, 'load', 'files');
+         if (cb) cb (x, true);
       });
    }],
 
@@ -119,6 +278,7 @@ B.mrespond ([
       var currentFile = B.get ('currentFile');
       if (currentFile && currentFile.name === name) {
          B.call (x, 'set', 'currentFile', null);
+         B.call (x, 'write', 'hash');
       }
 
       B.call (x, 'delete', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
@@ -128,11 +288,13 @@ B.mrespond ([
    }],
 
    ['close', 'file', function (x) {
-      var file = B.get ('currentFile');
-      if (file && file.content !== file.original) {
-         if (! confirm ('Discard unsaved changes?')) return;
-      }
-      B.call (x, 'set', 'currentFile', null);
+      var proceed = function () {
+         B.call (x, 'set', 'currentFile', null);
+         B.call (x, 'write', 'hash');
+      };
+
+      if (isDirtyDoc (B.get ('currentFile'))) return B.call (x, 'confirm', 'leaveCurrentDoc', proceed);
+      proceed ();
    }],
 
    ['keydown', 'editor', function (x, ev) {
@@ -195,6 +357,8 @@ B.mrespond ([
       B.call (x, 'set', 'pendingToolCalls', null);
       B.call (x, 'set', 'optimisticUserMessage', originalInput);
       B.call (x, 'set', 'chatInput', '');
+      var inputNode = document.querySelector ('.chat-input');
+      if (inputNode) inputNode.value = '';
 
       var parsed = file && parseDialogFilename (file.name);
       var method = parsed ? 'PUT' : 'POST';
@@ -289,12 +453,15 @@ B.mrespond ([
                            name: tool.name,
                            input: tool.input,
                            approved: null,
-                           alwaysAllow: false
+                           alwaysAllow: false,
+                           expanded: false,
+                           diffExpanded: false
                         };
                      });
                      B.call (x, 'set', 'pendingToolCalls', pendingTools);
                      B.call (x, 'set', 'streaming', false);
                      B.call (x, 'set', 'applyingToolDecisions', false);
+                     if (targetFilename) B.call (x, 'load', 'file', targetFilename);
                   }
                   else if (data.type === 'done') {
                      if (data.result && data.result.filename) targetFilename = data.result.filename;
@@ -360,19 +527,19 @@ B.mrespond ([
       B.call (x, 'maybe', 'submitToolDecisions');
    }],
 
-   // Deny all pending tools at once
-   ['deny', 'allTools', function (x) {
-      var pendingToolCalls = B.get ('pendingToolCalls');
-      if (! pendingToolCalls) return;
-      dale.go (pendingToolCalls, function (tool, index) {
-         B.call (x, 'set', ['pendingToolCalls', index, 'approved'], false);
-      });
-      B.call (x, 'maybe', 'submitToolDecisions');
-   }],
-
    ['toggle', 'alwaysAllowTool', function (x, toolIndex) {
       var current = B.get (['pendingToolCalls', toolIndex, 'alwaysAllow']);
       B.call (x, 'set', ['pendingToolCalls', toolIndex, 'alwaysAllow'], ! current);
+   }],
+
+   ['toggle', 'toolInputExpanded', function (x, toolIndex) {
+      var current = B.get (['pendingToolCalls', toolIndex, 'expanded']);
+      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'expanded'], ! current);
+   }],
+
+   ['toggle', 'toolDiffExpanded', function (x, toolIndex) {
+      var current = B.get (['pendingToolCalls', toolIndex, 'diffExpanded']);
+      B.call (x, 'set', ['pendingToolCalls', toolIndex, 'diffExpanded'], ! current);
    }],
 
    // Submit tool decisions to PUT /dialog
@@ -420,6 +587,44 @@ B.mrespond ([
          B.call (x, 'report', 'error', 'Failed to submit tool results: ' + err.message);
          B.call (x, 'set', 'streaming', false);
          B.call (x, 'set', 'applyingToolDecisions', false);
+      });
+   }],
+
+   ['stop', 'dialog', function (x) {
+      var file = B.get ('currentFile');
+      var parsed = file && parseDialogFilename (file.name);
+      if (! parsed) return;
+
+      fetch ('dialog', {
+         method: 'PUT',
+         headers: {'Content-Type': 'application/json'},
+         body: JSON.stringify ({
+            dialogId: parsed.dialogId,
+            status: 'waiting'
+         })
+      }).then (function (response) {
+         if (! response.ok) return response.text ().then (function (text) {throw new Error (text || ('HTTP ' + response.status));});
+         return response.json ().then (function () {
+            B.call (x, 'set', 'streaming', false);
+            B.call (x, 'set', 'applyingToolDecisions', false);
+            B.call (x, 'set', 'streamingContent', '');
+            B.call (x, 'set', 'optimisticUserMessage', null);
+
+            fetch ('dialogs').then (function (rs) {
+               if (! rs.ok) return null;
+               return rs.json ();
+            }).then (function (dialogs) {
+               B.call (x, 'load', 'files');
+               var found = dale.stopNot (dialogs || [], undefined, function (item) {
+                  if (item.dialogId === parsed.dialogId) return item.filename;
+               });
+               if (found) B.call (x, 'load', 'file', found);
+            }).catch (function () {
+               B.call (x, 'load', 'files');
+            });
+         });
+      }).catch (function (error) {
+         B.call (x, 'report', 'error', 'Failed to stop dialog: ' + error.message);
       });
    }],
 
@@ -556,6 +761,15 @@ views.css = [
       'white-space': 'nowrap',
       overflow: 'hidden',
       'text-overflow': 'ellipsis',
+   }],
+   ['.dialog-name', {
+      flex: 1,
+      'white-space': 'normal',
+      overflow: 'visible',
+      'text-overflow': 'clip',
+      'word-break': 'break-word',
+      'line-height': 1.3,
+      'padding-right': '0.5rem'
    }],
    ['.file-delete', {
       opacity: 0,
@@ -743,6 +957,33 @@ views.css = [
       'overflow-y': 'auto',
       'margin-bottom': '0.5rem',
    }],
+   ['.tool-input-expanded', {
+      'max-height': 'none',
+   }],
+   ['.tool-diff', {
+      'font-family': 'Monaco, Consolas, monospace',
+      'font-size': '12px',
+      'background-color': '#0d0d1a',
+      padding: '0.5rem',
+      'border-radius': '4px',
+      'white-space': 'pre-wrap',
+      'word-break': 'break-word',
+      'margin-bottom': '0.5rem',
+      border: '1px solid #2f2f4a'
+   }],
+   ['.tool-diff-line', {
+      color: '#a0aec0'
+   }],
+   ['.tool-diff-add', {
+      color: '#6ad48a'
+   }],
+   ['.tool-diff-del', {
+      color: '#ff8b94'
+   }],
+   ['.tool-diff-skip', {
+      color: '#8d93ab',
+      'font-style': 'italic'
+   }],
    ['.tool-actions', {
       display: 'flex',
       gap: '0.5rem',
@@ -914,7 +1155,7 @@ var parseDialogContent = function (content) {
    return messages;
 };
 
-var summarizeToolInput = function (tool) {
+var summarizeToolInput = function (tool, expanded) {
    var input = JSON.parse (JSON.stringify (tool.input || {}));
 
    if (tool.name === 'write_file' && type (input.content) === 'string') {
@@ -925,7 +1166,133 @@ var summarizeToolInput = function (tool) {
       if (type (input.new_string) === 'string') input.new_string = '[hidden new_string: ' + input.new_string.length + ' chars]';
    }
 
-   return JSON.stringify (input, null, 2);
+   var full = JSON.stringify (input, null, 2);
+
+   var maxChars = 180;
+   var maxLines = 6;
+   var lines = full.split ('\n');
+   var isLong = full.length > maxChars || lines.length > maxLines;
+
+   if (expanded || ! isLong) return {text: full, isLong: isLong};
+
+   var shortLines = lines.slice (0, maxLines).join ('\n');
+   if (shortLines.length > maxChars) shortLines = shortLines.slice (0, maxChars);
+   shortLines = shortLines.replace (/\s+$/, '') + '\n...';
+
+   return {text: shortLines, isLong: true};
+};
+
+var buildEditDiff = function (oldText, newText) {
+   oldText = type (oldText) === 'string' ? oldText : '';
+   newText = type (newText) === 'string' ? newText : '';
+
+   var a = oldText.split ('\n');
+   var b = newText.split ('\n');
+
+   var n = a.length, m = b.length;
+   var dp = [];
+   for (var i = 0; i <= n; i++) {
+      dp [i] = [];
+      for (var j = 0; j <= m; j++) dp [i][j] = 0;
+   }
+
+   for (i = n - 1; i >= 0; i--) {
+      for (j = m - 1; j >= 0; j--) {
+         if (a [i] === b [j]) dp [i][j] = dp [i + 1][j + 1] + 1;
+         else dp [i][j] = Math.max (dp [i + 1][j], dp [i][j + 1]);
+      }
+   }
+
+   var lines = [];
+   i = 0; j = 0;
+   while (i < n && j < m) {
+      if (a [i] === b [j]) {
+         lines.push ({type: 'context', text: '  ' + a [i]});
+         i++; j++;
+      }
+      else if (dp [i + 1][j] >= dp [i][j + 1]) {
+         lines.push ({type: 'del', text: '- ' + a [i]});
+         i++;
+      }
+      else {
+         lines.push ({type: 'add', text: '+ ' + b [j]});
+         j++;
+      }
+   }
+   while (i < n) lines.push ({type: 'del', text: '- ' + a [i++]});
+   while (j < m) lines.push ({type: 'add', text: '+ ' + b [j++]});
+
+   return lines;
+};
+
+var compactDiffLines = function (lines, full, contextLines) {
+   contextLines = contextLines || 3;
+   if (full) return {lines: lines, compacted: false};
+
+   var include = [];
+   for (var i = 0; i < lines.length; i++) include [i] = false;
+
+   var changed = false;
+   for (i = 0; i < lines.length; i++) {
+      if (lines [i].type === 'add' || lines [i].type === 'del') {
+         changed = true;
+         var start = Math.max (0, i - contextLines);
+         var end = Math.min (lines.length - 1, i + contextLines);
+         for (var k = start; k <= end; k++) include [k] = true;
+      }
+   }
+
+   if (! changed) return {lines: lines.slice (0, Math.min (lines.length, 2 * contextLines + 1)), compacted: lines.length > (2 * contextLines + 1)};
+
+   var out = [];
+   var compacted = false;
+   i = 0;
+   while (i < lines.length) {
+      if (include [i]) {
+         out.push (lines [i]);
+         i++;
+         continue;
+      }
+
+      var startGap = i;
+      while (i < lines.length && ! include [i]) i++;
+      var gap = i - startGap;
+      if (gap > 0) {
+         compacted = true;
+         out.push ({type: 'skip', text: '… ' + gap + ' unchanged line' + (gap === 1 ? '' : 's') + ' hidden'});
+      }
+   }
+
+   return {lines: out, compacted: compacted};
+};
+
+var renderEditDiff = function (tool, index, applyingToolDecisions) {
+   var input = tool.input || {};
+   var oldText = type (input.old_string) === 'string' ? input.old_string : '';
+   var newText = type (input.new_string) === 'string' ? input.new_string : '';
+
+   var rawLines = buildEditDiff (oldText, newText);
+   var compactView = compactDiffLines (rawLines, false, 3);
+   var display = tool.diffExpanded === true ? compactDiffLines (rawLines, true, 3) : compactView;
+
+   return ['div', [
+      ['div', {class: 'tool-input'}, JSON.stringify ({path: input.path || ''}, null, 2)],
+      ['div', {class: 'tool-diff'}, dale.go (display.lines, function (line) {
+         var cls = 'tool-diff-line';
+         if (line.type === 'add') cls += ' tool-diff-add';
+         else if (line.type === 'del') cls += ' tool-diff-del';
+         else if (line.type === 'skip') cls += ' tool-diff-skip';
+         return ['div', {class: cls}, line.text];
+      })],
+      compactView.compacted ? ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-bottom': '0.4rem'})}, [
+         ['button', {
+            class: 'btn-small',
+            style: style ({'background-color': '#3a3a5f', color: '#c9d4ff'}),
+            onclick: B.ev ('toggle', 'toolDiffExpanded', index),
+            disabled: applyingToolDecisions
+         }, tool.diffExpanded === true ? 'Show compact diff' : 'Show full diff']
+      ]] : ''
+   ]];
 };
 
 // Render tool request UI
@@ -944,15 +1311,25 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
                class: 'btn-small tool-btn-approve',
                onclick: B.ev ('approve', 'allTools'),
                disabled: applyingToolDecisions
-            }, 'Approve All'],
-            ['button', {
-               class: 'btn-small tool-btn-deny',
-               onclick: B.ev ('deny', 'allTools'),
-               disabled: applyingToolDecisions
-            }, 'Deny All']
+            }, 'Approve All']
          ]]
       ]],
       dale.go (pendingToolCalls, function (tool, index) {
+         var inputSummary = summarizeToolInput (tool, tool.expanded === true);
+         var inputUI = tool.name === 'edit_file'
+            ? renderEditDiff (tool, index, applyingToolDecisions)
+            : ['div', [
+               ['div', {class: 'tool-input' + (tool.expanded === true ? ' tool-input-expanded' : '')}, inputSummary.text],
+               inputSummary.isLong ? ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-bottom': '0.4rem'})}, [
+                  ['button', {
+                     class: 'btn-small',
+                     style: style ({'background-color': '#3a3a5f', color: '#c9d4ff'}),
+                     onclick: B.ev ('toggle', 'toolInputExpanded', index),
+                     disabled: applyingToolDecisions
+                  }, tool.expanded === true ? 'Collapse' : 'Expand']
+               ]] : ''
+            ]];
+
          return ['div', {class: 'tool-request'}, [
             ['div', {class: 'tool-request-header'}, [
                ['span', {class: 'tool-name'}, tool.name],
@@ -971,7 +1348,7 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
                   }, 'Deny']
                ]]
             ]],
-            ['div', {class: 'tool-input'}, summarizeToolInput (tool)],
+            inputUI,
             ['label', {style: style ({display: 'flex', gap: '0.4rem', 'align-items': 'center', 'font-size': '12px', color: '#aaa'})}, [
                ['input', {
                   type: 'checkbox',
@@ -1011,12 +1388,13 @@ views.dialogs = function () {
             dialogFiles && dialogFiles.length > 0
                ? dale.go (dialogFiles, function (name) {
                   var isActive = currentFile && currentFile.name === name;
-                  var displayName = name.replace ('dialog-', '').replace ('.md', '');
+                  var parsedDialog = parseDialogFilename (name) || {status: null};
+                  var displayName = dialogDisplayLabel (name);
                   return ['div', {
                      class: 'file-item' + (isActive ? ' file-item-active' : ''),
                      onclick: B.ev ('load', 'file', name)
                   }, [
-                     ['span', {class: 'file-name'}, displayName],
+                     ['span', {class: 'dialog-name'}, statusIcon (parsedDialog.status) + ' ' + displayName],
                      ['span', {
                         class: 'file-delete',
                         onclick: B.ev ('delete', 'file', name, {stopPropagation: true})
@@ -1028,7 +1406,7 @@ views.dialogs = function () {
          // Chat area
          ['div', {class: 'chat-container'}, [
             ['div', {class: 'editor-header'}, [
-               ['span', {class: 'editor-filename'}, isDialog ? currentFile.name.replace ('dialog-', '').replace ('.md', '') : 'New dialog'],
+               ['span', {class: 'editor-filename'}, isDialog ? (statusIcon ((parseDialogFilename (currentFile.name) || {}).status) + ' ' + dialogDisplayLabel (currentFile.name)) : 'New dialog'],
                isDialog ? ['button', {
                   class: 'btn-small',
                   style: style ({'background-color': '#444'}),
@@ -1081,16 +1459,21 @@ views.dialogs = function () {
                ['textarea', {
                   class: 'chat-input',
                   rows: 2,
+                  value: chatInput || '',
                   placeholder: 'Type a message... (Cmd+Enter to send)',
                   oninput: B.ev ('set', 'chatInput'),
                   onkeydown: B.ev ('keydown', 'chatInput', {raw: 'event'}),
                   disabled: streaming || hasPendingTools
-               }, chatInput || ''],
+               }, ''],
                ['button', {
                   class: 'primary',
                   onclick: B.ev ('send', 'message'),
                   disabled: streaming || hasPendingTools || ! (chatInput && chatInput.trim ())
-               }, streaming ? 'Sending...' : 'Send']
+               }, streaming ? 'Sending...' : 'Send'],
+               (streaming && isDialog) ? ['button', {
+                  style: style ({'background-color': '#e67e22', color: 'white'}),
+                  onclick: B.ev ('stop', 'dialog')
+               }, 'Stop'] : ''
             ]]
          ]]
       ]];
@@ -1109,11 +1492,11 @@ views.main = function () {
          ['div', {class: 'tabs'}, [
             ['button', {
                class: 'tab' + (tab === 'dialogs' ? ' tab-active' : ''),
-               onclick: B.ev ('set', 'tab', 'dialogs')
+               onclick: B.ev ('navigate', 'hash', '#/dialogs')
             }, 'Dialogs'],
             ['button', {
                class: 'tab' + (tab === 'docs' ? ' tab-active' : ''),
-               onclick: B.ev ('set', 'tab', 'docs')
+               onclick: B.ev ('navigate', 'hash', '#/docs')
             }, 'Docs'],
          ]],
 
@@ -1123,6 +1506,10 @@ views.main = function () {
 };
 
 // *** MOUNT ***
+
+window.addEventListener ('hashchange', function () {
+   B.call ('read', 'hash');
+});
 
 B.call ('initialize', []);
 B.mount ('body', views.main);

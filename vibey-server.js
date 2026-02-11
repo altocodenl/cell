@@ -29,6 +29,85 @@ var SECRET = require ('./secret.js');
 var OPENAI_API_KEY = SECRET.openai;
 var CLAUDE_API_KEY = SECRET.claude;
 
+var getDocMainContent = function () {
+   var path = Path.join (VIBEY_DIR, 'doc-main.md');
+   if (! fs.existsSync (path)) return null;
+
+   try {
+      var content = fs.readFileSync (path, 'utf8');
+      if (! content || ! content.trim ()) return null;
+      return {name: 'doc-main.md', content: content.trim ()};
+   }
+   catch (error) {
+      return null;
+   }
+};
+
+var compactText = function (text, maxLines, maxChars) {
+   if (type (text) !== 'string') return '';
+   maxLines = maxLines || 16;
+   maxChars = maxChars || 1800;
+
+   var lines = text.split ('\n');
+   var compacted = lines.slice (0, maxLines).join ('\n');
+   if (compacted.length > maxChars) compacted = compacted.slice (0, maxChars);
+
+   if (text.length > compacted.length || lines.length > maxLines) compacted = compacted.replace (/\s+$/, '') + '\n...';
+   return compacted;
+};
+
+var getDocMainInjection = function () {
+   var docMain = getDocMainContent ();
+   if (! docMain) return '';
+   return '\n\nProject instructions (' + docMain.name + '):\n\n' + docMain.content;
+};
+
+var upsertDocMainContextBlock = function (filepath) {
+   if (! fs.existsSync (filepath)) return;
+
+   var markdown = fs.readFileSync (filepath, 'utf8');
+   var blockRe = /<!-- DOC_MAIN_CONTEXT_START -->[\s\S]*?<!-- DOC_MAIN_CONTEXT_END -->\n\n?/;
+   markdown = markdown.replace (blockRe, '');
+
+   var docMain = getDocMainContent ();
+   if (! docMain) {
+      fs.writeFileSync (filepath, markdown, 'utf8');
+      return;
+   }
+
+   var preview = compactText (docMain.content, 12, 1200).split ('\n').join ('\n    ');
+   var block = '<!-- DOC_MAIN_CONTEXT_START -->\n';
+   block += '> Prompt context: ' + docMain.name + ' (' + docMain.content.length + ' chars, compacted)\n\n';
+   block += '    ' + preview + '\n';
+   block += '<!-- DOC_MAIN_CONTEXT_END -->\n\n';
+
+   if (/> Started:[^\n]*\n\n/.test (markdown)) {
+      markdown = markdown.replace (/(> Started:[^\n]*\n\n)/, '$1' + block);
+   }
+   else if (markdown.indexOf ('# Dialog\n\n') === 0) {
+      markdown = '# Dialog\n\n' + block + markdown.slice (10);
+   }
+   else markdown = block + markdown;
+
+   fs.writeFileSync (filepath, markdown, 'utf8');
+};
+
+var ACTIVE_STREAMS = {};
+
+var beginActiveStream = function (dialogId) {
+   var controller = new AbortController ();
+   ACTIVE_STREAMS [dialogId] = {controller: controller, requestedStatus: null};
+   return controller;
+};
+
+var getActiveStream = function (dialogId) {
+   return ACTIVE_STREAMS [dialogId] || null;
+};
+
+var endActiveStream = function (dialogId) {
+   delete ACTIVE_STREAMS [dialogId];
+};
+
 // *** MCP TOOLS ***
 
 var exec = require ('child_process').exec;
@@ -88,6 +167,32 @@ var TOOLS = [
          },
          required: ['path', 'old_string', 'new_string']
       }
+   },
+   {
+      name: 'launch_agent',
+      description: 'Spawn another top-level dialog. Equivalent to POST /dialog with provider, model, prompt, and optional slug.',
+      input_schema: {
+         type: 'object',
+         properties: {
+            provider: {
+               type: 'string',
+               description: 'claude or openai'
+            },
+            model: {
+               type: 'string',
+               description: 'Model name for the spawned agent'
+            },
+            prompt: {
+               type: 'string',
+               description: 'Initial prompt for the spawned agent'
+            },
+            slug: {
+               type: 'string',
+               description: 'Optional dialog slug'
+            }
+         },
+         required: ['provider', 'model', 'prompt']
+      }
    }
 ];
 
@@ -144,6 +249,32 @@ var executeTool = function (toolName, toolInput) {
                });
             }
          });
+      }
+
+      else if (toolName === 'launch_agent') {
+         if (toolInput.provider !== 'claude' && toolInput.provider !== 'openai') {
+            return resolve ({success: false, error: 'launch_agent: provider must be claude or openai'});
+         }
+         if (type (toolInput.prompt) !== 'string' || ! toolInput.prompt.trim ()) {
+            return resolve ({success: false, error: 'launch_agent: prompt is required'});
+         }
+
+         startDialogTurn (toolInput.provider, toolInput.prompt.trim (), toolInput.model, toolInput.slug, null)
+            .then (function (result) {
+               resolve ({
+                  success: true,
+                  launched: {
+                     dialogId: result.dialogId,
+                     filename: result.filename,
+                     status: result.status,
+                     provider: result.provider,
+                     model: result.model
+                  }
+               });
+            })
+            .catch (function (error) {
+               resolve ({success: false, error: 'launch_agent failed: ' + error.message});
+            });
       }
 
       else {
@@ -487,13 +618,17 @@ var setDialogStatus = function (dialog, status) {
 var getGlobalAuthorizations = function () {
    var docMain = Path.join (VIBEY_DIR, 'doc-main.md');
    if (! fs.existsSync (docMain)) return [];
+
    var auth = parseAuthorizations (fs.readFileSync (docMain, 'utf8'));
    return Object.keys (auth);
 };
 
 var ensureDialogFile = function (dialog, provider, model) {
    if (dialog.exists) {
-      if (dialog.metadata.provider && dialog.metadata.model) return;
+      if (dialog.metadata.provider && dialog.metadata.model) {
+         upsertDocMainContextBlock (dialog.filepath);
+         return;
+      }
       var content = fs.readFileSync (dialog.filepath, 'utf8');
       var headerLine = '> Provider: ' + provider + ' | Model: ' + model + '\n';
       if (! /\n> Started:/.test (content)) headerLine += '> Started: ' + new Date ().toISOString () + '\n';
@@ -501,7 +636,8 @@ var ensureDialogFile = function (dialog, provider, model) {
       if (content.startsWith ('# Dialog\n\n')) content = '# Dialog\n\n' + headerLine + content.slice (10);
       else content = '# Dialog\n\n' + headerLine + content;
       fs.writeFileSync (dialog.filepath, content, 'utf8');
-      dialog.markdown = content;
+      upsertDocMainContextBlock (dialog.filepath);
+      dialog.markdown = fs.readFileSync (dialog.filepath, 'utf8');
       dialog.metadata = {provider: provider, model: model};
       return;
    }
@@ -515,8 +651,9 @@ var ensureDialogFile = function (dialog, provider, model) {
    if (header [header.length - 1] !== '\n') header += '\n';
    header += '\n';
    fs.writeFileSync (dialog.filepath, header, 'utf8');
+   upsertDocMainContextBlock (dialog.filepath);
    dialog.exists = true;
-   dialog.markdown = header;
+   dialog.markdown = fs.readFileSync (dialog.filepath, 'utf8');
 };
 
 var appendToDialog = function (filepath, text) {
@@ -586,8 +723,10 @@ var parseAuthorizationsInput = function (authorizations) {
 };
 
 // Implementation function for Claude (streaming with tool support)
-var chatWithClaude = async function (messages, model, onChunk) {
+var chatWithClaude = async function (messages, model, onChunk, abortSignal) {
    model = model || 'claude-sonnet-4-20250514';
+
+   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection ();
 
    var requestBody = {
       model: model,
@@ -595,7 +734,7 @@ var chatWithClaude = async function (messages, model, onChunk) {
       stream: true,
       messages: messages,
       tools: CLAUDE_TOOLS,
-      system: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
+      system: systemPrompt
    };
 
    var response = await fetch ('https://api.anthropic.com/v1/messages', {
@@ -605,7 +744,8 @@ var chatWithClaude = async function (messages, model, onChunk) {
          'x-api-key': CLAUDE_API_KEY,
          'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify (requestBody)
+      body: JSON.stringify (requestBody),
+      signal: abortSignal
    });
 
    if (! response.ok) {
@@ -687,8 +827,10 @@ var chatWithClaude = async function (messages, model, onChunk) {
 };
 
 // Implementation function for OpenAI (streaming with tool support)
-var chatWithOpenAI = async function (messages, model, onChunk) {
+var chatWithOpenAI = async function (messages, model, onChunk, abortSignal) {
    model = model || 'gpt-5';
+
+   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection ();
 
    var requestBody = {
       model: model,
@@ -696,7 +838,7 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
       stream_options: {include_usage: true},
       messages: [{
          role: 'system',
-         content: 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, or list directories, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.'
+         content: systemPrompt
       }].concat (messages),
       tools: OPENAI_TOOLS
    };
@@ -707,7 +849,8 @@ var chatWithOpenAI = async function (messages, model, onChunk) {
          'Content-Type': 'application/json',
          'Authorization': 'Bearer ' + OPENAI_API_KEY
       },
-      body: JSON.stringify (requestBody)
+      body: JSON.stringify (requestBody),
+      signal: abortSignal
    });
 
    if (! response.ok) {
@@ -795,7 +938,8 @@ var appendToolCallsToAssistantSection = function (filepath, toolCalls) {
    });
 };
 
-var runCompletion = async function (dialog, provider, model, onChunk) {
+var runCompletion = async function (dialog, provider, model, onChunk, abortSignal) {
+   upsertDocMainContextBlock (dialog.filepath);
    var markdown = fs.readFileSync (dialog.filepath, 'utf8');
    var messages = parseDialogForProvider (markdown, provider);
 
@@ -807,42 +951,48 @@ var runCompletion = async function (dialog, provider, model, onChunk) {
       if (onChunk) onChunk (chunk);
    };
 
-   var result = provider === 'claude'
-      ? await chatWithClaude (messages, model, writeChunk)
-      : await chatWithOpenAI (messages, model, writeChunk);
+   try {
+      var result = provider === 'claude'
+         ? await chatWithClaude (messages, model, writeChunk, abortSignal)
+         : await chatWithOpenAI (messages, model, writeChunk, abortSignal);
 
-   appendToDialog (dialog.filepath, '\n\n');
-   appendUsageToAssistantSection (dialog.filepath, result.usage);
-   appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
+      appendToDialog (dialog.filepath, '\n\n');
+      appendUsageToAssistantSection (dialog.filepath, result.usage);
+      appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
 
-   finalizeAssistantTime (dialog.filepath, assistantStart, new Date ().toISOString ());
+      var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
+      var decisionsById = {};
+      var autoExecuted = [];
+      var pending = [];
 
-   var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
-   var decisionsById = {};
-   var autoExecuted = [];
-   var pending = [];
-
-   for (var i = 0; i < (result.toolCalls || []).length; i++) {
-      var tc = result.toolCalls [i];
-      if (authorizations [tc.name]) {
-         var toolResult = await executeTool (tc.name, tc.input);
-         decisionsById [tc.id] = {decision: 'approved', result: toolResult};
-         autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
+      for (var i = 0; i < (result.toolCalls || []).length; i++) {
+         var tc = result.toolCalls [i];
+         if (authorizations [tc.name]) {
+            var toolResult = await executeTool (tc.name, tc.input);
+            decisionsById [tc.id] = {decision: 'approved', result: toolResult};
+            autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
+         }
+         else pending.push (tc);
       }
-      else pending.push (tc);
+
+      if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
+
+      return {
+         dialogId: dialog.dialogId,
+         filename: dialog.filename,
+         provider: provider,
+         model: model,
+         content: result.content,
+         toolCalls: pending.length ? pending : null,
+         autoExecuted: autoExecuted
+      };
    }
-
-   if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
-
-   return {
-      dialogId: dialog.dialogId,
-      filename: dialog.filename,
-      provider: provider,
-      model: model,
-      content: result.content,
-      toolCalls: pending.length ? pending : null,
-      autoExecuted: autoExecuted
-   };
+   finally {
+      try {
+         finalizeAssistantTime (dialog.filepath, assistantStart, new Date ().toISOString ());
+      }
+      catch (error) {}
+   }
 };
 
 var createWaitingDialog = function (provider, model, slug) {
@@ -874,7 +1024,7 @@ var createWaitingDialog = function (provider, model, slug) {
    };
 };
 
-var startDialogTurn = async function (provider, prompt, model, slug, onChunk) {
+var startDialogTurn = async function (provider, prompt, model, slug, onChunk, abortSignal) {
    if (provider !== 'claude' && provider !== 'openai') {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
@@ -894,14 +1044,14 @@ var startDialogTurn = async function (provider, prompt, model, slug, onChunk) {
    ensureDialogFile (dialog, provider, defaultModel);
    appendToDialog (dialog.filepath, '## User\n> Time: ' + new Date ().toISOString () + '\n\n' + prompt + '\n\n');
 
-   var result = await runCompletion (dialog, provider, defaultModel, onChunk);
+   var result = await runCompletion (dialog, provider, defaultModel, onChunk, abortSignal);
    if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
    result.filename = dialog.filename;
    result.status = dialog.status;
    return result;
 };
 
-var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk) {
+var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk, abortSignal) {
    var dialog = loadDialog (dialogId);
    if (! dialog.exists) throw new Error ('Dialog not found: ' + dialogId);
 
@@ -961,7 +1111,7 @@ var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput,
          throw new Error ('Unable to determine provider for dialog update');
       }
       var resolvedModel = model || meta.model || (resolvedProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
-      var result = await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk);
+      var result = await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk, abortSignal);
 
       if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
       else if (deniedAny) setDialogStatus (dialog, 'waiting');
@@ -1163,6 +1313,13 @@ var routes = [
       var continues = (type (rq.body.prompt) === 'string' && rq.body.prompt.trim ()) || rq.body.decisions !== undefined;
 
       if (! continues) {
+         var active = getActiveStream (rq.body.dialogId);
+         if (active && rq.body.status && inc (['waiting', 'done'], rq.body.status)) {
+            active.requestedStatus = rq.body.status;
+            active.controller.abort ();
+            return reply (rs, 200, {ok: true, dialogId: rq.body.dialogId, interrupted: true, status: rq.body.status});
+         }
+
          try {
             var result = await updateDialogTurn (rq.body.dialogId, rq.body.status, null, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
             return reply (rs, 200, result);
@@ -1178,6 +1335,8 @@ var routes = [
          'Connection': 'keep-alive'
       });
 
+      var controller = beginActiveStream (rq.body.dialogId);
+
       try {
          var result = await updateDialogTurn (
             rq.body.dialogId,
@@ -1189,7 +1348,8 @@ var routes = [
             rq.body.model,
             function (chunk) {
                rs.write ('data: ' + JSON.stringify ({type: 'chunk', content: chunk}) + '\n\n');
-            }
+            },
+            controller.signal
          );
 
          if (result.toolCalls) {
@@ -1200,9 +1360,28 @@ var routes = [
          rs.end ();
       }
       catch (error) {
-         clog ('Dialog update error:', error.message);
-         rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
-         rs.end ();
+         if (error && error.name === 'AbortError') {
+            try {
+               var activeAfterAbort = getActiveStream (rq.body.dialogId);
+               var requestedStatus = activeAfterAbort && activeAfterAbort.requestedStatus ? activeAfterAbort.requestedStatus : 'waiting';
+               var dialogAfterAbort = loadDialog (rq.body.dialogId);
+               if (dialogAfterAbort.exists) setDialogStatus (dialogAfterAbort, requestedStatus);
+               rs.write ('data: ' + JSON.stringify ({type: 'done', result: {dialogId: rq.body.dialogId, filename: dialogAfterAbort.filename, status: requestedStatus, interrupted: true}}) + '\n\n');
+               rs.end ();
+            }
+            catch (interruptError) {
+               rs.write ('data: ' + JSON.stringify ({type: 'error', error: interruptError.message}) + '\n\n');
+               rs.end ();
+            }
+         }
+         else {
+            clog ('Dialog update error:', error.message);
+            rs.write ('data: ' + JSON.stringify ({type: 'error', error: error.message}) + '\n\n');
+            rs.end ();
+         }
+      }
+      finally {
+         endActiveStream (rq.body.dialogId);
       }
    }],
 

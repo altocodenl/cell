@@ -307,26 +307,29 @@ Goal: be able to build vibey with vibey itself.
 
 Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js.
 
-These are the flow I want to achieve now:
+These are the flows I want to achieve now:
 
 Flow #1:
 
-- I appear on the Files tab
+- I go to localhost:3001
+- I appear on the Docs tab
 - I go to the dialogs tab
 - I open a new dialog, entering its name
-- A file named dialog-<timestamp>-<name>-waiting.md is created
-- The dropdown for gpt5.3 is selected. I enter some text on the box below on the right (not a prompt window) and I send it and off the dialog goes.
-- I get a LLM response. I can see tokens used, times.
-- I ask a question to the LLM which requires tool use (say a diff).
+- A file named dialog-<timestamp>-<name>-waiting.md is created, but I only see the name of the dialog. The status is shown as an appropriate icon. The entire name is seen, even if it makes the label larger.
+- The dropdown for gpt5.3 is selected. I enter some text on the box below on the right (not a prompt window) and I send it and off the dialog goes. The request is to read vibey.md.
+- I get a request to read the file and I authorize it.
+- I get a LLM response. I can see tokens used, times of requests. The file sent is compacted, not shown fully. I can expand it (and re-contract it by clicking another button).
+- I ask a question to the LLM which requires tool use (say a diff): please add a console.log at the top of vibey-server.js.
 - The LLM asks for it and I need to authorize it. I authorize it once.
-- The diff is applied.
+- The diff is applied. I can see it with a green background.
 
 Flow #2:
 
-- I appear on the Files tab
+- I appear on the Docs tab
 - I click on main.md (which is, under the hood, doc-main.md).
 - I can have a good editing experience of the file.
 - I can save my changes.
+- If I leave before saving my changes, I'm warned and can stay and then save.
 - I can make more changes and discard them.
 
 Flow #3:
@@ -336,27 +339,11 @@ Flow #3:
 - I start a new dialog to say "please start".
 - The agent starts working, spawning another agent.
 
-- Please make the AI be purplish, rather than reddish.
-- Remove the "apply" button after I clicked on an authorization.
+TODO:
 
-- Interrupting an agent stops the stream. This is done with PUT /dialog
+- Create projects that are self-contained. Not their own container (yet), but definitely their own folder. Have a first view that is a project selector that just lists the folders. You cannoto go up.
+- You can save a copy of the project either as a .zip or as a project itself, that's listed as a snapshot/backup.
+- Inside each project, you have the docs and the dialogs. The project name is reflected in the URL.
+- Make sure URLs are URI encoded for every resource so we can have arbitrary names that won't break the navigation.
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
-- Remove pending tool calls from server memory. Have it written down in the markdown. When agreeing to execute from the dialog by human intervention, save that in the markdown of the dialog and resume the dialog.Also save blanket authorizations for the tool (let's say one per type) and have that available at the markdown. When a tool request comes from a dialog, the server checks if it was authorized or not in that dialog. If it was, it goes through, otherwise the dialog goes to pending. Also, when spinning the dialog, if there are global authorizations, put them right there from the beginning.
-- Show the message you send before you receive the answer (right now it appears when the response from the server is complete).
-- Hide (from the UI, not the markdown) the content of the files sent in the client (just say what file you sent), to avoid clogging the frontend.
-- Diff suggest & diff apply: show them nicely: green for the +, red for the -.
-- Show the times of messages (start & end, not per chunk), also show how many tokens consumed at the end of each message (as per the API response, no guessing), this is fun. Also cumulative tokens used for that dialog. Everything stored in the markdown! No state in the server.
 - The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to POST /dialog. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (POST /dialog should support sending an initial prompt).
-- Be able to interrupt an agent when you call PUT /dialog.
-- Possible dialog states: done, active, waiting (on human). Waiting means that a tool use is proposed, or that the LLM considers that they still need mor e human input (they can specify this through a convention that's also in the markdown). The status of a dialog is in its file name, its suffix is <status>.md.
-- I'm deciding against a single dialog/main.md to keep track. We just look at active dialogs to see what chats are happening.
-- Stop creating bla.md dialogs, we always need the status.
-- Allow a user to stop the stream of a dialog. Also to mark it as done.
-- Format: dialog-<YYYYMMDD-HHmmss>-<slug>-<status>.md
-- remove pendingToolCalls memory and reconstruct pending tool requests by parsing dialog markdown each time
-- To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
-
-
-EXPERIMENT FOR LATER:
-
-- Introduce a pseudo-tool name like request_human_input
