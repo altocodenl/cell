@@ -341,9 +341,6 @@ Flow #3:
 
 TODO:
 
-- Create projects that are self-contained. Not their own container (yet), but definitely their own folder. Have a first view that is a project selector that just lists the folders. You cannoto go up.
-- You can save a copy of the project either as a .zip or as a project itself, that's listed as a snapshot/backup.
-- Inside each project, you have the docs and the dialogs. The project name is reflected in the URL.
-- Make sure URLs are URI encoded for every resource so we can have arbitrary names that won't break the navigation.
+- Add openai and claude accounts as providers because to do this with API calls is going to be an arm and a leg.
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
 - The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to POST /dialog. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (POST /dialog should support sending an initial prompt).

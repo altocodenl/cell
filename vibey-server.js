@@ -29,8 +29,8 @@ var SECRET = require ('./secret.js');
 var OPENAI_API_KEY = SECRET.openai;
 var CLAUDE_API_KEY = SECRET.claude;
 
-var getDocMainContent = function () {
-   var path = Path.join (VIBEY_DIR, 'doc-main.md');
+var getDocMainContent = function (projectDir) {
+   var path = Path.join (projectDir, 'doc-main.md');
    if (! fs.existsSync (path)) return null;
 
    try {
@@ -56,20 +56,20 @@ var compactText = function (text, maxLines, maxChars) {
    return compacted;
 };
 
-var getDocMainInjection = function () {
-   var docMain = getDocMainContent ();
+var getDocMainInjection = function (projectDir) {
+   var docMain = getDocMainContent (projectDir);
    if (! docMain) return '';
    return '\n\nProject instructions (' + docMain.name + '):\n\n' + docMain.content;
 };
 
-var upsertDocMainContextBlock = function (filepath) {
+var upsertDocMainContextBlock = function (filepath, projectDir) {
    if (! fs.existsSync (filepath)) return;
 
    var markdown = fs.readFileSync (filepath, 'utf8');
    var blockRe = /<!-- DOC_MAIN_CONTEXT_START -->[\s\S]*?<!-- DOC_MAIN_CONTEXT_END -->\n\n?/;
    markdown = markdown.replace (blockRe, '');
 
-   var docMain = getDocMainContent ();
+   var docMain = getDocMainContent (projectDir);
    if (! docMain) {
       fs.writeFileSync (filepath, markdown, 'utf8');
       return;
@@ -94,6 +94,34 @@ var upsertDocMainContextBlock = function (filepath) {
 
 var ACTIVE_STREAMS = {};
 
+var getProjectDir = function (projectName) {
+   if (type (projectName) !== 'string' || ! projectName.trim ()) throw new Error ('Invalid project name');
+   projectName = projectName.trim ();
+   if (projectName.includes ('..') || projectName.includes ('/') || projectName.includes ('\\')) throw new Error ('Invalid project name');
+
+   var dir = Path.join (VIBEY_DIR, projectName);
+   var normalizedRoot = Path.resolve (VIBEY_DIR) + Path.sep;
+   var normalizedDir = Path.resolve (dir) + Path.sep;
+   if (normalizedDir.indexOf (normalizedRoot) !== 0) throw new Error ('Invalid project name');
+   return dir;
+};
+
+var ensureProjectDir = function (projectName) {
+   var dir = getProjectDir (projectName);
+   if (! fs.existsSync (dir)) fs.mkdirSync (dir, {recursive: true});
+   return dir;
+};
+
+var listProjects = function () {
+   if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR, {recursive: true});
+   var entries = fs.readdirSync (VIBEY_DIR, {withFileTypes: true});
+   var dirs = dale.fil (entries, undefined, function (entry) {
+      if (entry.isDirectory ()) return entry.name;
+   });
+   dirs.sort ();
+   return dirs;
+};
+
 var beginActiveStream = function (dialogId) {
    var controller = new AbortController ();
    ACTIVE_STREAMS [dialogId] = {controller: controller, requestedStatus: null};
@@ -111,6 +139,18 @@ var endActiveStream = function (dialogId) {
 // *** MCP TOOLS ***
 
 var exec = require ('child_process').exec;
+
+var resolveProjectPath = function (projectDir, path) {
+   if (type (path) !== 'string' || ! path.trim ()) throw new Error ('Invalid path');
+
+   var resolved = Path.isAbsolute (path) ? Path.resolve (path) : Path.resolve (projectDir, path);
+   var normalizedRoot = Path.resolve (projectDir) + Path.sep;
+   if (resolved !== Path.resolve (projectDir) && (resolved + Path.sep).indexOf (normalizedRoot) !== 0 && resolved.indexOf (normalizedRoot) !== 0) {
+      throw new Error ('Path escapes project directory');
+   }
+
+   return resolved;
+};
 
 // Tool definitions (written once, converted to both provider formats below)
 var TOOLS = [
@@ -212,25 +252,48 @@ var OPENAI_TOOLS = dale.go (TOOLS, function (tool) {
 });
 
 // Execute a tool locally
-var executeTool = function (toolName, toolInput) {
+var executeTool = function (toolName, toolInput, projectName) {
    return new Promise (function (resolve) {
+      var projectDir;
+      try {
+         projectDir = ensureProjectDir (projectName);
+      }
+      catch (error) {
+         return resolve ({success: false, error: error.message});
+      }
 
       if (toolName === 'run_command') {
-         exec (toolInput.command, {timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
+         exec (toolInput.command, {cwd: projectDir, timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
             if (error) resolve ({success: false, error: error.message, stderr: stderr});
             else       resolve ({success: true, stdout: stdout, stderr: stderr});
          });
       }
 
       else if (toolName === 'write_file') {
-         fs.writeFile (toolInput.path, toolInput.content, 'utf8', function (error) {
+         var writePath;
+         try {
+            writePath = resolveProjectPath (projectDir, toolInput.path);
+         }
+         catch (error) {
+            return resolve ({success: false, error: error.message});
+         }
+
+         fs.writeFile (writePath, toolInput.content, 'utf8', function (error) {
             if (error) resolve ({success: false, error: error.message});
             else       resolve ({success: true, message: 'File written: ' + toolInput.path});
          });
       }
 
       else if (toolName === 'edit_file') {
-         fs.readFile (toolInput.path, 'utf8', function (error, content) {
+         var editPath;
+         try {
+            editPath = resolveProjectPath (projectDir, toolInput.path);
+         }
+         catch (error) {
+            return resolve ({success: false, error: error.message});
+         }
+
+         fs.readFile (editPath, 'utf8', function (error, content) {
             if (error) return resolve ({success: false, error: error.message});
 
             var count = content.split (toolInput.old_string).length - 1;
@@ -243,7 +306,7 @@ var executeTool = function (toolName, toolInput) {
             }
             else {
                var updated = content.replace (toolInput.old_string, toolInput.new_string);
-               fs.writeFile (toolInput.path, updated, 'utf8', function (error) {
+               fs.writeFile (editPath, updated, 'utf8', function (error) {
                   if (error) resolve ({success: false, error: error.message});
                   else       resolve ({success: true, message: 'Edit applied to ' + toolInput.path});
                });
@@ -259,7 +322,7 @@ var executeTool = function (toolName, toolInput) {
             return resolve ({success: false, error: 'launch_agent: prompt is required'});
          }
 
-         startDialogTurn (toolInput.provider, toolInput.prompt.trim (), toolInput.model, toolInput.slug, null)
+         startDialogTurn (projectName, toolInput.provider, toolInput.prompt.trim (), toolInput.model, toolInput.slug, null)
             .then (function (result) {
                resolve ({
                   success: true,
@@ -551,8 +614,8 @@ var parseDialogFilename = function (filename) {
    return {dialogId: match [1], status: match [2]};
 };
 
-var findDialogFilename = function (dialogId) {
-   var files = fs.readdirSync (VIBEY_DIR);
+var findDialogFilename = function (projectDir, dialogId) {
+   var files = fs.readdirSync (projectDir);
    var prefix = 'dialog-' + dialogId + '-';
    var found = dale.stopNot (files, undefined, function (file) {
       var parsed = parseDialogFilename (file);
@@ -561,24 +624,24 @@ var findDialogFilename = function (dialogId) {
    return found || null;
 };
 
-var createDialogId = function (slug) {
+var createDialogId = function (projectDir, slug) {
    var base = formatDialogTimestamp () + '-' + slugify (slug || 'dialog');
    var candidate = base;
    var counter = 2;
-   while (findDialogFilename (candidate)) {
+   while (findDialogFilename (projectDir, candidate)) {
       candidate = base + '-' + counter;
       counter++;
    }
    return candidate;
 };
 
-var loadDialog = function (dialogId) {
-   var filename = findDialogFilename (dialogId);
+var loadDialog = function (projectDir, dialogId) {
+   var filename = findDialogFilename (projectDir, dialogId);
    if (! filename) {
       return {
          dialogId: dialogId,
          filename: buildDialogFilename (dialogId, 'active'),
-         filepath: Path.join (VIBEY_DIR, buildDialogFilename (dialogId, 'active')),
+         filepath: Path.join (projectDir, buildDialogFilename (dialogId, 'active')),
          status: 'active',
          exists: false,
          markdown: '',
@@ -586,7 +649,7 @@ var loadDialog = function (dialogId) {
       };
    }
 
-   var filepath = Path.join (VIBEY_DIR, filename);
+   var filepath = Path.join (projectDir, filename);
    var markdown = fs.readFileSync (filepath, 'utf8');
    var parsed = parseDialogFilename (filename) || {status: 'active'};
 
@@ -607,7 +670,7 @@ var setDialogStatus = function (dialog, status) {
    if (dialog.status === status) return dialog;
 
    var newFilename = buildDialogFilename (dialog.dialogId, status);
-   var newPath = Path.join (VIBEY_DIR, newFilename);
+   var newPath = Path.join (Path.dirname (dialog.filepath), newFilename);
    fs.renameSync (dialog.filepath, newPath);
    dialog.filename = newFilename;
    dialog.filepath = newPath;
@@ -615,18 +678,18 @@ var setDialogStatus = function (dialog, status) {
    return dialog;
 };
 
-var getGlobalAuthorizations = function () {
-   var docMain = Path.join (VIBEY_DIR, 'doc-main.md');
+var getGlobalAuthorizations = function (projectDir) {
+   var docMain = Path.join (projectDir, 'doc-main.md');
    if (! fs.existsSync (docMain)) return [];
 
    var auth = parseAuthorizations (fs.readFileSync (docMain, 'utf8'));
    return Object.keys (auth);
 };
 
-var ensureDialogFile = function (dialog, provider, model) {
+var ensureDialogFile = function (dialog, provider, model, projectDir) {
    if (dialog.exists) {
       if (dialog.metadata.provider && dialog.metadata.model) {
-         upsertDocMainContextBlock (dialog.filepath);
+         upsertDocMainContextBlock (dialog.filepath, projectDir);
          return;
       }
       var content = fs.readFileSync (dialog.filepath, 'utf8');
@@ -636,7 +699,7 @@ var ensureDialogFile = function (dialog, provider, model) {
       if (content.startsWith ('# Dialog\n\n')) content = '# Dialog\n\n' + headerLine + content.slice (10);
       else content = '# Dialog\n\n' + headerLine + content;
       fs.writeFileSync (dialog.filepath, content, 'utf8');
-      upsertDocMainContextBlock (dialog.filepath);
+      upsertDocMainContextBlock (dialog.filepath, projectDir);
       dialog.markdown = fs.readFileSync (dialog.filepath, 'utf8');
       dialog.metadata = {provider: provider, model: model};
       return;
@@ -645,7 +708,7 @@ var ensureDialogFile = function (dialog, provider, model) {
    var header = '# Dialog\n\n';
    header += '> Provider: ' + provider + ' | Model: ' + model + '\n';
    header += '> Started: ' + new Date ().toISOString () + '\n\n';
-   dale.go (getGlobalAuthorizations (), function (name) {
+   dale.go (getGlobalAuthorizations (projectDir), function (name) {
       header += '> Authorized: ' + name + '\n';
    });
    if (header [header.length - 1] !== '\n') header += '\n';
@@ -723,10 +786,10 @@ var parseAuthorizationsInput = function (authorizations) {
 };
 
 // Implementation function for Claude (streaming with tool support)
-var chatWithClaude = async function (messages, model, onChunk, abortSignal) {
+var chatWithClaude = async function (projectDir, messages, model, onChunk, abortSignal) {
    model = model || 'claude-sonnet-4-20250514';
 
-   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection ();
+   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection (projectDir);
 
    var requestBody = {
       model: model,
@@ -827,10 +890,10 @@ var chatWithClaude = async function (messages, model, onChunk, abortSignal) {
 };
 
 // Implementation function for OpenAI (streaming with tool support)
-var chatWithOpenAI = async function (messages, model, onChunk, abortSignal) {
+var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abortSignal) {
    model = model || 'gpt-5';
 
-   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection ();
+   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection (projectDir);
 
    var requestBody = {
       model: model,
@@ -938,8 +1001,9 @@ var appendToolCallsToAssistantSection = function (filepath, toolCalls) {
    });
 };
 
-var runCompletion = async function (dialog, provider, model, onChunk, abortSignal) {
-   upsertDocMainContextBlock (dialog.filepath);
+var runCompletion = async function (projectName, dialog, provider, model, onChunk, abortSignal) {
+   var projectDir = ensureProjectDir (projectName);
+   upsertDocMainContextBlock (dialog.filepath, projectDir);
    var markdown = fs.readFileSync (dialog.filepath, 'utf8');
    var messages = parseDialogForProvider (markdown, provider);
 
@@ -953,8 +1017,8 @@ var runCompletion = async function (dialog, provider, model, onChunk, abortSigna
 
    try {
       var result = provider === 'claude'
-         ? await chatWithClaude (messages, model, writeChunk, abortSignal)
-         : await chatWithOpenAI (messages, model, writeChunk, abortSignal);
+         ? await chatWithClaude (projectDir, messages, model, writeChunk, abortSignal)
+         : await chatWithOpenAI (projectDir, messages, model, writeChunk, abortSignal);
 
       appendToDialog (dialog.filepath, '\n\n');
       appendUsageToAssistantSection (dialog.filepath, result.usage);
@@ -968,7 +1032,7 @@ var runCompletion = async function (dialog, provider, model, onChunk, abortSigna
       for (var i = 0; i < (result.toolCalls || []).length; i++) {
          var tc = result.toolCalls [i];
          if (authorizations [tc.name]) {
-            var toolResult = await executeTool (tc.name, tc.input);
+            var toolResult = await executeTool (tc.name, tc.input, projectName);
             decisionsById [tc.id] = {decision: 'approved', result: toolResult};
             autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
          }
@@ -995,25 +1059,26 @@ var runCompletion = async function (dialog, provider, model, onChunk, abortSigna
    }
 };
 
-var createWaitingDialog = function (provider, model, slug) {
+var createWaitingDialog = function (projectName, provider, model, slug) {
    if (provider !== 'claude' && provider !== 'openai') {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
+   var projectDir = ensureProjectDir (projectName);
    var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
-   var dialogId = createDialogId (slug || 'dialog');
+   var dialogId = createDialogId (projectDir, slug || 'dialog');
    var filename = buildDialogFilename (dialogId, 'waiting');
    var dialog = {
       dialogId: dialogId,
       filename: filename,
-      filepath: Path.join (VIBEY_DIR, filename),
+      filepath: Path.join (projectDir, filename),
       status: 'waiting',
       exists: false,
       markdown: '',
       metadata: {}
    };
 
-   ensureDialogFile (dialog, provider, defaultModel);
+   ensureDialogFile (dialog, provider, defaultModel, projectDir);
 
    return {
       dialogId: dialog.dialogId,
@@ -1024,35 +1089,36 @@ var createWaitingDialog = function (provider, model, slug) {
    };
 };
 
-var startDialogTurn = async function (provider, prompt, model, slug, onChunk, abortSignal) {
+var startDialogTurn = async function (projectName, provider, prompt, model, slug, onChunk, abortSignal) {
    if (provider !== 'claude' && provider !== 'openai') {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
+   var projectDir = ensureProjectDir (projectName);
    var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
-   var dialogId = createDialogId (slug);
+   var dialogId = createDialogId (projectDir, slug);
    var dialog = {
       dialogId: dialogId,
       filename: buildDialogFilename (dialogId, 'active'),
-      filepath: Path.join (VIBEY_DIR, buildDialogFilename (dialogId, 'active')),
+      filepath: Path.join (projectDir, buildDialogFilename (dialogId, 'active')),
       status: 'active',
       exists: false,
       markdown: '',
       metadata: {}
    };
 
-   ensureDialogFile (dialog, provider, defaultModel);
+   ensureDialogFile (dialog, provider, defaultModel, projectDir);
    appendToDialog (dialog.filepath, '## User\n> Time: ' + new Date ().toISOString () + '\n\n' + prompt + '\n\n');
 
-   var result = await runCompletion (dialog, provider, defaultModel, onChunk, abortSignal);
+   var result = await runCompletion (projectName, dialog, provider, defaultModel, onChunk, abortSignal);
    if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
    result.filename = dialog.filename;
    result.status = dialog.status;
    return result;
 };
 
-var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk, abortSignal) {
-   var dialog = loadDialog (dialogId);
+var updateDialogTurn = async function (projectName, dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk, abortSignal) {
+   var dialog = loadDialog (ensureProjectDir (projectName), dialogId);
    if (! dialog.exists) throw new Error ('Dialog not found: ' + dialogId);
 
    var authorizations = parseAuthorizationsInput (authorizationsInput || '');
@@ -1091,7 +1157,7 @@ var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput,
          var tc = pending [i];
          if (! decisionsById [tc.id]) continue;
          if (decisionsById [tc.id].decision !== 'approved') continue;
-         decisionsById [tc.id].result = await executeTool (tc.name, tc.input);
+         decisionsById [tc.id].result = await executeTool (tc.name, tc.input, projectName);
       }
 
       if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
@@ -1111,7 +1177,7 @@ var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput,
          throw new Error ('Unable to determine provider for dialog update');
       }
       var resolvedModel = model || meta.model || (resolvedProvider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
-      var result = await runCompletion (dialog, resolvedProvider, resolvedModel, onChunk, abortSignal);
+      var result = await runCompletion (projectName, dialog, resolvedProvider, resolvedModel, onChunk, abortSignal);
 
       if (result.toolCalls && result.toolCalls.length) setDialogStatus (dialog, 'waiting');
       else if (deniedAny) setDialogStatus (dialog, 'waiting');
@@ -1133,15 +1199,12 @@ var updateDialogTurn = async function (dialogId, status, prompt, decisionsInput,
    };
 };
 
-// Ensure vibey directory exists
-if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR);
-
 // Validate filename: only alphanumeric, dash, underscore, dot; must end in .md
 var validFilename = function (name) {
    if (! name || typeof name !== 'string') return false;
-   if (! /^[a-zA-Z0-9_\-\.]+$/.test (name)) return false;
    if (! name.endsWith ('.md')) return false;
    if (name.includes ('..')) return false;
+   if (name.includes ('/') || name.includes ('\\')) return false;
    return true;
 }
 
@@ -1170,10 +1233,63 @@ var routes = [
    ])],
    ['get', 'vibey-client.js', cicek.file],
 
+   // *** PROJECTS ***
+
+   ['get', 'projects', function (rq, rs) {
+      try {
+         reply (rs, 200, listProjects ());
+      }
+      catch (error) {
+         reply (rs, 500, {error: error.message});
+      }
+   }],
+
+   ['post', 'projects', function (rq, rs) {
+      if (stop (rs, [['name', rq.body.name, 'string']])) return;
+      try {
+         ensureProjectDir (rq.body.name);
+         reply (rs, 200, {ok: true, name: rq.body.name});
+      }
+      catch (error) {
+         reply (rs, 400, {error: error.message});
+      }
+   }],
+
+   ['post', 'project/:project/snapshot', function (rq, rs) {
+      if (stop (rs, [['type', rq.body.type, 'string', {oneOf: ['zip', 'project']}]])) return;
+
+      var projectName = rq.data.params.project;
+      try {
+         var projectDir = ensureProjectDir (projectName);
+         var stamp = formatDialogTimestamp ();
+
+         if (rq.body.type === 'project') {
+            var snapshotName = (rq.body.name && rq.body.name.trim ()) || ('snapshot-' + projectName + '-' + stamp);
+            var snapshotDir = ensureProjectDir (snapshotName);
+            fs.cpSync (projectDir, snapshotDir, {recursive: true});
+            return reply (rs, 200, {ok: true, type: 'project', name: snapshotName});
+         }
+
+         var zipName = (rq.body.name && rq.body.name.trim ()) || (projectName + '-snapshot-' + stamp + '.zip');
+         if (! /\.zip$/i.test (zipName)) zipName += '.zip';
+         var zipPath = Path.join (projectDir, zipName);
+         exec ('zip -r ' + JSON.stringify (zipPath) + ' .', {cwd: projectDir}, function (error, stdout, stderr) {
+            if (error) return reply (rs, 500, {error: 'zip failed: ' + error.message, stderr: stderr});
+            reply (rs, 200, {ok: true, type: 'zip', file: zipName});
+         });
+      }
+      catch (error) {
+         reply (rs, 400, {error: error.message});
+      }
+   }],
+
    // *** FILES ***
 
-   ['get', 'files', function (rq, rs) {
-      fs.readdir (VIBEY_DIR, function (error, files) {
+   ['get', 'project/:project/files', function (rq, rs) {
+      var projectDir;
+      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+
+      fs.readdir (projectDir, function (error, files) {
          if (error) return reply (rs, 500, {error: 'Failed to read directory'});
          var mdFiles = dale.fil (files, undefined, function (file) {
             if (file.endsWith ('.md')) return file;
@@ -1181,7 +1297,7 @@ var routes = [
          // Sort by modification time, most recent first
          var withStats = dale.go (mdFiles, function (file) {
             try {
-               var stat = fs.statSync (Path.join (VIBEY_DIR, file));
+               var stat = fs.statSync (Path.join (projectDir, file));
                return {name: file, mtime: stat.mtime.getTime ()};
             }
             catch (e) {
@@ -1193,11 +1309,14 @@ var routes = [
       });
    }],
 
-   ['get', 'file/:name', function (rq, rs) {
+   ['get', 'project/:project/file/:name', function (rq, rs) {
       var name = rq.data.params.name;
       if (! validFilename (name)) return reply (rs, 400, {error: 'Invalid filename'});
 
-      var filepath = Path.join (VIBEY_DIR, name);
+      var projectDir;
+      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+
+      var filepath = Path.join (projectDir, name);
       fs.readFile (filepath, 'utf8', function (error, content) {
          if (error) {
             if (error.code === 'ENOENT') return reply (rs, 404, {error: 'File not found'});
@@ -1207,7 +1326,7 @@ var routes = [
       });
    }],
 
-   ['post', 'file/:name', function (rq, rs) {
+   ['post', 'project/:project/file/:name', function (rq, rs) {
       var name = rq.data.params.name;
       if (! validFilename (name)) return reply (rs, 400, {error: 'Invalid filename'});
 
@@ -1215,18 +1334,24 @@ var routes = [
          ['content', rq.body.content, 'string'],
       ])) return;
 
-      var filepath = Path.join (VIBEY_DIR, name);
+      var projectDir;
+      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+
+      var filepath = Path.join (projectDir, name);
       fs.writeFile (filepath, rq.body.content, 'utf8', function (error) {
          if (error) return reply (rs, 500, {error: 'Failed to write file'});
          reply (rs, 200, {ok: true, name: name});
       });
    }],
 
-   ['delete', 'file/:name', function (rq, rs) {
+   ['delete', 'project/:project/file/:name', function (rq, rs) {
       var name = rq.data.params.name;
       if (! validFilename (name)) return reply (rs, 400, {error: 'Invalid filename'});
 
-      var filepath = Path.join (VIBEY_DIR, name);
+      var projectDir;
+      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+
+      var filepath = Path.join (projectDir, name);
       fs.unlink (filepath, function (error) {
          if (error) {
             if (error.code === 'ENOENT') return reply (rs, 404, {error: 'File not found'});
@@ -1239,7 +1364,7 @@ var routes = [
    // *** LLM ***
 
    // Create a waiting dialog draft
-   ['post', 'dialog/new', function (rq, rs) {
+   ['post', 'project/:project/dialog/new', function (rq, rs) {
       if (stop (rs, [
          ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
       ])) return;
@@ -1248,7 +1373,7 @@ var routes = [
       if (rq.body.slug !== undefined && type (rq.body.slug) !== 'string') return reply (rs, 400, {error: 'slug must be a string'});
 
       try {
-         var created = createWaitingDialog (rq.body.provider, rq.body.model, rq.body.slug || 'dialog');
+         var created = createWaitingDialog (rq.data.params.project, rq.body.provider, rq.body.model, rq.body.slug || 'dialog');
          reply (rs, 200, created);
       }
       catch (error) {
@@ -1257,7 +1382,7 @@ var routes = [
    }],
 
    // Create dialog + first turn (SSE)
-   ['post', 'dialog', async function (rq, rs) {
+   ['post', 'project/:project/dialog', async function (rq, rs) {
       if (stop (rs, [
          ['provider', rq.body.provider, 'string', {oneOf: ['claude', 'openai']}],
          ['prompt', rq.body.prompt, 'string'],
@@ -1274,6 +1399,7 @@ var routes = [
 
       try {
          var result = await startDialogTurn (
+            rq.data.params.project,
             rq.body.provider,
             rq.body.prompt,
             rq.body.model,
@@ -1298,7 +1424,7 @@ var routes = [
    }],
 
    // Update dialog (optional SSE when continuing)
-   ['put', 'dialog', async function (rq, rs) {
+   ['put', 'project/:project/dialog', async function (rq, rs) {
       if (stop (rs, [
          ['dialogId', rq.body.dialogId, 'string'],
       ])) return;
@@ -1321,7 +1447,7 @@ var routes = [
          }
 
          try {
-            var result = await updateDialogTurn (rq.body.dialogId, rq.body.status, null, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
+            var result = await updateDialogTurn (rq.data.params.project, rq.body.dialogId, rq.body.status, null, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
             return reply (rs, 200, result);
          }
          catch (error) {
@@ -1339,6 +1465,7 @@ var routes = [
 
       try {
          var result = await updateDialogTurn (
+            rq.data.params.project,
             rq.body.dialogId,
             rq.body.status,
             rq.body.prompt,
@@ -1364,7 +1491,7 @@ var routes = [
             try {
                var activeAfterAbort = getActiveStream (rq.body.dialogId);
                var requestedStatus = activeAfterAbort && activeAfterAbort.requestedStatus ? activeAfterAbort.requestedStatus : 'waiting';
-               var dialogAfterAbort = loadDialog (rq.body.dialogId);
+               var dialogAfterAbort = loadDialog (ensureProjectDir (rq.data.params.project), rq.body.dialogId);
                if (dialogAfterAbort.exists) setDialogStatus (dialogAfterAbort, requestedStatus);
                rs.write ('data: ' + JSON.stringify ({type: 'done', result: {dialogId: rq.body.dialogId, filename: dialogAfterAbort.filename, status: requestedStatus, interrupted: true}}) + '\n\n');
                rs.end ();
@@ -1386,14 +1513,14 @@ var routes = [
    }],
 
    // Execute a tool (called after user approves)
-   ['post', 'tool/execute', async function (rq, rs) {
+   ['post', 'project/:project/tool/execute', async function (rq, rs) {
       if (stop (rs, [
          ['toolName', rq.body.toolName, 'string'],
          ['toolInput', rq.body.toolInput, 'object'],
       ])) return;
 
       try {
-         var result = await executeTool (rq.body.toolName, rq.body.toolInput);
+         var result = await executeTool (rq.body.toolName, rq.body.toolInput, rq.data.params.project);
          reply (rs, 200, result);
       }
       catch (error) {
@@ -1403,9 +1530,9 @@ var routes = [
    }],
 
    // Get dialog by ID
-   ['get', 'dialog/:id', function (rq, rs) {
+   ['get', 'project/:project/dialog/:id', function (rq, rs) {
       var dialogId = rq.data.params.id;
-      var dialog = loadDialog (dialogId);
+      var dialog = loadDialog (ensureProjectDir (rq.data.params.project), dialogId);
 
       if (! dialog.exists) {
          return reply (rs, 404, {error: 'Dialog not found'});
@@ -1423,8 +1550,11 @@ var routes = [
    }],
 
    // List all dialogs
-   ['get', 'dialogs', function (rq, rs) {
-      fs.readdir (VIBEY_DIR, function (error, files) {
+   ['get', 'project/:project/dialogs', function (rq, rs) {
+      var projectDir;
+      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+
+      fs.readdir (projectDir, function (error, files) {
          if (error) return reply (rs, 500, {error: 'Failed to read directory'});
          var dialogFiles = dale.fil (files, undefined, function (file) {
             if (file.startsWith ('dialog-') && file.endsWith ('.md')) return file;
@@ -1432,7 +1562,7 @@ var routes = [
          // Sort by modification time, most recent first
          var withStats = dale.go (dialogFiles, function (file) {
             try {
-               var stat = fs.statSync (Path.join (VIBEY_DIR, file));
+               var stat = fs.statSync (Path.join (projectDir, file));
                var parsed = parseDialogFilename (file);
                if (! parsed) return null;
                return {dialogId: parsed.dialogId, status: parsed.status, filename: file, mtime: stat.mtime.getTime ()};

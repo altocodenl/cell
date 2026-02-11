@@ -241,6 +241,10 @@ Prompts:
 - When I navigate away from a doc with unsaved changes, ask me if I want to save before letting me leave and lose my changes.
 - Please now test flow #1 in its entirety, as specified in vibey.md. Use pupeteer. Check for everything, particularly compaction.
 - Diff suggest & diff apply: show them nicely: green for the +, red for the -.
+- Create projects that are self-contained. Not their own container (yet), but definitely their own folder. Have a first view that is a project selector that just lists the folders. You cannoto go up.
+- You can save a copy of the project either as a .zip or as a project itself, that's listed as a snapshot/backup.
+- Inside each project, you have the docs and the dialogs. The project name is reflected in the URL.
+- Make sure URLs are URI encoded for every resource so we can have arbitrary names that won't break the navigation.
 
 Pupeteer scripts are too one off. It'd be cool to give the LLM a way to run commands interactively in a frontend. Of course, security. But in a localhost context, why not?
 

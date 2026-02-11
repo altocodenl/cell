@@ -55,40 +55,49 @@ var docDisplayName = function (name) {
    return name === 'doc-main.md' ? 'main.md' : name;
 };
 
-var buildHash = function (tab, currentFile) {
+var buildHash = function (project, tab, currentFile) {
+   if (! project) return '#/projects';
    tab = tab === 'dialogs' ? 'dialogs' : 'docs';
-   if (! currentFile || ! currentFile.name) return '#/' + tab;
+   if (! currentFile || ! currentFile.name) return '#/project/' + encodeURIComponent (project) + '/' + tab;
 
    var parsed = parseDialogFilename (currentFile.name);
 
    if (tab === 'dialogs') {
-      if (! parsed) return '#/dialogs';
-      return '#/dialogs/' + encodeURIComponent (parsed.dialogId);
+      if (! parsed) return '#/project/' + encodeURIComponent (project) + '/dialogs';
+      return '#/project/' + encodeURIComponent (project) + '/dialogs/' + encodeURIComponent (parsed.dialogId);
    }
 
-   if (parsed) return '#/docs';
-   return '#/docs/' + encodeURIComponent (docDisplayName (currentFile.name));
+   if (parsed) return '#/project/' + encodeURIComponent (project) + '/docs';
+   return '#/project/' + encodeURIComponent (project) + '/docs/' + encodeURIComponent (docDisplayName (currentFile.name));
 };
 
 var readHashTarget = function (hashValue) {
    var rawHash = hashValue !== undefined ? hashValue : (window.location.hash || '');
    var raw = rawHash.replace (/^#\/?/, '');
-   if (! raw) return {tab: 'docs', target: null};
+   if (! raw) return {project: null, tab: 'projects', target: null};
 
    var parts = raw.split ('/');
-   var tab = parts [0] === 'dialogs' ? 'dialogs' : 'docs';
-   var target = parts [1] ? decodeURIComponent (parts [1]) : null;
+   if (parts [0] === 'project' && parts [1]) {
+      var project = decodeURIComponent (parts [1]);
+      var tab = parts [2] === 'dialogs' ? 'dialogs' : (parts [2] === 'docs' ? 'docs' : 'docs');
+      var target = parts [3] ? decodeURIComponent (parts [3]) : null;
+      if (tab === 'docs' && target) target = normalizeDocFilename (target);
+      return {project: project, tab: tab, target: target};
+   }
 
-   if (tab === 'docs' && target) target = normalizeDocFilename (target);
-   return {tab: tab, target: target};
+   return {project: null, tab: 'projects', target: null};
+};
+
+var projectPath = function (project, tail) {
+   return 'project/' + encodeURIComponent (project) + '/' + tail;
 };
 
 var isDirtyDoc = function (file) {
    return file && ! file.name.startsWith ('dialog-') && file.content !== file.original;
 };
 
-var isSameDocTarget = function (parsed, file) {
-   return parsed && parsed.tab === 'docs' && parsed.target && file && normalizeDocFilename (parsed.target) === file.name;
+var isSameDocTarget = function (parsed, file, currentProject) {
+   return parsed && parsed.tab === 'docs' && parsed.target && file && parsed.project === currentProject && normalizeDocFilename (parsed.target) === file.name;
 };
 
 // *** RESPONDERS ***
@@ -98,44 +107,46 @@ B.mrespond ([
    // *** SETUP ***
 
    ['initialize', [], function (x) {
-      B.call (x, 'set', 'tab', 'docs');
+      B.call (x, 'set', 'tab', 'projects');
       B.call (x, 'set', 'chatProvider', 'openai');
       B.call (x, 'set', 'chatModel', 'gpt-5');
+      B.call (x, 'load', 'projects');
       B.call (x, 'read', 'hash');
-      B.call (x, 'load', 'files');
    }],
 
    ['read', 'hash', function (x) {
       var parsed = readHashTarget ();
       var currentFile = B.get ('currentFile');
-      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile);
+      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile, B.get ('currentProject'));
 
       var applyParsed = function () {
          B.call (x, 'set', 'tab', parsed.tab);
+         B.call (x, 'set', 'currentProject', parsed.project);
          B.call (x, 'set', 'hashTarget', parsed);
-         if (! parsed.target) B.call (x, 'set', 'currentFile', null);
+         if (! parsed.project || ! parsed.target) B.call (x, 'set', 'currentFile', null);
+         if (parsed.project) B.call (x, 'load', 'files', parsed.project);
          B.call (x, 'apply', 'hashTarget');
       };
 
       if (! leavingDirtyDoc) return applyParsed ();
 
       B.call (x, 'confirm', 'leaveCurrentDoc', applyParsed, function () {
-         var backHash = buildHash (B.get ('tab') || 'docs', B.get ('currentFile'));
+         var backHash = buildHash (B.get ('currentProject'), B.get ('tab') || 'docs', B.get ('currentFile'));
          if (window.location.hash !== backHash) window.location.hash = backHash;
       });
    }],
 
    ['write', 'hash', function (x) {
-      var tab = B.get ('tab') || 'docs';
+      var tab = B.get ('tab') || 'projects';
       var currentFile = B.get ('currentFile');
-      var next = buildHash (tab, currentFile);
+      var next = buildHash (B.get ('currentProject'), tab, currentFile);
       if (window.location.hash !== next) window.location.hash = next;
    }],
 
    ['navigate', 'hash', function (x, hash) {
       var parsed = readHashTarget (hash);
       var currentFile = B.get ('currentFile');
-      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile);
+      var leavingDirtyDoc = isDirtyDoc (currentFile) && ! isSameDocTarget (parsed, currentFile, B.get ('currentProject'));
 
       var go = function () {
          if (window.location.hash !== hash) window.location.hash = hash;
@@ -201,10 +212,42 @@ B.mrespond ([
       });
    }],
 
+   // *** PROJECTS ***
+
+   ['load', 'projects', function (x) {
+      B.call (x, 'get', 'projects', {}, '', function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to load projects');
+         B.call (x, 'set', 'projects', rs.body || []);
+      });
+   }],
+
+   ['create', 'project', function (x) {
+      var name = prompt ('Project name:');
+      if (! name || ! name.trim ()) return;
+      B.call (x, 'post', 'projects', {}, {name: name.trim ()}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to create project');
+         B.call (x, 'load', 'projects');
+         B.call (x, 'navigate', 'hash', '#/project/' + encodeURIComponent (name.trim ()) + '/docs');
+      });
+   }],
+
+   ['snapshot', 'project', function (x, type) {
+      var project = B.get ('currentProject');
+      if (! project) return;
+      B.call (x, 'post', projectPath (project, 'snapshot'), {}, {type: type}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to create snapshot');
+         B.call (x, 'load', 'projects');
+         alert (type === 'zip' ? ('Zip created: ' + rs.body.file) : ('Project snapshot created: ' + rs.body.name));
+      });
+   }],
+
    // *** FILES ***
 
-   ['load', 'files', function (x) {
-      B.call (x, 'get', 'files', {}, '', function (x, error, rs) {
+   ['load', 'files', function (x, project) {
+      project = project || B.get ('currentProject');
+      if (! project) return B.call (x, 'set', 'files', []);
+
+      B.call (x, 'get', projectPath (project, 'files'), {}, '', function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to load files');
          B.call (x, 'set', 'files', rs.body);
          B.call (x, 'apply', 'hashTarget');
@@ -213,9 +256,11 @@ B.mrespond ([
 
    ['load', 'file', function (x, name) {
       var currentFile = B.get ('currentFile');
+      var project = B.get ('currentProject');
+      if (! project) return;
       var proceed = function () {
          B.call (x, 'set', 'loadingFile', true);
-         B.call (x, 'get', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+         B.call (x, 'get', projectPath (project, 'file/' + encodeURIComponent (name)), {}, '', function (x, error, rs) {
             B.call (x, 'set', 'loadingFile', false);
             if (error) {
                B.call (x, 'set', 'currentFile', null);
@@ -245,8 +290,11 @@ B.mrespond ([
          return;
       }
 
+      var project = B.get ('currentProject');
+      if (! project) return;
+
       B.call (x, 'set', 'savingFile', true);
-      B.call (x, 'post', 'file/' + encodeURIComponent (file.name), {}, {content: file.content}, function (x, error, rs) {
+      B.call (x, 'post', projectPath (project, 'file/' + encodeURIComponent (file.name)), {}, {content: file.content}, function (x, error, rs) {
          B.call (x, 'set', 'savingFile', false);
          if (error) {
             B.call (x, 'report', 'error', 'Failed to save file');
@@ -265,7 +313,10 @@ B.mrespond ([
       if (! name.endsWith ('.md')) name += '.md';
       name = normalizeDocFilename (name);
 
-      B.call (x, 'post', 'file/' + encodeURIComponent (name), {}, {content: '# ' + docDisplayName (name).replace ('.md', '') + '\n\n'}, function (x, error, rs) {
+      var project = B.get ('currentProject');
+      if (! project) return;
+
+      B.call (x, 'post', projectPath (project, 'file/' + encodeURIComponent (name)), {}, {content: '# ' + docDisplayName (name).replace ('.md', '') + '\n\n'}, function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to create file');
          B.call (x, 'load', 'files');
          B.call (x, 'load', 'file', name);
@@ -281,7 +332,10 @@ B.mrespond ([
          B.call (x, 'write', 'hash');
       }
 
-      B.call (x, 'delete', 'file/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+      var project = B.get ('currentProject');
+      if (! project) return;
+
+      B.call (x, 'delete', projectPath (project, 'file/' + encodeURIComponent (name)), {}, '', function (x, error, rs) {
          if (error) return B.call (x, 'report', 'error', 'Failed to delete file');
          B.call (x, 'load', 'files');
       });
@@ -311,10 +365,13 @@ B.mrespond ([
       var name = prompt ('Dialog name:');
       if (! name || ! name.trim ()) return;
 
+      var project = B.get ('currentProject');
+      if (! project) return;
+
       var provider = B.get ('chatProvider') || 'openai';
       var model = B.get ('chatModel') || defaultModelForProvider (provider);
 
-      B.call (x, 'post', 'dialog/new', {}, {
+      B.call (x, 'post', projectPath (project, 'dialog/new'), {}, {
          provider: provider,
          model: model,
          slug: name.trim ()
@@ -345,6 +402,8 @@ B.mrespond ([
    ['send', 'message', function (x) {
       var file = B.get ('currentFile');
       var input = B.get ('chatInput');
+      var project = B.get ('currentProject');
+      if (! project) return;
       var provider = B.get ('chatProvider') || 'openai';
       var model = B.get ('chatModel') || defaultModelForProvider (provider);
       if (! input || ! input.trim ()) return;
@@ -375,7 +434,7 @@ B.mrespond ([
             model: model || undefined
          };
 
-      fetch ('dialog', {
+      fetch (projectPath (project, 'dialog'), {
          method: method,
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify (payload)
@@ -573,7 +632,7 @@ B.mrespond ([
       B.call (x, 'set', 'streamingContent', '');
       B.call (x, 'set', 'pendingToolCalls', null);
 
-      fetch ('dialog', {
+      fetch (projectPath (B.get ('currentProject'), 'dialog'), {
          method: 'PUT',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({
@@ -595,7 +654,7 @@ B.mrespond ([
       var parsed = file && parseDialogFilename (file.name);
       if (! parsed) return;
 
-      fetch ('dialog', {
+      fetch (projectPath (B.get ('currentProject'), 'dialog'), {
          method: 'PUT',
          headers: {'Content-Type': 'application/json'},
          body: JSON.stringify ({
@@ -610,7 +669,7 @@ B.mrespond ([
             B.call (x, 'set', 'streamingContent', '');
             B.call (x, 'set', 'optimisticUserMessage', null);
 
-            fetch ('dialogs').then (function (rs) {
+            fetch (projectPath (B.get ('currentProject'), 'dialogs')).then (function (rs) {
                if (! rs.ok) return null;
                return rs.json ();
             }).then (function (dialogs) {
@@ -1480,27 +1539,56 @@ views.dialogs = function () {
    });
 };
 
+views.projects = function () {
+   return B.view ([['projects']], function (projects) {
+      return ['div', {class: 'editor-empty'}, [
+         ['div', {style: style ({width: '100%', 'max-width': '640px'})}, [
+            ['div', {class: 'editor-header'}, [
+               ['span', {class: 'editor-filename'}, 'Projects'],
+               ['button', {class: 'primary btn-small', onclick: B.ev ('create', 'project')}, '+ New project']
+            ]],
+            (projects && projects.length)
+               ? ['div', {class: 'file-list', style: style ({width: '100%'})}, dale.go (projects, function (name) {
+                  return ['div', {
+                     class: 'file-item',
+                     onclick: B.ev ('navigate', 'hash', '#/project/' + encodeURIComponent (name) + '/docs')
+                  }, [
+                     ['span', {class: 'file-name'}, name]
+                  ]];
+               })]
+               : ['div', {style: style ({color: '#888'})}, 'No projects yet']
+         ]]
+      ]];
+   });
+};
+
 views.main = function () {
-   return B.view ([['tab']], function (tab) {
+   return B.view ([['tab'], ['currentProject']], function (tab, currentProject) {
       return ['div', {class: 'container'}, [
          ['style', views.css],
 
          ['div', {class: 'header'}, [
             ['h1', {style: style ({margin: 0, 'font-size': '1.5rem'})}, 'vibey'],
+            currentProject ? ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
+               ['span', {style: style ({color: '#9aa4bf'})}, currentProject],
+               ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'project')}, 'Snapshot project'],
+               ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'zip')}, 'Export zip'],
+               ['button', {class: 'btn-small', onclick: B.ev ('navigate', 'hash', '#/projects')}, 'Projects']
+            ]] : ''
          ]],
 
-         ['div', {class: 'tabs'}, [
+         currentProject ? ['div', {class: 'tabs'}, [
             ['button', {
                class: 'tab' + (tab === 'dialogs' ? ' tab-active' : ''),
-               onclick: B.ev ('navigate', 'hash', '#/dialogs')
+               onclick: B.ev ('navigate', 'hash', '#/project/' + encodeURIComponent (currentProject) + '/dialogs')
             }, 'Dialogs'],
             ['button', {
                class: 'tab' + (tab === 'docs' ? ' tab-active' : ''),
-               onclick: B.ev ('navigate', 'hash', '#/docs')
+               onclick: B.ev ('navigate', 'hash', '#/project/' + encodeURIComponent (currentProject) + '/docs')
             }, 'Docs'],
-         ]],
+         ]] : '',
 
-         tab === 'docs' ? views.files () : views.dialogs ()
+         ! currentProject || tab === 'projects' ? views.projects () : (tab === 'docs' ? views.files () : views.dialogs ())
       ]];
    });
 };
