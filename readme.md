@@ -209,6 +209,54 @@ view
 
 ## Development notes
 
+### 2026-02-12
+
+Prompts:
+- The changes to fix the bug are ugly as sin. Can you not just set the value using gotoB as is done elsewhere? If you need examples, let me know.
+- Add openai and claude accounts as providers because to do this with API calls is going to be an arm and a leg. There should be an accounts section outside, next to projects. The credentials should be stored in the vibey folder, at config.json... Actually you're right. secret.js could be part of config.json. That would be the option to add the API keys. Add that too please. Hide the API keys so I
+- Nice work! But the accounts part should have two sections: API keys and subscriptions. Add please the flow for both subscriptions. If possible, do this like the pi agent (which is open source) does, but changing the referrer to vibey when sending the oauth request.
+- Fantastic work! Is this stored at `vibey/config.json`? It shouldn't be in secret.js anymore.
+
+IT WORKED! IT ALL WORKED!
+
+- Change the logic so that when there's a provider with a subscription, you use that and not the API. Do we need new endpoints? Explain to me how it works under the hood before implementing.
+- Bam, go for it.
+
+- I'm tired of pupeteer. Build a vibey-test.js that can be loaded dynamically and executed by the client when clicking a button somewhere. Please read arc/gotoB.min.js to understand the libraries. Then use c.test for the tests.
+
+### Claude's analysis of oauth with anthropic and openai
+
+Now I have a clear picture. The OAuth flows are:
+
+ Anthropic (Claude Pro/Max):
+ 1. Generate PKCE verifier/challenge
+ 2. Open browser to https://claude.ai/oauth/authorize with params
+ 3. User logs in and gets a code#state back from the redirect
+ 4. User pastes the code
+ 5. Exchange code for tokens at https://console.anthropic.com/v1/oauth/token
+ 6. Store access/refresh/expires
+ 7. When using: if token has sk-ant-oat, use authToken instead of apiKey, add special headers
+ 8. OpenAI follows a similar PKCE flow but runs a local callback server on port 1455, extracts the accountId from the JWT after token exchange, and then hits
+ their Codex endpoint with the access token.
+
+ For vibey as a web app, the server needs to handle OAuth coordination since the browser can't directly manage the flows. I'll set up endpoints to manage
+ authentication across providers—one to check status, save credentials, initiate OAuth flows, handle callbacks, and log out. The Anthropic flow starts when
+ the client requests an OAuth login, and the server generates the necessary parameters to kick things off. I'm picturing the Accounts page with an API Keys
+ section for manual entry and a Subscriptions section with OAuth buttons—Claude's will prompt for a code paste while ChatGPT's will auto-receive the callback
+ since vibey runs its own server. The backend will handle token exchange and storage, then transparently refresh tokens when needed during LLM calls.
+
+ Now I'm starting the implementation, focusing on PKCE generation in Node.js, the OAuth endpoints, and token refresh logic.
+
+ For OpenAI's callback, I realize the redirect_uri is hardcoded to http://localhost:1455/auth/callback, so I'll need to spin up a temporary server on that
+ port just like pi does rather than trying to route it through vibey's main server. Anthropic's redirect is different, so I'll handle that separately.
+
+ Now I have the full picture. Let me implement both OAuth flows. Here's the plan:
+
+ - Anthropic OAuth: PKCE flow → user pastes code#state back
+ - OpenAI Codex OAuth: PKCE flow → local callback server on port 1455 + manual paste fallback
+ - Both store tokens in config.json, auto-refresh, originator set to vibey
+ - Server LLM functions adapted to use OAuth tokens with correct headers
+
 ### 2026-02-11
 
 https://mariozechner.at/posts/2025-11-22-armin-is-wrong/

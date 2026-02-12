@@ -774,6 +774,12 @@ B.mrespond ([
          B.call (x, 'send', 'message');
       }
    }],
+
+   ['run', 'tests', function (x) {
+      c.loadScript ('vibey-test.js', function (error) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to load vibey-test.js');
+      });
+   }],
 ]);
 
 // *** VIEWS ***
@@ -1820,7 +1826,12 @@ views.main = function () {
                ['button', {
                   class: 'btn-small' + (tab === 'accounts' ? ' primary' : ''),
                   onclick: B.ev ('navigate', 'hash', '#/accounts')
-               }, 'Accounts']
+               }, 'Accounts'],
+               ['button', {
+                  class: 'btn-small',
+                  style: style ({'background-color': '#2d6a4f', color: '#b7e4c7'}),
+                  onclick: B.ev ('run', 'tests')
+               }, '🧪 Test']
             ]]
          ]],
 

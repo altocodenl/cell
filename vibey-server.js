@@ -1124,7 +1124,7 @@ var ensureDialogFile = function (dialog, provider, model, projectDir) {
    if (header [header.length - 1] !== '\n') header += '\n';
    header += '\n';
    fs.writeFileSync (dialog.filepath, header, 'utf8');
-   upsertDocMainContextBlock (dialog.filepath);
+   upsertDocMainContextBlock (dialog.filepath, projectDir);
    dialog.exists = true;
    dialog.markdown = fs.readFileSync (dialog.filepath, 'utf8');
 };
@@ -1337,6 +1337,16 @@ var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abort
       headers ['chatgpt-account-id'] = auth.accountId;
       headers ['OpenAI-Beta'] = 'responses=experimental';
       headers ['originator'] = 'vibey';
+      // Responses API uses `input` + `instructions`, not `messages`
+      requestBody.instructions = systemPrompt;
+      requestBody.input = messages;
+      requestBody.store = false;
+      // Responses API tool format: {type, name, description, parameters} (flat, not nested under `function`)
+      requestBody.tools = dale.go (TOOLS, function (tool) {
+         return {type: 'function', name: tool.name, description: tool.description, parameters: tool.input_schema};
+      });
+      delete requestBody.messages;
+      delete requestBody.stream_options;
    }
 
    var response = await fetch (apiUrl, {
@@ -1662,6 +1672,7 @@ var routes = [
       ]]
    ])],
    ['get', 'vibey-client.js', cicek.file],
+   ['get', 'vibey-test.js', cicek.file],
 
    // *** ACCOUNTS ***
 
