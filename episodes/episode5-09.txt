@@ -1,0 +1,25 @@
+Eight episode of season 5! I'm building a programming substrate from scratch while recording myself. More vibey. The dopamine is starting to flow like opium.
+
+https://github.com/altocodenl/cell
+
+Continuing but mute, conversation around me.
+
+Whoops, I got pwned.
+
+OK, the clanker really got what I meant.
+
+claude goes through its context window like a machine gun through ammunition
+
+Even if I get help from pi, vibey is never going to be as cool as pi.
+
+I did oauth2 flows by hand before. I'm a bit happy that I don't have to do it by hand anymore.
+
+I'm 50% in the context window but too much in love with that session to stop it now. It will come to tears, perhaps.
+
+Got something in my eye.
+
+I almost never use that testing layer that I built on my library, because I never got around to it. Maybe now...
+
+Only today I understood why it is really hard to stop when you're on a roll like this with an agent. And it's just one agent.
+
+OK, the flows are broken. But tremendous progress nevertheless. See you next time!
