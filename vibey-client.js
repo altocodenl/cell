@@ -31,7 +31,7 @@ var dialogDisplayLabel = function (filename) {
 
 var MODEL_OPTIONS = {
    openai: [
-      {value: 'gpt-5', label: 'gpt-5'},
+      {value: 'gpt-5', label: 'gpt5.3'},
       {value: 'gpt-4o', label: 'gpt-4o'}
    ],
    claude: [
@@ -76,6 +76,8 @@ var readHashTarget = function (hashValue) {
    var raw = rawHash.replace (/^#\/?/, '');
    if (! raw) return {project: null, tab: 'projects', target: null};
 
+   if (raw === 'accounts') return {project: null, tab: 'accounts', target: null};
+
    var parts = raw.split ('/');
    if (parts [0] === 'project' && parts [1]) {
       var project = decodeURIComponent (parts [1]);
@@ -110,6 +112,7 @@ B.mrespond ([
       B.call (x, 'set', 'tab', 'projects');
       B.call (x, 'set', 'chatProvider', 'openai');
       B.call (x, 'set', 'chatModel', 'gpt-5');
+      B.call (x, 'set', 'chatInput', '');
       B.call (x, 'load', 'projects');
       B.call (x, 'read', 'hash');
    }],
@@ -121,6 +124,8 @@ B.mrespond ([
 
       var applyParsed = function () {
          B.call (x, 'set', 'tab', parsed.tab);
+         if (parsed.tab === 'dialogs') B.call (x, 'reset', 'chatInput');
+         if (parsed.tab === 'accounts') B.call (x, 'load', 'accounts');
          B.call (x, 'set', 'currentProject', parsed.project);
          B.call (x, 'set', 'hashTarget', parsed);
          if (! parsed.project || ! parsed.target) B.call (x, 'set', 'currentFile', null);
@@ -185,6 +190,11 @@ B.mrespond ([
       alert (typeof error === 'string' ? error : JSON.stringify (error));
    }],
 
+   ['reset', 'chatInput', function (x) {
+      B.call (x, 'set', 'chatInput', ' ');
+      B.call (x, 'set', 'chatInput', '');
+   }],
+
    ['confirm', 'leaveCurrentDoc', function (x, onContinue, onCancel) {
       var currentFile = B.get ('currentFile');
       if (! isDirtyDoc (currentFile)) return onContinue && onContinue ();
@@ -241,6 +251,75 @@ B.mrespond ([
       });
    }],
 
+   // *** ACCOUNTS ***
+
+   ['load', 'accounts', function (x) {
+      B.call (x, 'get', 'accounts', {}, '', function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to load accounts');
+         B.call (x, 'set', 'accounts', rs.body || {});
+      });
+   }],
+
+   ['save', 'accounts', function (x) {
+      var edits = B.get ('accountEdits') || {};
+      var body = {};
+      if (edits.openaiKey !== undefined) body.openaiKey = edits.openaiKey;
+      if (edits.claudeKey !== undefined) body.claudeKey = edits.claudeKey;
+
+      B.call (x, 'set', 'savingAccounts', true);
+      B.call (x, 'post', 'accounts', {}, body, function (x, error, rs) {
+         B.call (x, 'set', 'savingAccounts', false);
+         if (error) return B.call (x, 'report', 'error', 'Failed to save accounts');
+         B.call (x, 'set', 'accountEdits', {});
+         B.call (x, 'load', 'accounts');
+      });
+   }],
+
+   ['login', 'oauth', function (x, provider) {
+      B.call (x, 'set', 'oauthLoading', provider);
+      B.call (x, 'set', 'oauthStep', null);
+      B.call (x, 'post', 'accounts/login/' + provider, {}, {}, function (x, error, rs) {
+         if (error) {
+            B.call (x, 'set', 'oauthLoading', null);
+            return B.call (x, 'report', 'error', 'Failed to start login');
+         }
+         var body = rs.body;
+         // Open the auth URL in a new tab
+         window.open (body.url, '_blank');
+
+         if (body.flow === 'paste_code') {
+            // Anthropic: user must paste code#state
+            B.call (x, 'set', 'oauthStep', {provider: provider, flow: 'paste_code', url: body.url});
+            B.call (x, 'set', 'oauthLoading', null);
+         }
+         else {
+            // OpenAI: wait for browser callback, then complete
+            B.call (x, 'set', 'oauthStep', {provider: provider, flow: 'waiting', url: body.url});
+            B.call (x, 'complete', 'oauthCallback', provider, null);
+         }
+      });
+   }],
+
+   ['complete', 'oauthCallback', function (x, provider, manualCode) {
+      B.call (x, 'set', 'oauthLoading', provider);
+      var body = manualCode ? {code: manualCode} : {};
+      B.call (x, 'post', 'accounts/login/' + provider + '/callback', {}, body, function (x, error, rs) {
+         B.call (x, 'set', 'oauthLoading', null);
+         B.call (x, 'set', 'oauthStep', null);
+         B.call (x, 'set', 'oauthCode', '');
+         if (error) return B.call (x, 'report', 'error', 'Login failed: ' + (rs && rs.body && rs.body.error ? rs.body.error : 'unknown error'));
+         B.call (x, 'load', 'accounts');
+      });
+   }],
+
+   ['logout', 'oauth', function (x, provider) {
+      if (! confirm ('Log out from ' + (provider === 'claude' ? 'Anthropic (Claude)' : 'OpenAI (ChatGPT)') + ' subscription?')) return;
+      B.call (x, 'post', 'accounts/logout/' + provider, {}, {}, function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to logout');
+         B.call (x, 'load', 'accounts');
+      });
+   }],
+
    // *** FILES ***
 
    ['load', 'files', function (x, project) {
@@ -266,12 +345,14 @@ B.mrespond ([
                B.call (x, 'set', 'currentFile', null);
                return B.call (x, 'write', 'hash');
             }
+            var isDialogFile = rs.body.name.startsWith ('dialog-');
             B.call (x, 'set', 'currentFile', {
                name: rs.body.name,
                content: rs.body.content,
                original: rs.body.content
             });
-            B.call (x, 'set', 'tab', rs.body.name.startsWith ('dialog-') ? 'dialogs' : 'docs');
+            B.call (x, 'set', 'tab', isDialogFile ? 'dialogs' : 'docs');
+            if (isDialogFile) B.call (x, 'reset', 'chatInput');
             B.call (x, 'write', 'hash');
          });
       };
@@ -1523,7 +1604,7 @@ views.dialogs = function () {
                   oninput: B.ev ('set', 'chatInput'),
                   onkeydown: B.ev ('keydown', 'chatInput', {raw: 'event'}),
                   disabled: streaming || hasPendingTools
-               }, ''],
+               }],
                ['button', {
                   class: 'primary',
                   onclick: B.ev ('send', 'message'),
@@ -1562,19 +1643,185 @@ views.projects = function () {
    });
 };
 
+views.accounts = function () {
+   return B.view ([['accounts'], ['accountEdits'], ['savingAccounts'], ['showApiKeys'], ['oauthLoading'], ['oauthStep'], ['oauthCode']], function (accounts, edits, saving, showKeys, oauthLoading, oauthStep, oauthCode) {
+      accounts = accounts || {};
+      edits = edits || {};
+      var openai = accounts.openai || {};
+      var claude = accounts.claude || {};
+      var openaiOAuth = accounts.openaiOAuth || {};
+      var claudeOAuth = accounts.claudeOAuth || {};
+
+      var sectionTitle = function (title) {
+         return ['h3', {style: style ({color: '#94b8ff', 'font-size': '14px', 'text-transform': 'uppercase', 'letter-spacing': '0.05em', 'margin-bottom': '0.75rem', 'margin-top': '1.5rem', 'border-bottom': '1px solid #333', 'padding-bottom': '0.5rem'})}, title];
+      };
+
+      var renderApiKeyProvider = function (provider, label, info, editKey) {
+         var editing = edits [editKey] !== undefined;
+         var currentDisplay = editing ? edits [editKey] : (showKeys ? (info.apiKey || '') : (info.hasKey ? info.apiKey : ''));
+
+         return ['div', {style: style ({'background-color': '#16213e', 'border-radius': '8px', padding: '1.25rem', 'margin-bottom': '1rem'})}, [
+            ['div', {style: style ({display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.75rem'})}, [
+               ['span', {style: style ({'font-weight': 'bold', 'font-size': '16px', color: '#94b8ff'})}, label],
+               info.hasKey
+                  ? ['span', {style: style ({color: '#6ad48a', 'font-size': '12px'})}, '✓ Configured']
+                  : ['span', {style: style ({color: '#ff8b94', 'font-size': '12px'})}, '✗ Not set']
+            ]],
+            ['div', {style: style ({display: 'flex', gap: '0.5rem', 'align-items': 'center'})}, [
+               ['input', {
+                  type: showKeys ? 'text' : 'password',
+                  value: currentDisplay,
+                  placeholder: 'Paste API key here...',
+                  oninput: B.ev ('set', ['accountEdits', editKey]),
+                  style: style ({
+                     flex: 1, padding: '0.6rem', 'border-radius': '6px', border: 'none',
+                     'background-color': '#1a1a2e', color: '#eee', 'font-family': 'Monaco, Consolas, monospace', 'font-size': '13px'
+                  })
+               }]
+            ]]
+         ]];
+      };
+
+      var renderOAuthProvider = function (providerId, label, description, oauthInfo) {
+         var isLoading = oauthLoading === providerId;
+         var isPasteStep = oauthStep && oauthStep.provider === providerId && oauthStep.flow === 'paste_code';
+         var isWaiting = oauthStep && oauthStep.provider === providerId && oauthStep.flow === 'waiting';
+
+         return ['div', {style: style ({'background-color': '#16213e', 'border-radius': '8px', padding: '1.25rem', 'margin-bottom': '1rem'})}, [
+            ['div', {style: style ({display: 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '0.5rem'})}, [
+               ['div', [
+                  ['span', {style: style ({'font-weight': 'bold', 'font-size': '16px', color: '#94b8ff'})}, label],
+                  ['div', {style: style ({color: '#9aa4bf', 'font-size': '12px', 'margin-top': '0.25rem'})}, description]
+               ]],
+               oauthInfo.loggedIn
+                  ? ['div', {style: style ({display: 'flex', gap: '0.5rem', 'align-items': 'center'})}, [
+                     ['span', {style: style ({color: oauthInfo.expired ? '#f0ad4e' : '#6ad48a', 'font-size': '12px'})}, oauthInfo.expired ? '⚠ Token expired' : '✓ Logged in'],
+                     ['button', {
+                        class: 'btn-small',
+                        style: style ({'background-color': '#e74c3c', color: 'white'}),
+                        onclick: B.ev ('logout', 'oauth', providerId),
+                        disabled: isLoading
+                     }, 'Logout']
+                  ]]
+                  : ['span', {style: style ({color: '#ff8b94', 'font-size': '12px'})}, '✗ Not connected']
+            ]],
+
+            // Login button (when not logged in and no step in progress)
+            ! oauthInfo.loggedIn && ! isPasteStep && ! isWaiting ? ['div', {style: style ({'margin-top': '0.75rem'})}, [
+               ['button', {
+                  class: 'primary btn-small',
+                  onclick: B.ev ('login', 'oauth', providerId),
+                  disabled: isLoading
+               }, isLoading ? 'Opening browser...' : 'Login with ' + label]
+            ]] : '',
+
+            // Anthropic: paste code step
+            isPasteStep ? ['div', {style: style ({'margin-top': '0.75rem', 'background-color': '#1a1a2e', padding: '1rem', 'border-radius': '6px'})}, [
+               ['div', {style: style ({color: '#f0ad4e', 'font-size': '13px', 'margin-bottom': '0.5rem'})}, 'A browser tab opened. Log in and paste the authorization code below:'],
+               ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
+                  ['input', {
+                     type: 'text',
+                     value: oauthCode || '',
+                     placeholder: 'Paste code#state here...',
+                     oninput: B.ev ('set', 'oauthCode'),
+                     style: style ({
+                        flex: 1, padding: '0.6rem', 'border-radius': '6px', border: 'none',
+                        'background-color': '#2a2a4e', color: '#eee', 'font-family': 'Monaco, Consolas, monospace', 'font-size': '13px'
+                     })
+                  }],
+                  ['button', {
+                     class: 'primary btn-small',
+                     onclick: B.ev ('complete', 'oauthCallback', providerId, oauthCode || ''),
+                     disabled: ! oauthCode || ! oauthCode.trim ()
+                  }, 'Submit'],
+                  ['button', {
+                     class: 'btn-small',
+                     style: style ({'background-color': '#444'}),
+                     onclick: B.ev (['set', 'oauthStep', null], ['set', 'oauthLoading', null])
+                  }, 'Cancel']
+               ]]
+            ]] : '',
+
+            // OpenAI: waiting for browser callback
+            isWaiting ? ['div', {style: style ({'margin-top': '0.75rem', 'background-color': '#1a1a2e', padding: '1rem', 'border-radius': '6px'})}, [
+               ['div', {style: style ({color: '#f0ad4e', 'font-size': '13px', 'margin-bottom': '0.5rem'})}, isLoading ? '⏳ Waiting for browser authentication...' : '✓ Authentication complete!'],
+               ['div', {style: style ({color: '#9aa4bf', 'font-size': '12px', 'margin-bottom': '0.5rem'})}, 'Complete the login in the browser tab that opened. This page will update automatically.'],
+               ['div', {style: style ({display: 'flex', gap: '0.5rem', 'margin-top': '0.5rem'})}, [
+                  ['button', {
+                     class: 'btn-small',
+                     style: style ({'background-color': '#444'}),
+                     onclick: B.ev (['set', 'oauthStep', null], ['set', 'oauthLoading', null])
+                  }, 'Cancel']
+               ]]
+            ]] : '',
+
+            // Re-login when expired
+            oauthInfo.loggedIn && oauthInfo.expired ? ['div', {style: style ({'margin-top': '0.5rem'})}, [
+               ['button', {
+                  class: 'primary btn-small',
+                  onclick: B.ev ('login', 'oauth', providerId),
+                  disabled: isLoading
+               }, 'Re-authenticate']
+            ]] : ''
+         ]];
+      };
+
+      var hasEdits = edits.openaiKey !== undefined || edits.claudeKey !== undefined;
+
+      return ['div', {class: 'editor-empty'}, [
+         ['div', {style: style ({width: '100%', 'max-width': '640px', 'overflow-y': 'auto', 'max-height': 'calc(100vh - 120px)'})}, [
+            ['div', {class: 'editor-header'}, [
+               ['span', {class: 'editor-filename'}, 'Accounts']
+            ]],
+
+            // *** API KEYS SECTION ***
+            sectionTitle ('API Keys'),
+            ['p', {style: style ({color: '#9aa4bf', 'font-size': '13px', 'margin-bottom': '1rem'})}, 'Pay-per-use API access. Keys are stored in vibey/config.json.'],
+            ['div', {style: style ({display: 'flex', gap: '0.5rem', 'margin-bottom': '1rem'})}, [
+               ['button', {
+                  class: 'btn-small',
+                  style: style ({'background-color': '#3a3a5f', color: '#c9d4ff'}),
+                  onclick: B.ev ('set', 'showApiKeys', ! showKeys)
+               }, showKeys ? 'Hide keys' : 'Show keys'],
+               ['button', {
+                  class: 'primary btn-small',
+                  onclick: B.ev ('save', 'accounts'),
+                  disabled: saving || ! hasEdits
+               }, saving ? 'Saving...' : 'Save']
+            ]],
+            renderApiKeyProvider ('openai', 'OpenAI', openai, 'openaiKey'),
+            renderApiKeyProvider ('claude', 'Anthropic (Claude)', claude, 'claudeKey'),
+
+            // *** SUBSCRIPTIONS SECTION ***
+            sectionTitle ('Subscriptions'),
+            ['p', {style: style ({color: '#9aa4bf', 'font-size': '13px', 'margin-bottom': '1rem'})}, 'Use your existing ChatGPT or Claude subscription. Logs in via OAuth — no API key needed.'],
+            renderOAuthProvider ('openai', 'ChatGPT Plus/Pro', 'Use your ChatGPT subscription (Plus, Pro, Team)', openaiOAuth),
+            renderOAuthProvider ('claude', 'Claude Pro/Max', 'Use your Anthropic Claude subscription (Pro, Max)', claudeOAuth)
+         ]]
+      ]];
+   });
+};
+
 views.main = function () {
    return B.view ([['tab'], ['currentProject']], function (tab, currentProject) {
       return ['div', {class: 'container'}, [
          ['style', views.css],
 
          ['div', {class: 'header'}, [
-            ['h1', {style: style ({margin: 0, 'font-size': '1.5rem'})}, 'vibey'],
-            currentProject ? ['div', {style: style ({display: 'flex', gap: '0.5rem'})}, [
-               ['span', {style: style ({color: '#9aa4bf'})}, currentProject],
-               ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'project')}, 'Snapshot project'],
-               ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'zip')}, 'Export zip'],
-               ['button', {class: 'btn-small', onclick: B.ev ('navigate', 'hash', '#/projects')}, 'Projects']
-            ]] : ''
+            ['h1', {style: style ({margin: 0, 'font-size': '1.5rem', cursor: 'pointer'}), onclick: B.ev ('navigate', 'hash', '#/projects')}, 'vibey'],
+            ['div', {style: style ({display: 'flex', gap: '0.5rem', 'align-items': 'center'})}, [
+               currentProject ? ['span', {style: style ({color: '#9aa4bf'})}, currentProject] : '',
+               currentProject ? ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'project')}, 'Snapshot project'] : '',
+               currentProject ? ['button', {class: 'btn-small', onclick: B.ev ('snapshot', 'project', 'zip')}, 'Export zip'] : '',
+               ['button', {
+                  class: 'btn-small' + (tab === 'projects' ? ' primary' : ''),
+                  onclick: B.ev ('navigate', 'hash', '#/projects')
+               }, 'Projects'],
+               ['button', {
+                  class: 'btn-small' + (tab === 'accounts' ? ' primary' : ''),
+                  onclick: B.ev ('navigate', 'hash', '#/accounts')
+               }, 'Accounts']
+            ]]
          ]],
 
          currentProject ? ['div', {class: 'tabs'}, [
@@ -1588,7 +1835,7 @@ views.main = function () {
             }, 'Docs'],
          ]] : '',
 
-         ! currentProject || tab === 'projects' ? views.projects () : (tab === 'docs' ? views.files () : views.dialogs ())
+         tab === 'accounts' ? views.accounts () : (! currentProject || tab === 'projects' ? views.projects () : (tab === 'docs' ? views.files () : views.dialogs ()))
       ]];
    });
 };

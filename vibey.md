@@ -305,13 +305,15 @@ There is no orchestration loop. To get the system going, the user starts a singl
 
 Goal: be able to build vibey with vibey itself.
 
-Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js.
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js. Pupeteer is installed globally.
 
-These are the flows I want to achieve now:
+These are the flows I want to achieve now. Please test them with pupeteer.
 
 Flow #1:
 
 - I go to localhost:3001
+- I appear on the projects tab.
+- I create a new project.
 - I appear on the Docs tab
 - I go to the dialogs tab
 - I open a new dialog, entering its name
@@ -322,6 +324,9 @@ Flow #1:
 - I ask a question to the LLM which requires tool use (say a diff): please add a console.log at the top of vibey-server.js.
 - The LLM asks for it and I need to authorize it. I authorize it once.
 - The diff is applied. I can see it with a green background.
+
+Known bugs to fix:
+- When I'm in a doc and I go to a dialog, the contents of the doc are in the box on the dialog.
 
 Flow #2:
 
@@ -341,6 +346,5 @@ Flow #3:
 
 TODO:
 
-- Add openai and claude accounts as providers because to do this with API calls is going to be an arm and a leg.
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
 - The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to POST /dialog. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (POST /dialog should support sending an initial prompt).

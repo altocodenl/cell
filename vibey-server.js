@@ -22,12 +22,422 @@ var stop = function (rs, rules) {
 
 // *** HELPERS ***
 
-var VIBEY_DIR = Path.join (__dirname, 'vibey');
-var SECRET = require ('./secret.js');
+var crypto = require ('crypto');
+var http   = require ('http');
 
-// API keys
-var OPENAI_API_KEY = SECRET.openai;
-var CLAUDE_API_KEY = SECRET.claude;
+var VIBEY_DIR = Path.join (__dirname, 'vibey');
+
+// *** CONFIG.JSON ***
+
+var CONFIG_JSON_PATH = Path.join (VIBEY_DIR, 'config.json');
+
+var loadConfigJson = function () {
+   try {
+      if (fs.existsSync (CONFIG_JSON_PATH)) return JSON.parse (fs.readFileSync (CONFIG_JSON_PATH, 'utf8'));
+   }
+   catch (e) {}
+   return {};
+};
+
+var saveConfigJson = function (config) {
+   if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR, {recursive: true});
+   fs.writeFileSync (CONFIG_JSON_PATH, JSON.stringify (config, null, 2), 'utf8');
+};
+
+var maskApiKey = function (key) {
+   if (! key || key.length < 12) return key ? '••••••••' : '';
+   return key.slice (0, 7) + '••••••••' + key.slice (-4);
+};
+
+// *** PKCE ***
+
+var base64urlEncode = function (buffer) {
+   return buffer.toString ('base64').replace (/\+/g, '-').replace (/\//g, '_').replace (/=/g, '');
+};
+
+var generatePKCE = async function () {
+   var verifierBytes = crypto.randomBytes (32);
+   var verifier = base64urlEncode (verifierBytes);
+   var challengeBuffer = crypto.createHash ('sha256').update (verifier).digest ();
+   var challenge = base64urlEncode (challengeBuffer);
+   return {verifier: verifier, challenge: challenge};
+};
+
+// *** OAUTH: ANTHROPIC ***
+
+var ANTHROPIC_CLIENT_ID = Buffer.from ('OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl', 'base64').toString ();
+var ANTHROPIC_AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
+var ANTHROPIC_TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
+var ANTHROPIC_REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
+var ANTHROPIC_SCOPES = 'org:create_api_key user:profile user:inference';
+
+// In-flight PKCE state for Anthropic login
+var anthropicPendingLogin = null;
+
+var startAnthropicLogin = async function () {
+   var pkce = await generatePKCE ();
+   var params = new URLSearchParams ({
+      code: 'true',
+      client_id: ANTHROPIC_CLIENT_ID,
+      response_type: 'code',
+      redirect_uri: ANTHROPIC_REDIRECT_URI,
+      scope: ANTHROPIC_SCOPES,
+      code_challenge: pkce.challenge,
+      code_challenge_method: 'S256',
+      state: pkce.verifier
+   });
+   var url = ANTHROPIC_AUTHORIZE_URL + '?' + params.toString ();
+   anthropicPendingLogin = {verifier: pkce.verifier};
+   return url;
+};
+
+var completeAnthropicLogin = async function (authCode) {
+   if (! anthropicPendingLogin) throw new Error ('No pending Anthropic login');
+   var verifier = anthropicPendingLogin.verifier;
+   anthropicPendingLogin = null;
+
+   var splits = authCode.split ('#');
+   var code = splits [0];
+   var state = splits [1];
+
+   var response = await fetch (ANTHROPIC_TOKEN_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify ({
+         grant_type: 'authorization_code',
+         client_id: ANTHROPIC_CLIENT_ID,
+         code: code,
+         state: state,
+         redirect_uri: ANTHROPIC_REDIRECT_URI,
+         code_verifier: verifier
+      })
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('Anthropic token exchange failed: ' + error);
+   }
+
+   var tokenData = await response.json ();
+   var expiresAt = Date.now () + tokenData.expires_in * 1000 - 5 * 60 * 1000;
+
+   var config = loadConfigJson ();
+   if (! config.accounts) config.accounts = {};
+   config.accounts.claudeOAuth = {
+      type: 'oauth',
+      access: tokenData.access_token,
+      refresh: tokenData.refresh_token,
+      expires: expiresAt
+   };
+   saveConfigJson (config);
+   return {ok: true};
+};
+
+var refreshAnthropicToken = async function (cred) {
+   var response = await fetch (ANTHROPIC_TOKEN_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify ({
+         grant_type: 'refresh_token',
+         client_id: ANTHROPIC_CLIENT_ID,
+         refresh_token: cred.refresh
+      })
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('Anthropic token refresh failed: ' + error);
+   }
+
+   var data = await response.json ();
+   return {
+      access: data.access_token,
+      refresh: data.refresh_token,
+      expires: Date.now () + data.expires_in * 1000 - 5 * 60 * 1000
+   };
+};
+
+// *** OAUTH: OPENAI CODEX ***
+
+var OPENAI_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+var OPENAI_AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
+var OPENAI_TOKEN_URL = 'https://auth.openai.com/oauth/token';
+var OPENAI_REDIRECT_URI = 'http://localhost:1455/auth/callback';
+var OPENAI_SCOPE = 'openid profile email offline_access';
+var OPENAI_JWT_CLAIM_PATH = 'https://api.openai.com/auth';
+
+var openaiPendingLogin = null;
+
+var SUCCESS_HTML = '<!doctype html><html><head><meta charset="utf-8"><title>Authentication successful</title></head><body><p>Authentication successful. Return to vibey to continue.</p></body></html>';
+
+var decodeJwt = function (token) {
+   try {
+      var parts = token.split ('.');
+      if (parts.length !== 3) return null;
+      return JSON.parse (Buffer.from (parts [1], 'base64').toString ());
+   }
+   catch (e) {return null;}
+};
+
+var extractOpenAIAccountId = function (accessToken) {
+   var payload = decodeJwt (accessToken);
+   var auth = payload && payload [OPENAI_JWT_CLAIM_PATH];
+   var accountId = auth && auth.chatgpt_account_id;
+   return (type (accountId) === 'string' && accountId.length > 0) ? accountId : null;
+};
+
+var startOpenAILogin = async function () {
+   var pkce = await generatePKCE ();
+   var state = crypto.randomBytes (16).toString ('hex');
+
+   var params = new URLSearchParams ({
+      response_type: 'code',
+      client_id: OPENAI_CODEX_CLIENT_ID,
+      redirect_uri: OPENAI_REDIRECT_URI,
+      scope: OPENAI_SCOPE,
+      code_challenge: pkce.challenge,
+      code_challenge_method: 'S256',
+      state: state,
+      id_token_add_organizations: 'true',
+      codex_cli_simplified_flow: 'true',
+      originator: 'vibey'
+   });
+
+   var url = OPENAI_AUTHORIZE_URL + '?' + params.toString ();
+
+   // Start local callback server
+   var callbackPromise = startOpenAICallbackServer (state);
+
+   openaiPendingLogin = {
+      verifier: pkce.verifier,
+      state: state,
+      callbackPromise: callbackPromise
+   };
+
+   return url;
+};
+
+var startOpenAICallbackServer = function (expectedState) {
+   return new Promise (function (resolveOuter) {
+      var lastCode = null;
+      var cancelled = false;
+      var server = http.createServer (function (req, res) {
+         try {
+            var url = new URL (req.url || '', 'http://localhost');
+            if (url.pathname !== '/auth/callback') {
+               res.statusCode = 404;
+               res.end ('Not found');
+               return;
+            }
+            if (url.searchParams.get ('state') !== expectedState) {
+               res.statusCode = 400;
+               res.end ('State mismatch');
+               return;
+            }
+            var code = url.searchParams.get ('code');
+            if (! code) {
+               res.statusCode = 400;
+               res.end ('Missing authorization code');
+               return;
+            }
+            res.statusCode = 200;
+            res.setHeader ('Content-Type', 'text/html; charset=utf-8');
+            res.end (SUCCESS_HTML);
+            lastCode = code;
+         }
+         catch (e) {
+            res.statusCode = 500;
+            res.end ('Internal error');
+         }
+      });
+
+      server.listen (1455, '127.0.0.1', function () {
+         resolveOuter ({
+            close: function () {server.close ();},
+            cancelWait: function () {cancelled = true;},
+            waitForCode: function () {
+               return new Promise (function (resolve) {
+                  var attempts = 0;
+                  var interval = setInterval (function () {
+                     if (lastCode) {
+                        clearInterval (interval);
+                        resolve ({code: lastCode});
+                     }
+                     else if (cancelled || attempts > 600) {
+                        clearInterval (interval);
+                        resolve (null);
+                     }
+                     attempts++;
+                  }, 100);
+               });
+            }
+         });
+      });
+
+      server.on ('error', function () {
+         resolveOuter ({
+            close: function () {},
+            cancelWait: function () {},
+            waitForCode: function () {return Promise.resolve (null);}
+         });
+      });
+   });
+};
+
+var completeOpenAILogin = async function (manualCode) {
+   if (! openaiPendingLogin) throw new Error ('No pending OpenAI login');
+   var verifier = openaiPendingLogin.verifier;
+   var state = openaiPendingLogin.state;
+   var callbackPromise = openaiPendingLogin.callbackPromise;
+   openaiPendingLogin = null;
+
+   var server = await callbackPromise;
+   var code = null;
+
+   if (manualCode) {
+      // User pasted code manually
+      server.cancelWait ();
+      server.close ();
+      var parts = manualCode.trim ().split ('#');
+      code = parts [0];
+      // Check for URL format
+      try {
+         var url = new URL (manualCode.trim ());
+         code = url.searchParams.get ('code') || code;
+      }
+      catch (e) {}
+   }
+   else {
+      // Wait for browser callback
+      var result = await server.waitForCode ();
+      server.close ();
+      if (result) code = result.code;
+   }
+
+   if (! code) throw new Error ('No authorization code received');
+
+   var response = await fetch (OPENAI_TOKEN_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams ({
+         grant_type: 'authorization_code',
+         client_id: OPENAI_CODEX_CLIENT_ID,
+         code: code,
+         code_verifier: verifier,
+         redirect_uri: OPENAI_REDIRECT_URI
+      })
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('OpenAI token exchange failed: ' + error);
+   }
+
+   var tokenData = await response.json ();
+   if (! tokenData.access_token || ! tokenData.refresh_token) throw new Error ('OpenAI token response missing fields');
+
+   var accountId = extractOpenAIAccountId (tokenData.access_token);
+   if (! accountId) throw new Error ('Failed to extract accountId from token');
+
+   var config = loadConfigJson ();
+   if (! config.accounts) config.accounts = {};
+   config.accounts.openaiOAuth = {
+      type: 'oauth',
+      access: tokenData.access_token,
+      refresh: tokenData.refresh_token,
+      expires: Date.now () + tokenData.expires_in * 1000,
+      accountId: accountId
+   };
+   saveConfigJson (config);
+   return {ok: true};
+};
+
+var refreshOpenAIToken = async function (cred) {
+   var response = await fetch (OPENAI_TOKEN_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams ({
+         grant_type: 'refresh_token',
+         refresh_token: cred.refresh,
+         client_id: OPENAI_CODEX_CLIENT_ID
+      })
+   });
+
+   if (! response.ok) {
+      var error = await response.text ();
+      throw new Error ('OpenAI token refresh failed: ' + error);
+   }
+
+   var data = await response.json ();
+   if (! data.access_token || ! data.refresh_token) throw new Error ('OpenAI token refresh missing fields');
+
+   var accountId = extractOpenAIAccountId (data.access_token);
+   if (! accountId) throw new Error ('Failed to extract accountId from refreshed token');
+
+   return {
+      access: data.access_token,
+      refresh: data.refresh_token,
+      expires: Date.now () + data.expires_in * 1000,
+      accountId: accountId
+   };
+};
+
+// *** API KEY RESOLUTION (API key from config.json > OAuth token) ***
+
+var getApiKey = async function (provider) {
+   var config = loadConfigJson ();
+   var accounts = config.accounts || {};
+
+   if (provider === 'claude') {
+      // 1. OAuth subscription (preferred)
+      if (accounts.claudeOAuth && accounts.claudeOAuth.type === 'oauth') {
+         var cred = accounts.claudeOAuth;
+         if (Date.now () >= cred.expires) {
+            try {
+               var refreshed = await refreshAnthropicToken (cred);
+               config.accounts.claudeOAuth = {type: 'oauth', access: refreshed.access, refresh: refreshed.refresh, expires: refreshed.expires};
+               saveConfigJson (config);
+               cred = config.accounts.claudeOAuth;
+            }
+            catch (e) {
+               clog ('Anthropic token refresh failed:', e.message);
+               return {key: '', type: 'api_key'};
+            }
+         }
+         return {key: cred.access, type: 'oauth'};
+      }
+      // 2. API key fallback
+      if (accounts.claude && accounts.claude.apiKey) return {key: accounts.claude.apiKey, type: 'api_key'};
+      // 3. No credentials configured
+      return {key: '', type: 'api_key'};
+   }
+
+   if (provider === 'openai') {
+      // 1. OAuth subscription (preferred)
+      if (accounts.openaiOAuth && accounts.openaiOAuth.type === 'oauth') {
+         var cred = accounts.openaiOAuth;
+         if (Date.now () >= cred.expires) {
+            try {
+               var refreshed = await refreshOpenAIToken (cred);
+               config.accounts.openaiOAuth = {type: 'oauth', access: refreshed.access, refresh: refreshed.refresh, expires: refreshed.expires, accountId: refreshed.accountId};
+               saveConfigJson (config);
+               cred = config.accounts.openaiOAuth;
+            }
+            catch (e) {
+               clog ('OpenAI token refresh failed:', e.message);
+               return {key: '', type: 'api_key'};
+            }
+         }
+         return {key: cred.access, type: 'oauth', accountId: cred.accountId};
+      }
+      // 2. API key fallback
+      if (accounts.openai && accounts.openai.apiKey) return {key: accounts.openai.apiKey, type: 'api_key'};
+      // 3. No credentials configured
+      return {key: '', type: 'api_key'};
+   }
+
+   return {key: '', type: 'api_key'};
+};
 
 var getDocMainContent = function (projectDir) {
    var path = Path.join (projectDir, 'doc-main.md');
@@ -800,13 +1210,22 @@ var chatWithClaude = async function (projectDir, messages, model, onChunk, abort
       system: systemPrompt
    };
 
+   var auth = await getApiKey ('claude');
+   var headers = {'Content-Type': 'application/json'};
+
+   if (auth.type === 'oauth') {
+      headers ['Authorization'] = 'Bearer ' + auth.key;
+      headers ['anthropic-beta'] = 'oauth-2025-04-20';
+      headers ['anthropic-dangerous-direct-browser-access'] = 'true';
+   }
+   else {
+      headers ['x-api-key'] = auth.key;
+      headers ['anthropic-version'] = '2023-06-01';
+   }
+
    var response = await fetch ('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-         'Content-Type': 'application/json',
-         'x-api-key': CLAUDE_API_KEY,
-         'anthropic-version': '2023-06-01'
-      },
+      headers: headers,
       body: JSON.stringify (requestBody),
       signal: abortSignal
    });
@@ -906,12 +1325,23 @@ var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abort
       tools: OPENAI_TOOLS
    };
 
-   var response = await fetch ('https://api.openai.com/v1/chat/completions', {
+   var auth = await getApiKey ('openai');
+   var apiUrl = 'https://api.openai.com/v1/chat/completions';
+   var headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + auth.key
+   };
+
+   if (auth.type === 'oauth' && auth.accountId) {
+      apiUrl = 'https://chatgpt.com/backend-api/codex/responses';
+      headers ['chatgpt-account-id'] = auth.accountId;
+      headers ['OpenAI-Beta'] = 'responses=experimental';
+      headers ['originator'] = 'vibey';
+   }
+
+   var response = await fetch (apiUrl, {
       method: 'POST',
-      headers: {
-         'Content-Type': 'application/json',
-         'Authorization': 'Bearer ' + OPENAI_API_KEY
-      },
+      headers: headers,
       body: JSON.stringify (requestBody),
       signal: abortSignal
    });
@@ -1232,6 +1662,112 @@ var routes = [
       ]]
    ])],
    ['get', 'vibey-client.js', cicek.file],
+
+   // *** ACCOUNTS ***
+
+   ['get', 'accounts', function (rq, rs) {
+      var config = loadConfigJson ();
+      var accounts = config.accounts || {};
+      reply (rs, 200, {
+         openai: {
+            apiKey: maskApiKey ((accounts.openai && accounts.openai.apiKey) || ''),
+            hasKey: !! (accounts.openai && accounts.openai.apiKey)
+         },
+         claude: {
+            apiKey: maskApiKey ((accounts.claude && accounts.claude.apiKey) || ''),
+            hasKey: !! (accounts.claude && accounts.claude.apiKey)
+         },
+         openaiOAuth: {
+            loggedIn: !! (accounts.openaiOAuth && accounts.openaiOAuth.type === 'oauth'),
+            expired: accounts.openaiOAuth ? Date.now () >= (accounts.openaiOAuth.expires || 0) : false
+         },
+         claudeOAuth: {
+            loggedIn: !! (accounts.claudeOAuth && accounts.claudeOAuth.type === 'oauth'),
+            expired: accounts.claudeOAuth ? Date.now () >= (accounts.claudeOAuth.expires || 0) : false
+         }
+      });
+   }],
+
+   ['post', 'accounts', function (rq, rs) {
+      var config = loadConfigJson ();
+      if (! config.accounts) config.accounts = {};
+
+      if (type (rq.body.openaiKey) === 'string') {
+         if (! config.accounts.openai) config.accounts.openai = {};
+         config.accounts.openai.apiKey = rq.body.openaiKey.trim ();
+      }
+      if (type (rq.body.claudeKey) === 'string') {
+         if (! config.accounts.claude) config.accounts.claude = {};
+         config.accounts.claude.apiKey = rq.body.claudeKey.trim ();
+      }
+
+      saveConfigJson (config);
+      reply (rs, 200, {ok: true});
+   }],
+
+   // OAuth login: start flow
+   ['post', 'accounts/login/:provider', async function (rq, rs) {
+      var provider = rq.data.params.provider;
+      try {
+         if (provider === 'claude') {
+            var url = await startAnthropicLogin ();
+            reply (rs, 200, {url: url, flow: 'paste_code'});
+         }
+         else if (provider === 'openai') {
+            var url = await startOpenAILogin ();
+            reply (rs, 200, {url: url, flow: 'callback'});
+         }
+         else {
+            reply (rs, 400, {error: 'Unknown provider: ' + provider});
+         }
+      }
+      catch (error) {
+         reply (rs, 500, {error: error.message});
+      }
+   }],
+
+   // OAuth login: complete flow (paste code or wait for callback)
+   ['post', 'accounts/login/:provider/callback', async function (rq, rs) {
+      var provider = rq.data.params.provider;
+      try {
+         if (provider === 'claude') {
+            if (type (rq.body.code) !== 'string' || ! rq.body.code.trim ()) return reply (rs, 400, {error: 'code is required'});
+            var result = await completeAnthropicLogin (rq.body.code.trim ());
+            reply (rs, 200, result);
+         }
+         else if (provider === 'openai') {
+            // manualCode is optional; if not provided, waits for browser callback
+            var result = await completeOpenAILogin (rq.body.code || null);
+            reply (rs, 200, result);
+         }
+         else {
+            reply (rs, 400, {error: 'Unknown provider: ' + provider});
+         }
+      }
+      catch (error) {
+         reply (rs, 500, {error: error.message});
+      }
+   }],
+
+   // OAuth logout
+   ['post', 'accounts/logout/:provider', function (rq, rs) {
+      var provider = rq.data.params.provider;
+      var config = loadConfigJson ();
+      if (! config.accounts) config.accounts = {};
+
+      if (provider === 'claude') {
+         delete config.accounts.claudeOAuth;
+      }
+      else if (provider === 'openai') {
+         delete config.accounts.openaiOAuth;
+      }
+      else {
+         return reply (rs, 400, {error: 'Unknown provider: ' + provider});
+      }
+
+      saveConfigJson (config);
+      reply (rs, 200, {ok: true});
+   }],
 
    // *** PROJECTS ***
 
