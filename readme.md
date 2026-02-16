@@ -209,6 +209,96 @@ view
 
 ## Development notes
 
+### 2026-02-14
+
+Rather than build one app for everyone, build a platform so that people can build their own apps. It's exactly like Yegge says (https://gist.github.com/chitchcock/1281611):
+"Our Google+ team took a look at the aftermarket and said: "Gosh, it looks like we need some games. Let's go contract someone to, um, write some games for us." Do you begin to see how incredibly wrong that thinking is now? The problem is that we are trying to predict what people want and deliver it for them."
+"We don't get Platforms, and we don't get Accessibility. The two are basically the same thing, because platforms solve accessibility. A platform is accessibility."
+
+vibey as a platform for vibe coding.
+
+### Summary of where I am with vibey
+
+- My journey with cell: understand/empower people to build their own systems through a simple programming substrate. But, given the current revolution, most people will never see code anymore: they will be vibe coding, writing and debugging in a natural language.
+- What will empower most people to program is to have a good environment for vibe coding. The only thing more empowering (not to build, but to run their life) is something like openclaw, but, for me, the security implications of that are just too big to contemplate. Not that it is impossible. But I want to solve another problem. I want to help people build small systems, small applications.
+- Offline vibey will provide a good interface, or a platform, for vibe coding locally:
+   1. Through your browser (not the terminal, not another native app)
+   2. The concept: everything is markdown. Your docs. The dialogs with the LLMs. Almost zero state outside the markdown.
+   3. Containerized: so that the blast radius is reduced, with your local machine and also between apps.
+- If vibey works locally, local is not the end of the road. Almost always, people need their apps that run in servers, not locally. A server makes your app available 1) everywhere; 2) anytime. This means that more people are going to be using a lot more cloud resources for themselves, with the apps they vibe code.
+- There are a lot of tools out there to solve this problem. A few are really good. The proposal of vibey in the cloud, besides vibey itself, would be to provide:
+   1. An annual subscription (30 USD?) that gives you access to key cloud providers priced at cost (Hetzner for VPS, Backblaze for files); calls to LLM APIs; email sending. You can also of course bring your own API keys or subscriptions.
+   2. Automatic infra to: put projects (containers) onto servers, HTTPS (bring your DNS record), receive emails, vibey session cookies.
+   3. No lock-in: the whole thing being open source, so you can always run the same thing yourself elsewhere.
+- Interesting alternatives:
+  - exe.dev: most like vibey, but with a different agent model and for devs.
+     1. You buy underlying resources, and can create throwaway VMs on top of those resources.
+     2. The VMs have a persistent disk.
+     3. You can use a browser-based agent to interact with the VMs.
+ - Val Town
+     1. Excellent for tiny serverless/backend scripts and quick automations, especially JS/TS-first workflows.
+     2. Less of a full “build your own app system” environment with local-first containers + portable infra path.
+ - Replit
+     1. Strongest all-in-one cloud coding product for broad users (editor, deploy, collaboration, AI help).
+     2. Very locked-in.
+
+Claude says:
+- Conversion from local (free) to cloud (paid) — this is your funnel
+- Time to first deployed app — this is your north star metric. If it's under 30 minutes, you win"
+[I'd say it has to be three minutes]
+
+Plan A:
+- Make local vibey useful.
+- Make vibey-as-a-service useful.
+- Go back to work in cell.
+
+=====
+
+Alternative idea that I'm not considering for now: a place to store markdown and host client side js only, connect with your subscriptions, make little client side app with some persistence, no need to run anything else. just need a proxy for subscriptions and the client side app runs statically.
+
+Vibey will have a vi-like mode in, because "vi" is in "vibey". It has to have a powerful editor as an opt-in.
+
+Really curious to see if we can use documents as channels, so that LLMs can cooperate through them, like it was a slack channel.
+
+
+Prompt header:
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then vibey-test.js.
+
+Please read the stack of libraries I use at `arch/gotoB.min.js` (it's not minified). That'll give you a style too.
+
+For testing: just use pupeteer to load the app. Use test-vibey by clicking on the "Test" button. The logic is there.
+
+
+Prompts:
+- Fantastic. Now please read again vibey.md, make sense of all the tool call conventions. The API is messy and it even looks inconsistent. Please use the schwas and an unified way to represent 1) user inputs; tool requests & authorizations; times and resources used per message. Put your output into a temporary file clean-convention.md
+- Let's debug. I cannot even get a proper response to a "Hello". Please timeout your pupeteer to perhaps 1m, not more.
+- Please make a pupeteer file that just opens the client and clicks on test, then listens to an alert and stops on it and reports it back to you. Do it as vibey-test-boot.js.
+- The project deletion worked! Please don't jump to that project when clicking on the delete.
+- There's another agent coding. Can you just run the tests for flow 1? The server is running.
+- Please add a way to remove a project. Add the endpoint for that, the frontend logic. Also modify the readme in vibey.md. Don't restart the server yet.
+
+
+### 2026-02-13
+
+"Thou shalt not make a machine in the likeness of a human mind." -- Orange Catholic Bible
+
+https://mariozechner.at/posts/2025-11-30-pi-coding-agent/#toc_6
+"pi-tui uses a simple retained mode approach. A Component is just an object with a render(width) method that returns an array of strings (lines that fit the viewport horizontally, with ANSI escape codes for colors and styling) and an optional handleInput(data) method for keyboard input. A Container holds a list of components arranged vertically and collects all their rendered lines. The TUI class is itself a container that orchestrates everything."
+
+"pi does not have a dedicated sub-agent tool. When Claude Code needs to do something complex, it often spawns a sub-agent to handle part of the task. You have zero visibility into what that sub-agent does. It's a black box within a black box. Context transfer between agents is also poor. The orchestrating agent decides what initial context to pass to the sub-agent, and you generally have little control over that. If the sub-agent makes a mistake, debugging is painful because you can't see the full conversation."
+
+Agents talking to each other by being able to see their dialogs. Perhaps even coordinating by stopping and talking to a common dialog and polling it? Can agents wait or do they need the server to re-prompt them? Maybe waiting can be a tool.
+
+?? interesting things to test: agent coordination
+
+How can we have tasks in markdown and still have incremental updates? The idea is to move completely off JSON, or anything backed by a DB, for the purposes of project management.
+
+On surface tests:
+- linear sequence!
+- liskov substitute change possible, other changes break
+- errors are also outputs, it's a matter of order!
+
+
 ### 2026-02-12
 
 Prompts:
