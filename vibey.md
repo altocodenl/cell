@@ -64,6 +64,23 @@ Note that the deed is missing; if it's code, go use your IDE, or just open your 
 
 `GET /` serves an HTML shell that loads normalize.css, tachyons, gotoB, marked.js, and `vibey-client.js`. `GET /vibey-client.js` serves the client.
 
+### Server: projects
+
+Projects are directories under `vibey/`.
+
+- `GET /projects` - list project names.
+- `POST /projects` - create project. Body: `{name}`.
+- `DELETE /projects/:name` - delete a project directory recursively.
+  - If any dialog streams are active for dialogs in that project, they are aborted before deletion.
+
+### Client: projects
+
+Projects tab lists all projects with + New and × delete.
+
+- Clicking a project opens its Docs tab.
+- Deleting asks for confirmation and removes the project from disk.
+- If the deleted project is currently open, client state resets and navigation returns to `#/projects`.
+
 ### Server: files
 
 All files live in a local `vibey/` directory, created on startup if missing. Filenames must match `[a-zA-Z0-9_\-\.]+`, end in `.md`, no `..`.
@@ -73,7 +90,11 @@ All files live in a local `vibey/` directory, created on startup if missing. Fil
 - `POST /file/:name` - write file. Body: `{content}`.
 - `DELETE /file/:name` - delete file.
 
-### Server: dialogs (endpoints)
+### Client: files
+
+Left sidebar lists all files with + New and × delete. Right side is a textarea editor. Cmd+S saves. Tracks dirty state, warns on close with unsaved changes. Deleting the currently open file clears the editor immediately. Loading a file that no longer exists silently deselects it.
+
+### Server: dialogs
 
 - `POST /dialog` - create a new dialog and run first turn. Body: `{provider, model?, prompt, slug?}`. Response: SSE.
   - Creates a file named `dialog-<YYYYMMDD-HHmmss>-<slug>-active.md`.
@@ -134,12 +155,6 @@ Parsing rules:
 No separate pending endpoint is needed. UI/server derive pending tool requests directly by parsing dialog markdown.
 
 SSE event types: `chunk`, `tool_request`, `done`, `error`.
-
-### Client: files
-
-Left sidebar lists all files with + New and × delete. Right side is a textarea editor. Cmd+S saves. Tracks dirty state, warns on close with unsaved changes. Deleting the currently open file clears the editor immediately. Loading a file that no longer exists silently deselects it.
-
-### Server: dialog
 
 Dialogs are files named:
 
@@ -277,10 +292,6 @@ No separate tool-execution endpoint is needed in normal flow: once approved, the
 
 Markdown is the source of truth. Restart-safe by design.
 
-#### Endpoints
-
-Dialog endpoints are defined near the top of the Spec section (right after file endpoints), to keep API discovery in one place.
-
 ### Client: tools for dialogs
 
 When `tool_request` arrives, a panel shows each unauthorized tool call (name + summarized input). Large file payloads are redacted in UI (markdown remains full-fidelity).
@@ -305,9 +316,11 @@ There is no orchestration loop. To get the system going, the user starts a singl
 
 Goal: be able to build vibey with vibey itself.
 
-Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js. Pupeteer is installed globally.
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then vibey-test.js.
 
-These are the flows I want to achieve now. Please test them with pupeteer.
+Please read the stack of libraries I use at `arch/gotoB.min.js` (it's not minified). That'll give you a style too.
+
+The flows to implement:
 
 Flow #1:
 
@@ -343,6 +356,13 @@ Flow #3:
 - I go to the dialogs tab.
 - I start a new dialog to say "please start".
 - The agent starts working, spawning another agent.
+
+Flow #4:
+
+- I open vibey, already with a project.
+- I can delete the project.
+- Any agents running in that project are stopped.
+- The folder is deleted.
 
 TODO:
 
