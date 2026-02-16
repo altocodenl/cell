@@ -83,12 +83,12 @@ Projects tab lists all projects with + New and × delete.
 
 ### Server: files
 
-All files live in a local `vibey/` directory, created on startup if missing. Filenames must match `[a-zA-Z0-9_\-\.]+`, end in `.md`, no `..`.
+All files live inside a project directory `vibey/<project>/`. Filenames must match `[a-zA-Z0-9_\-\.]+`, end in `.md`, no `..`.
 
-- `GET /files` - list all `.md` files, sorted by mtime descending.
-- `GET /file/:name` - read file. Returns `{name, content}`.
-- `POST /file/:name` - write file. Body: `{content}`.
-- `DELETE /file/:name` - delete file.
+- `GET /project/:project/files` - list all `.md` files, sorted by mtime descending.
+- `GET /project/:project/file/:name` - read file. Returns `{name, content}`.
+- `POST /project/:project/file/:name` - write file. Body: `{content}`.
+- `DELETE /project/:project/file/:name` - delete file.
 
 ### Client: files
 
@@ -96,54 +96,181 @@ Left sidebar lists all files with + New and × delete. Right side is a textarea 
 
 ### Server: dialogs
 
-- `POST /dialog` - create a new dialog and run first turn. Body: `{provider, model?, prompt, slug?}`. Response: SSE.
-  - Creates a file named `dialog-<YYYYMMDD-HHmmss>-<slug>-active.md`.
+- `POST /project/:project/dialog/new` — create a waiting dialog draft. Body: `{provider, model?, slug?}`.
+- `POST /project/:project/dialog` — create a new dialog and run first turn. Body: `{provider, model?, prompt, slug?}`. Response: SSE.
+  - Creates a file named `dialog-<YYYYMMDD-HHmmss>-<slug>-<status>.md`.
   - Stable `dialogId` is `<YYYYMMDD-HHmmss>-<slug>` (status is not part of the id).
-  - Appends initial `## User` message, streams assistant (`chunk`), writes tool blocks.
+  - Appends a `## User` message with canonical payload format, opens `## Assistant`, streams `chunk` events.
   - If unauthorized tool requests remain, emits `tool_request`, sets status to `waiting`, ends stream.
 
-- `PUT /dialog` — mutate or continue an existing dialog. Body: `{dialogId, status?, prompt?, decisions?, authorizations?}`.
+- `PUT /project/:project/dialog` — mutate or continue an existing dialog.
+  - Canonical body: `{dialogId, status?, prompt?, control?}`.
+  - Transitional compatibility: server may still accept `{decisions?, authorizations?}`; canonical input is `control`.
   - `status` can be `waiting` or `done`.
-  - If `status` is set without `prompt` or `decisions`, it is a pure status change (e.g. interrupt or mark done). The server aborts any in-progress stream for that dialog, writes the end timestamp on the current assistant section, renames the file to reflect the new status, and returns JSON `{ok: true}`.
-  - If `prompt` is present, append as a user message and continue generation.
+  - If `status` is set without `prompt` or `control`, it is a pure status change (interrupt/mark done).
+  - If `prompt` is present, append as `## User` and continue generation.
   - Whenever generation is kicked off on an existing dialog, server first sets status to `active`.
-  - `decisions` is parseable text that maps tool-call IDs to approve/deny decisions.
-  - `authorizations` is parseable text that records blanket authorizations (`> Authorized: <tool_name>` semantics).
-  - If any tool decision is deny, resulting dialog status is `waiting`.
   - Response is SSE when generation continues; otherwise JSON.
-  - The server keeps a map of `dialogId → AbortController` for active streams. When a `PUT` sets status to `waiting` or `done`, the server calls `abort()` on the controller, which terminates the LLM fetch and closes the SSE connection. The aborted text (whatever was streamed so far) remains in the markdown.
+- `GET /project/:project/dialogs` — list dialog files with `{dialogId, status, filename, mtime}`.
+- `GET /project/:project/dialog/:id` — load one dialog.
 
-#### Text conventions for `decisions` and `authorizations` (three-schwa sentinel)
+SSE event types: `chunk`, `tool_request`, `done`, `error`.
 
-Both fields use the same sentinel wrapper:
+### Dialog markdown: canonical convention
 
-```
+Dialogs are files named:
+
+`dialog-<YYYYMMDD-HHmmss>-<slug>-<status>.md`
+
+Where `<status>` is one of: `active`, `waiting`, `done`.
+
+Canonical section shape (for `User`, `Assistant`, `Tool Request`, `Authorization`, `Tool Result`):
+
+```md
+## <Role>
+> Id: <id>
+> Time: <start_iso> - <end_iso>
+> Resources: in=<n> out=<n> total=<n> tools=<n> ms=<n>
+
+əəə<type>
+<payload>
 əəə
-...lines...
+```
+
+Rules:
+- Markdown remains source of truth.
+- All parseable payloads use schwa wrappers.
+- `Resources` is always present. If provider usage is unavailable, use zeros.
+- For one-shot user input, `start == end`.
+
+Canonical dialog header:
+
+```md
+# Dialog
+> DialogId: 20260216-201100-read-vibey
+> Provider: openai
+> Model: gpt-5
+> Status: waiting
+> Started: 2026-02-16T20:11:00Z
+```
+
+Canonical user input:
+
+```md
+## User
+> Id: msg_20260216_201100_u1
+> Time: 2026-02-16T20:11:00Z - 2026-02-16T20:11:00Z
+> Resources: in=0 out=0 total=0 tools=0 ms=0
+
+əəəinput/markdown
+Please read vibey.md and summarize it.
 əəə
 ```
 
-`decisions` lines:
+If UI sends structured input, use JSON instead:
 
-- Format: `<tool_call_id>: approve` or `<tool_call_id>: deny`
-- Example:
-
-```
-əəə
-toolu_abc123: approve
-toolu_def456: deny
+```md
+əəəinput/json
+{"text":"Please read vibey.md and summarize it."}
 əəə
 ```
 
-`authorizations` lines:
+Canonical assistant output:
 
-- Format: `allow <tool_name>` or `deny <tool_name>`
-- Example:
+```md
+## Assistant
+> Id: msg_20260216_201101_a1
+> Time: 2026-02-16T20:11:01Z - 2026-02-16T20:11:14Z
+> Resources: in=123 out=456 total=579 tools=1 ms=12982
 
-```
+əəəoutput/markdown
+Summary goes here.
 əəə
+```
+
+Optional cumulative line (if desired):
+
+```md
+> Resources cumulative: in=1200 out=3400 total=4600 tools=14 ms=248392
+```
+
+### Server: tools for dialogs
+
+The LLM always receives four tools:
+
+- `run_command` - run a shell command (30s timeout, 1MB max output). Use for reading files (`cat`), listing directories (`ls`), HTTP requests (`curl`), git, and anything else the shell can do.
+- `write_file` - create or overwrite a file. Takes `{path, content}`. Bypasses the shell so content with quotes, backticks, template literals, etc. is written cleanly.
+- `edit_file` - surgical find-and-replace. Takes `{path, old_string, new_string}`. `old_string` must appear exactly once in the file; if it appears zero times or more than once, the tool returns an error asking for more context. The LLM should read the file first (`cat` via `run_command`) before editing.
+- `launch_agent` - spawn another top-level dialog (flat structure, no subagent tree). Takes `{provider, model, prompt, slug?}` and is equivalent to `POST /project/:project/dialog`.
+
+Tool definitions are written once and converted to both Claude and OpenAI formats.
+
+**No server-side state.** All tool-call state lives in dialog markdown. The server reconstructs pending requests, authorizations, and decisions by parsing markdown each request.
+
+#### Tool request/result canonical blocks
+
+Pending request:
+
+```md
+## Tool Request
+> Id: toolu_abc123
+> Parent: msg_20260216_201101_a1
+> Time: 2026-02-16T20:11:02Z - 2026-02-16T20:11:02Z
+> Resources: in=0 out=0 total=0 tools=0 ms=0
+> Tool: run_command
+> Status: pending
+
+əəətool/input/json
+{"command":"ls"}
+əəə
+```
+
+Status values: `pending | approved | denied | error`.
+
+Approved result:
+
+```md
+## Tool Result
+> Id: toolu_abc123
+> Parent: msg_20260216_201101_a1
+> Time: 2026-02-16T20:11:03Z - 2026-02-16T20:11:04Z
+> Resources: in=0 out=0 total=0 tools=1 ms=812
+> Tool: run_command
+> Status: approved
+
+əəətool/result/json
+{"success":true,"stdout":"file1.txt"}
+əəə
+```
+
+Denied result:
+
+```md
+## Tool Result
+> Id: toolu_abc123
+> Parent: msg_20260216_201101_a1
+> Time: 2026-02-16T20:11:03Z - 2026-02-16T20:11:03Z
+> Resources: in=0 out=0 total=0 tools=0 ms=0
+> Tool: run_command
+> Status: denied
+
+əəətool/result/json
+{"success":false,"error":"Denied by user"}
+əəə
+```
+
+#### Unified control text (schwa)
+
+Use one control grammar for per-call decisions and blanket authorizations.
+
+Canonical `PUT /project/:project/dialog` payload field: `control`.
+
+```txt
+əəəcontrol/v1
+toolu_abc123 approve
+toolu_def456 deny
 allow run_command
-allow edit_file
+deny write_file
 əəə
 ```
 
@@ -152,37 +279,40 @@ Parsing rules:
 - Ignore lines starting with `#`.
 - Unknown lines are ignored (non-fatal).
 
-No separate pending endpoint is needed. UI/server derive pending tool requests directly by parsing dialog markdown.
+Persist the control action in dialog markdown:
 
-SSE event types: `chunk`, `tool_request`, `done`, `error`.
+```md
+## Authorization
+> Id: auth_20260216_201103_1
+> Time: 2026-02-16T20:11:03Z - 2026-02-16T20:11:03Z
+> Resources: in=0 out=0 total=0 tools=0 ms=0
+> Scope: dialog
 
-Dialogs are files named:
-
-`dialog-<YYYYMMDD-HHmmss>-<slug>-<status>.md`
-
-Where `<status>` is one of: `active`, `waiting`, `done`.
-
-Core markdown format:
-
-```
-# Dialog
-> Provider: claude | Model: claude-sonnet-4-20250514
-> Started: 2026-02-10T20:11:00Z
-
-## User
-> Time: 2026-02-10T20:11:00Z
-
-message
-
-## Assistant
-> Time: 2026-02-10T20:11:01Z - 2026-02-10T20:11:14Z
-
-response
+əəəcontrol/v1
+toolu_abc123 approve
+allow run_command
+əəə
 ```
 
-Every `## User` section has a `> Time:` line with the UTC timestamp when the message was sent. Every `## Assistant` section has a `> Time:` line with start and end timestamps separated by ` - `. The server writes the start timestamp when the assistant section is opened and appends the end timestamp when the turn completes (stream ends or status changes). The client displays these timestamps next to each message.
+#### Tool-call flow
 
-Two implementations: Claude (Anthropic API, max_tokens 64000) and OpenAI. Both stream. Provider must be `claude` or `openai`. Server runs on port `CONFIG.vibeyPort` (default 3001).
+1. LLM emits tool calls. Server writes `Tool Request` sections.
+2. Server parses current authorizations from markdown.
+3. Authorized tools execute immediately.
+4. Results are written as `Tool Result` sections and fed back to the LLM.
+5. Unauthorized tools remain pending; dialog becomes `waiting`; stream emits `tool_request`.
+6. Human sends `control` text (`əəəcontrol/v1 ... əəə`); server writes authorization/decision effects and continues.
+
+No separate tool-execution endpoint is needed in normal flow.
+
+#### Parsing dialog for provider messages
+
+`parseDialog` reconstructs API history from markdown:
+- `## User` / `## Assistant` sections become text messages.
+- `## Tool Request` sections become assistant `tool_use`/`tool_calls` entries.
+- `## Tool Result` sections become `tool_result`/`tool` messages.
+
+Markdown is the source of truth. Restart-safe by design.
 
 ### Client: dialogs
 
@@ -192,111 +322,24 @@ Input area: provider select (Claude/OpenAI), textarea (Cmd+Enter to send), Send 
 
 User messages are rendered optimistically (shown immediately when sent).
 
-Message usage/tokens are shown only when returned by the provider response; if usage is unavailable, nothing is printed.
-
-Usage is stored in markdown as metadata lines at the end of each assistant section:
-
-```
-> Usage: input=123 output=456 total=579
-> Usage cumulative: input=1200 output=3400 total=4600
-```
-
-Only write these lines when provider usage is actually available.
-
-### Server: tools for dialogs
-
-The LLM always receives four tools:
-
-- `run_command` - run a shell command (30s timeout, 1MB max output). Use for reading files (`cat`), listing directories (`ls`), HTTP requests (`curl`), git, and anything else the shell can do.
-- `write_file` - create or overwrite a file. Takes `{path, content}`. Bypasses the shell so content with quotes, backticks, template literals, etc. is written cleanly.
-- `edit_file` - surgical find-and-replace. Takes `{path, old_string, new_string}`. `old_string` must appear exactly once in the file; if it appears zero times or more than once, the tool returns an error asking for more context. The LLM should read the file first (`cat` via `run_command`) before editing.
-- `launch_agent` - spawn another top-level dialog (flat structure, no subagent tree). Takes `{provider, model, prompt, slug?}` and is equivalent to `POST /dialog`.
-
-Tool definitions are written once and converted to both Claude and OpenAI formats.
-
-**No server-side state.** All tool-call state lives in dialog markdown. The server reconstructs pending requests, authorizations, and decisions by parsing markdown each request.
-
-#### Markdown format for tool requests
-
-When the LLM requests tools, they are written to dialog markdown as blocks inside the assistant section. Each block includes the tool name and provider tool-call ID:
-
-```
----
-Tool request: run_command [toolu_abc123]
-
-    {"command": "ls"}
-
----
-```
-
-After approval and execution:
-
-```
----
-Tool request: run_command [toolu_abc123]
-
-    {"command": "ls"}
-
-Decision: approved
-Result:
-
-    {"success": true, "stdout": "file1.txt"}
-
----
-```
-
-After rejection:
-
-```
----
-Tool request: run_command [toolu_abc123]
-
-    {"command": "ls"}
-
-Decision: denied
-
----
-```
-
-A block with no `Decision:` is pending.
-
-#### Blanket authorizations
-
-Authorizations are written inline in markdown:
-
-```
-> Authorized: run_command
-```
-
-Meaning: from that point onward in that dialog, that tool type is auto-approved.
-
-When a new dialog is created (including via `launch_agent`), global authorizations from `doc-main.md` are copied into the new dialog header.
-
-#### Tool-call flow
-
-1. LLM emits tool calls. Server writes tool blocks to markdown.
-2. Server parses authorizations from markdown.
-3. Authorized (or pre-authorized) tools are executed immediately by the server.
-4. Execution results are written to markdown (`Decision: approved` + `Result:`), then fed back to the LLM to continue.
-5. Unauthorized tools are left pending (no decision written), dialog status becomes `waiting`, and stream ends with `tool_request`.
-6. Human sends parseable decisions text (wrapped with `əəə` sentinel, by tool-call ID); server writes decisions/results into markdown and continues.
-
-No separate tool-execution endpoint is needed in normal flow: once approved, the server can execute directly from the pending block data in markdown.
-
-#### Parsing dialog for provider messages
-
-`parseDialog` reconstructs API history from markdown:
-- `## User` / `## Assistant` sections become text messages.
-- Tool request blocks become assistant `tool_use`/`tool_calls` entries.
-- Decided tool blocks become `tool_result`/`tool` messages.
-
-Markdown is the source of truth. Restart-safe by design.
+Message resources/tokens are shown from each section's `> Resources:` metadata line.
 
 ### Client: tools for dialogs
 
 When `tool_request` arrives, a panel shows each unauthorized tool call (name + summarized input). Large file payloads are redacted in UI (markdown remains full-fidelity).
 
-User approves/denies by tool-call ID, optionally sets "Always allow" per tool type, then sends one `PUT /dialog` with parseable `decisions` text (+ optional parseable `authorizations` text), both wrapped in the `əəə ... əəə` sentinel convention. Server writes decisions/authorizations in markdown and continues.
+User approves/denies by tool-call ID, optionally sets "Always allow" per tool type, then sends one `PUT /project/:project/dialog` with parseable `control` text wrapped in schwas.
+
+Canonical control payload:
+
+```txt
+əəəcontrol/v1
+toolu_abc123 approve
+allow edit_file
+əəə
+```
+
+Server writes authorization/decision outcomes in canonical markdown sections and continues.
 
 #### Diff rendering for `edit_file`
 
@@ -338,9 +381,6 @@ Flow #1:
 - The LLM asks for it and I need to authorize it. I authorize it once.
 - The diff is applied. I can see it with a green background.
 
-Known bugs to fix:
-- When I'm in a doc and I go to a dialog, the contents of the doc are in the box on the dialog.
-
 Flow #2:
 
 - I appear on the Docs tab
@@ -367,4 +407,4 @@ Flow #4:
 TODO:
 
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
-- The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to POST /dialog. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (POST /dialog should support sending an initial prompt).
+- The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to `POST /project/:project/dialog`. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (`POST /project/:project/dialog` should support sending an initial prompt).

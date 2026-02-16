@@ -262,14 +262,11 @@ Really curious to see if we can use documents as channels, so that LLMs can coop
 
 
 Prompt header:
-Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then vibey-test.js.
-
-Please read the stack of libraries I use at `arch/gotoB.min.js` (it's not minified). That'll give you a style too.
-
-For testing: just use pupeteer to load the app. Use test-vibey by clicking on the "Test" button. The logic is there.
-
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
 
 Prompts:
+- Perfect. Now iterate running node vibey-server-test.js and fixing wherever needed the tests. Do not fix the server yet.
+- Hi! There's another agent modifying the code. Can you go through flow #1 and check that the tests at vibey-server-test.js match it? No need to run it yet.
 - Fantastic. Now please read again vibey.md, make sense of all the tool call conventions. The API is messy and it even looks inconsistent. Please use the schwas and an unified way to represent 1) user inputs; tool requests & authorizations; times and resources used per message. Put your output into a temporary file clean-convention.md
 - Let's debug. I cannot even get a proper response to a "Hello". Please timeout your pupeteer to perhaps 1m, not more.
 - Please make a pupeteer file that just opens the client and clicks on test, then listens to an alert and stops on it and reports it back to you. Do it as vibey-test-boot.js.
@@ -277,6 +274,7 @@ Prompts:
 - There's another agent coding. Can you just run the tests for flow 1? The server is running.
 - Please add a way to remove a project. Add the endpoint for that, the frontend logic. Also modify the readme in vibey.md. Don't restart the server yet.
 
+Thinking that YOLO is correct: if you have guardrails in place (container, backups, limiting destructive calls to external resources), you just let the LLM do its thing and give it permission to fail. Like network packets, if one doesn't make it, you just retry. (Thanks Mario Zechner for letting me see this through pi!)
 
 ### 2026-02-13
 

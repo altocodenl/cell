@@ -522,6 +522,12 @@ var ensureProjectDir = function (projectName) {
    return dir;
 };
 
+var getExistingProjectDir = function (projectName) {
+   var dir = getProjectDir (projectName);
+   if (! fs.existsSync (dir)) throw new Error ('Project not found');
+   return dir;
+};
+
 var listProjects = function () {
    if (! fs.existsSync (VIBEY_DIR)) fs.mkdirSync (VIBEY_DIR, {recursive: true});
    var entries = fs.readdirSync (VIBEY_DIR, {withFileTypes: true});
@@ -666,7 +672,7 @@ var executeTool = function (toolName, toolInput, projectName) {
    return new Promise (function (resolve) {
       var projectDir;
       try {
-         projectDir = ensureProjectDir (projectName);
+         projectDir = getExistingProjectDir (projectName);
       }
       catch (error) {
          return resolve ({success: false, error: error.message});
@@ -1159,11 +1165,25 @@ var getPendingToolCalls = function (filepath) {
 
 var parseSentinelLines = function (text) {
    if (type (text) !== 'string') return [];
-   var block = text;
-   var match = text.match (/əəə\s*([\s\S]*?)\s*əəə/);
-   if (match) block = match [1];
-   return dale.fil (block.split ('\n'), undefined, function (line) {
-      line = line.replace (/\r/g, '').trim ();
+
+   var normalized = text.replace (/\r/g, '');
+   var lines = normalized.split ('\n');
+   var start = -1, end = -1;
+
+   dale.go (lines, function (line, index) {
+      var trimmed = line.trim ();
+      if (start === -1 && trimmed.indexOf ('əəə') === 0) {
+         start = Number (index);
+         return;
+      }
+      if (start !== -1 && end === -1 && trimmed === 'əəə') end = Number (index);
+   });
+
+   var bodyLines = lines;
+   if (start !== -1 && end > start) bodyLines = lines.slice (start + 1, end);
+
+   return dale.fil (bodyLines, undefined, function (line) {
+      line = line.trim ();
       if (! line || line [0] === '#') return;
       return line;
    });
@@ -1193,6 +1213,37 @@ var parseAuthorizationsInput = function (authorizations) {
       else deny [match [2]] = true;
    });
    return {allow: Object.keys (allow), deny: Object.keys (deny)};
+};
+
+var parseControlInput = function (control) {
+   if (! control) return {decisions: [], authorizations: {allow: [], deny: []}};
+
+   var decisions = [];
+   var allow = {}, deny = {};
+
+   dale.go (parseSentinelLines (control), function (line) {
+      var toolDecision = line.match (/^([^:\s]+)\s+(approve|deny)$/i);
+      if (toolDecision) {
+         decisions.push ({id: toolDecision [1], approved: toolDecision [2].toLowerCase () === 'approve'});
+         return;
+      }
+
+      var legacyDecision = line.match (/^([^:\s]+)\s*:\s*(approve|deny)$/i);
+      if (legacyDecision) {
+         decisions.push ({id: legacyDecision [1], approved: legacyDecision [2].toLowerCase () === 'approve'});
+         return;
+      }
+
+      var authMatch = line.match (/^(allow|deny)\s+([a-zA-Z0-9_\-]+)$/i);
+      if (! authMatch) return;
+      if (authMatch [1].toLowerCase () === 'allow') allow [authMatch [2]] = true;
+      else deny [authMatch [2]] = true;
+   });
+
+   return {
+      decisions: decisions,
+      authorizations: {allow: Object.keys (allow), deny: Object.keys (deny)}
+   };
 };
 
 // Implementation function for Claude (streaming with tool support)
@@ -1308,6 +1359,37 @@ var chatWithClaude = async function (projectDir, messages, model, onChunk, abort
    };
 };
 
+var normalizeMessagesForResponsesApi = function (messages) {
+   var normalized = [];
+
+   dale.go (messages || [], function (message) {
+      if (! message || type (message) !== 'object') return;
+
+      if (message.role === 'tool') {
+         var toolText = '[Tool result ' + (message.tool_call_id || 'unknown') + ']\n' + (message.content || '');
+         normalized.push ({role: 'user', content: toolText});
+         return;
+      }
+
+      var content = message.content;
+      if (content === null || content === undefined) content = '';
+
+      if (type (content) !== 'string') {
+         try {content = JSON.stringify (content);} catch (error) {content = '' + content;}
+      }
+
+      if (message.tool_calls && message.tool_calls.length) {
+         content += (content ? '\n\n' : '') + '[Assistant tool calls]\n' + dale.go (message.tool_calls, function (tc) {
+            return '- ' + ((tc.function && tc.function.name) || tc.name || 'unknown') + ' id=' + (tc.id || 'unknown') + ' args=' + ((tc.function && tc.function.arguments) || tc.arguments || '{}');
+         }).join ('\n');
+      }
+
+      normalized.push ({role: message.role || 'user', content: content});
+   });
+
+   return normalized;
+};
+
 // Implementation function for OpenAI (streaming with tool support)
 var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abortSignal) {
    model = model || 'gpt-5';
@@ -1331,15 +1413,17 @@ var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abort
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + auth.key
    };
+   var usingResponsesApi = false;
 
    if (auth.type === 'oauth' && auth.accountId) {
+      usingResponsesApi = true;
       apiUrl = 'https://chatgpt.com/backend-api/codex/responses';
       headers ['chatgpt-account-id'] = auth.accountId;
       headers ['OpenAI-Beta'] = 'responses=experimental';
       headers ['originator'] = 'vibey';
       // Responses API uses `input` + `instructions`, not `messages`
       requestBody.instructions = systemPrompt;
-      requestBody.input = messages;
+      requestBody.input = normalizeMessagesForResponsesApi (messages);
       requestBody.store = false;
       // Responses API tool format: {type, name, description, parameters} (flat, not nested under `function`)
       requestBody.tools = dale.go (TOOLS, function (tool) {
@@ -1363,7 +1447,8 @@ var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abort
 
    var fullContent = '';
    var toolCalls = [];
-   var toolCallsInProgress = {}; // {index: {id, name, arguments}}
+   var toolCallsInProgress = {}; // Chat Completions stream: {index: {id, name, arguments}}
+   var responseToolCalls = {};   // Responses stream: {item_id: {id, name, arguments}}
    var usage = null;
    var reader = response.body.getReader ();
    var decoder = new TextDecoder ();
@@ -1378,47 +1463,97 @@ var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abort
       buffer = lines.pop ();
 
       dale.go (lines, function (line) {
-         if (line.startsWith ('data: ')) {
-            var data = line.slice (6);
-            if (data === '[DONE]') return;
-            try {
-               var parsed = JSON.parse (data);
-               if (parsed.usage) usage = parsed.usage;
-               var delta = parsed.choices && parsed.choices [0] && parsed.choices [0].delta;
-               if (! delta) return;
+         if (! line.startsWith ('data: ')) return;
 
-               // Text content
-               if (delta.content) {
-                  fullContent += delta.content;
-                  if (onChunk) onChunk (delta.content);
+         var data = line.slice (6);
+         if (data === '[DONE]') return;
+
+         try {
+            var parsed = JSON.parse (data);
+            if (parsed.usage) usage = parsed.usage;
+
+            if (usingResponsesApi) {
+               // Text deltas
+               if (parsed.type === 'response.output_text.delta' && type (parsed.delta) === 'string') {
+                  fullContent += parsed.delta;
+                  if (onChunk) onChunk (parsed.delta);
                }
 
-               // Tool calls
-               if (delta.tool_calls) {
-                  dale.go (delta.tool_calls, function (tc) {
-                     var idx = tc.index;
-                     if (! toolCallsInProgress [idx]) {
-                        toolCallsInProgress [idx] = {id: tc.id, name: '', arguments: ''};
-                     }
-                     if (tc.id) toolCallsInProgress [idx].id = tc.id;
-                     if (tc.function && tc.function.name) toolCallsInProgress [idx].name += tc.function.name;
-                     if (tc.function && tc.function.arguments) toolCallsInProgress [idx].arguments += tc.function.arguments;
-                  });
+               // Tool call scaffold
+               if (parsed.type === 'response.output_item.added' && parsed.item && parsed.item.type === 'function_call') {
+                  responseToolCalls [parsed.item.id] = {
+                     id: parsed.item.call_id || parsed.item.id,
+                     name: parsed.item.name || '',
+                     arguments: parsed.item.arguments || ''
+                  };
                }
+
+               // Tool args deltas
+               if (parsed.type === 'response.function_call_arguments.delta') {
+                  if (! responseToolCalls [parsed.item_id]) {
+                     responseToolCalls [parsed.item_id] = {id: parsed.item_id, name: '', arguments: ''};
+                  }
+                  responseToolCalls [parsed.item_id].arguments += parsed.delta || '';
+               }
+
+               if (parsed.type === 'response.function_call_arguments.done') {
+                  if (! responseToolCalls [parsed.item_id]) {
+                     responseToolCalls [parsed.item_id] = {id: parsed.item_id, name: '', arguments: ''};
+                  }
+                  if (type (parsed.arguments) === 'string') responseToolCalls [parsed.item_id].arguments = parsed.arguments;
+               }
+
+               // Final tool item data (name/call_id/arguments)
+               if (parsed.type === 'response.output_item.done' && parsed.item && parsed.item.type === 'function_call') {
+                  if (! responseToolCalls [parsed.item.id]) responseToolCalls [parsed.item.id] = {id: parsed.item.id, name: '', arguments: ''};
+                  if (parsed.item.call_id) responseToolCalls [parsed.item.id].id = parsed.item.call_id;
+                  if (parsed.item.name) responseToolCalls [parsed.item.id].name = parsed.item.name;
+                  if (type (parsed.item.arguments) === 'string') responseToolCalls [parsed.item.id].arguments = parsed.item.arguments;
+               }
+
+               // Usage is delivered on completion for responses streams
+               if (parsed.type === 'response.completed' && parsed.response && parsed.response.usage) usage = parsed.response.usage;
+
+               return;
             }
-            catch (e) {}
+
+            // Chat Completions stream format
+            var delta = parsed.choices && parsed.choices [0] && parsed.choices [0].delta;
+            if (! delta) return;
+
+            if (delta.content) {
+               fullContent += delta.content;
+               if (onChunk) onChunk (delta.content);
+            }
+
+            if (delta.tool_calls) {
+               dale.go (delta.tool_calls, function (tc) {
+                  var idx = tc.index;
+                  if (! toolCallsInProgress [idx]) toolCallsInProgress [idx] = {id: tc.id, name: '', arguments: ''};
+                  if (tc.id) toolCallsInProgress [idx].id = tc.id;
+                  if (tc.function && tc.function.name) toolCallsInProgress [idx].name += tc.function.name;
+                  if (tc.function && tc.function.arguments) toolCallsInProgress [idx].arguments += tc.function.arguments;
+               });
+            }
          }
+         catch (e) {}
       });
    }
 
-   // Convert in-progress tool calls to final format
+   // Convert in-progress tool calls to final format (chat completions)
    dale.go (toolCallsInProgress, function (tc) {
       try {
-         toolCalls.push ({
-            id: tc.id,
-            name: tc.name,
-            input: JSON.parse (tc.arguments)
-         });
+         toolCalls.push ({id: tc.id, name: tc.name, input: JSON.parse (tc.arguments)});
+      }
+      catch (e) {
+         toolCalls.push ({id: tc.id, name: tc.name, input: {}});
+      }
+   });
+
+   // Convert in-progress tool calls to final format (responses API)
+   dale.go (responseToolCalls, function (tc) {
+      try {
+         toolCalls.push ({id: tc.id, name: tc.name, input: JSON.parse (tc.arguments || '{}')});
       }
       catch (e) {
          toolCalls.push ({id: tc.id, name: tc.name, input: {}});
@@ -1442,61 +1577,85 @@ var appendToolCallsToAssistantSection = function (filepath, toolCalls) {
 };
 
 var runCompletion = async function (projectName, dialog, provider, model, onChunk, abortSignal) {
-   var projectDir = ensureProjectDir (projectName);
-   upsertDocMainContextBlock (dialog.filepath, projectDir);
-   var markdown = fs.readFileSync (dialog.filepath, 'utf8');
-   var messages = parseDialogForProvider (markdown, provider);
+   var projectDir = getExistingProjectDir (projectName);
+   var autoExecutedAll = [];
+   var lastContent = '';
 
-   var assistantStart = new Date ().toISOString ();
-   appendToDialog (dialog.filepath, '## Assistant\n> Time: ' + assistantStart + ' - ...\n\n');
+   for (var round = 0; round < 8; round++) {
+      upsertDocMainContextBlock (dialog.filepath, projectDir);
+      var markdown = fs.readFileSync (dialog.filepath, 'utf8');
+      var messages = parseDialogForProvider (markdown, provider);
 
-   var writeChunk = function (chunk) {
-      appendToDialog (dialog.filepath, chunk);
-      if (onChunk) onChunk (chunk);
-   };
+      var assistantStart = new Date ().toISOString ();
+      appendToDialog (dialog.filepath, '## Assistant\n> Time: ' + assistantStart + ' - ...\n\n');
 
-   try {
-      var result = provider === 'claude'
-         ? await chatWithClaude (projectDir, messages, model, writeChunk, abortSignal)
-         : await chatWithOpenAI (projectDir, messages, model, writeChunk, abortSignal);
-
-      appendToDialog (dialog.filepath, '\n\n');
-      appendUsageToAssistantSection (dialog.filepath, result.usage);
-      appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
-
-      var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
-      var decisionsById = {};
-      var autoExecuted = [];
-      var pending = [];
-
-      for (var i = 0; i < (result.toolCalls || []).length; i++) {
-         var tc = result.toolCalls [i];
-         if (authorizations [tc.name]) {
-            var toolResult = await executeTool (tc.name, tc.input, projectName);
-            decisionsById [tc.id] = {decision: 'approved', result: toolResult};
-            autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
-         }
-         else pending.push (tc);
-      }
-
-      if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
-
-      return {
-         dialogId: dialog.dialogId,
-         filename: dialog.filename,
-         provider: provider,
-         model: model,
-         content: result.content,
-         toolCalls: pending.length ? pending : null,
-         autoExecuted: autoExecuted
+      var writeChunk = function (chunk) {
+         appendToDialog (dialog.filepath, chunk);
+         if (onChunk) onChunk (chunk);
       };
-   }
-   finally {
+
       try {
-         finalizeAssistantTime (dialog.filepath, assistantStart, new Date ().toISOString ());
+         var result = provider === 'claude'
+            ? await chatWithClaude (projectDir, messages, model, writeChunk, abortSignal)
+            : await chatWithOpenAI (projectDir, messages, model, writeChunk, abortSignal);
+
+         lastContent = result.content || '';
+
+         appendToDialog (dialog.filepath, '\n\n');
+         appendUsageToAssistantSection (dialog.filepath, result.usage);
+         appendToolCallsToAssistantSection (dialog.filepath, result.toolCalls);
+
+         var authorizations = parseAuthorizations (fs.readFileSync (dialog.filepath, 'utf8'));
+         var decisionsById = {};
+         var autoExecuted = [];
+         var pending = [];
+
+         for (var i = 0; i < (result.toolCalls || []).length; i++) {
+            var tc = result.toolCalls [i];
+            if (authorizations [tc.name]) {
+               var toolResult = await executeTool (tc.name, tc.input, projectName);
+               decisionsById [tc.id] = {decision: 'approved', result: toolResult};
+               autoExecuted.push ({id: tc.id, name: tc.name, result: toolResult});
+            }
+            else pending.push (tc);
+         }
+
+         if (Object.keys (decisionsById).length) writeToolDecisions (dialog.filepath, decisionsById);
+         if (autoExecuted.length) autoExecutedAll = autoExecutedAll.concat (autoExecuted);
+
+         if (pending.length) {
+            return {
+               dialogId: dialog.dialogId,
+               filename: dialog.filename,
+               provider: provider,
+               model: model,
+               content: lastContent,
+               toolCalls: pending,
+               autoExecuted: autoExecutedAll
+            };
+         }
+
+         if (! autoExecuted.length) {
+            return {
+               dialogId: dialog.dialogId,
+               filename: dialog.filename,
+               provider: provider,
+               model: model,
+               content: lastContent,
+               toolCalls: null,
+               autoExecuted: autoExecutedAll
+            };
+         }
       }
-      catch (error) {}
+      finally {
+         try {
+            finalizeAssistantTime (dialog.filepath, assistantStart, new Date ().toISOString ());
+         }
+         catch (error) {}
+      }
    }
+
+   throw new Error ('Exceeded maximum auto-tool continuation rounds');
 };
 
 var createWaitingDialog = function (projectName, provider, model, slug) {
@@ -1504,7 +1663,7 @@ var createWaitingDialog = function (projectName, provider, model, slug) {
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
-   var projectDir = ensureProjectDir (projectName);
+   var projectDir = getExistingProjectDir (projectName);
    var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
    var dialogId = createDialogId (projectDir, slug || 'dialog');
    var filename = buildDialogFilename (dialogId, 'waiting');
@@ -1534,7 +1693,7 @@ var startDialogTurn = async function (projectName, provider, prompt, model, slug
       throw new Error ('Unknown provider: ' + provider + '. Use "claude" or "openai".');
    }
 
-   var projectDir = ensureProjectDir (projectName);
+   var projectDir = getExistingProjectDir (projectName);
    var defaultModel = model || (provider === 'claude' ? 'claude-sonnet-4-20250514' : 'gpt-5');
    var dialogId = createDialogId (projectDir, slug);
    var dialog = {
@@ -1557,11 +1716,25 @@ var startDialogTurn = async function (projectName, provider, prompt, model, slug
    return result;
 };
 
-var updateDialogTurn = async function (projectName, dialogId, status, prompt, decisionsInput, authorizationsInput, provider, model, onChunk, abortSignal) {
-   var dialog = loadDialog (ensureProjectDir (projectName), dialogId);
+var updateDialogTurn = async function (projectName, dialogId, status, prompt, controlInput, decisionsInput, authorizationsInput, provider, model, onChunk, abortSignal) {
+   var dialog = loadDialog (getExistingProjectDir (projectName), dialogId);
    if (! dialog.exists) throw new Error ('Dialog not found: ' + dialogId);
 
-   var authorizations = parseAuthorizationsInput (authorizationsInput || '');
+   var control = parseControlInput (controlInput || '');
+
+   var legacyAuthorizations = parseAuthorizationsInput (authorizationsInput || '');
+   var authMap = {};
+   dale.go (legacyAuthorizations.allow, function (name) {authMap [name] = 'allow';});
+   dale.go (legacyAuthorizations.deny, function (name) {authMap [name] = 'deny';});
+   dale.go (control.authorizations.allow, function (name) {authMap [name] = 'allow';});
+   dale.go (control.authorizations.deny, function (name) {authMap [name] = 'deny';});
+
+   var authorizations = {allow: [], deny: []};
+   dale.go (authMap, function (action, name) {
+      if (action === 'allow') authorizations.allow.push (name);
+      if (action === 'deny') authorizations.deny.push (name);
+   });
+
    if (authorizations.allow.length || authorizations.deny.length) {
       dale.go (authorizations.allow, function (name) {
          appendToDialog (dialog.filepath, '> Authorized: ' + name + '\n');
@@ -1572,7 +1745,17 @@ var updateDialogTurn = async function (projectName, dialogId, status, prompt, de
       appendToDialog (dialog.filepath, '\n');
    }
 
-   var decisions = parseDecisionsInput (decisionsInput || []);
+   var decisionsMap = {};
+   dale.go (parseDecisionsInput (decisionsInput || []), function (decision) {
+      if (! decision || ! decision.id) return;
+      decisionsMap [decision.id] = {id: decision.id, approved: decision.approved === true};
+   });
+   dale.go (control.decisions, function (decision) {
+      if (! decision || ! decision.id) return;
+      decisionsMap [decision.id] = {id: decision.id, approved: decision.approved === true};
+   });
+   var decisions = dale.go (decisionsMap, function (decision) {return decision;});
+
    var deniedAny = false;
 
    if (decisions.length) {
@@ -1802,12 +1985,47 @@ var routes = [
       }
    }],
 
+   ['delete', 'projects/:name', function (rq, rs) {
+      var projectName = rq.data.params.name;
+      var projectDir;
+
+      try {
+         projectDir = getProjectDir (projectName);
+      }
+      catch (error) {
+         return reply (rs, 400, {error: error.message});
+      }
+
+      if (! fs.existsSync (projectDir)) return reply (rs, 404, {error: 'Project not found'});
+
+      try {
+         dale.go (fs.readdirSync (projectDir), function (file) {
+            var parsed = parseDialogFilename (file);
+            if (! parsed) return;
+            var active = getActiveStream (parsed.dialogId);
+            if (! active) return;
+            active.requestedStatus = 'done';
+            active.controller.abort ();
+            endActiveStream (parsed.dialogId);
+         });
+      }
+      catch (error) {}
+
+      fs.rm (projectDir, {recursive: true, force: false}, function (error) {
+         if (error) {
+            if (error.code === 'ENOENT') return reply (rs, 404, {error: 'Project not found'});
+            return reply (rs, 500, {error: 'Failed to delete project'});
+         }
+         reply (rs, 200, {ok: true, name: projectName});
+      });
+   }],
+
    ['post', 'project/:project/snapshot', function (rq, rs) {
       if (stop (rs, [['type', rq.body.type, 'string', {oneOf: ['zip', 'project']}]])) return;
 
       var projectName = rq.data.params.project;
       try {
-         var projectDir = ensureProjectDir (projectName);
+         var projectDir = getExistingProjectDir (projectName);
          var stamp = formatDialogTimestamp ();
 
          if (rq.body.type === 'project') {
@@ -1834,7 +2052,7 @@ var routes = [
 
    ['get', 'project/:project/files', function (rq, rs) {
       var projectDir;
-      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
 
       fs.readdir (projectDir, function (error, files) {
          if (error) return reply (rs, 500, {error: 'Failed to read directory'});
@@ -1861,7 +2079,7 @@ var routes = [
       if (! validFilename (name)) return reply (rs, 400, {error: 'Invalid filename'});
 
       var projectDir;
-      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
 
       var filepath = Path.join (projectDir, name);
       fs.readFile (filepath, 'utf8', function (error, content) {
@@ -1882,7 +2100,7 @@ var routes = [
       ])) return;
 
       var projectDir;
-      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
 
       var filepath = Path.join (projectDir, name);
       fs.writeFile (filepath, rq.body.content, 'utf8', function (error) {
@@ -1896,7 +2114,7 @@ var routes = [
       if (! validFilename (name)) return reply (rs, 400, {error: 'Invalid filename'});
 
       var projectDir;
-      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
 
       var filepath = Path.join (projectDir, name);
       fs.unlink (filepath, function (error) {
@@ -1978,12 +2196,15 @@ var routes = [
 
       if (rq.body.status !== undefined && ! inc (['waiting', 'done'], rq.body.status)) return reply (rs, 400, {error: 'status must be waiting or done'});
       if (rq.body.prompt !== undefined && type (rq.body.prompt) !== 'string') return reply (rs, 400, {error: 'prompt must be a string'});
+      if (rq.body.control !== undefined && type (rq.body.control) !== 'string') return reply (rs, 400, {error: 'control must be a string'});
       if (rq.body.decisions !== undefined && type (rq.body.decisions) !== 'string' && type (rq.body.decisions) !== 'array') return reply (rs, 400, {error: 'decisions must be string or array'});
       if (rq.body.authorizations !== undefined && type (rq.body.authorizations) !== 'string' && type (rq.body.authorizations) !== 'array') return reply (rs, 400, {error: 'authorizations must be string or array'});
       if (rq.body.provider !== undefined && (type (rq.body.provider) !== 'string' || ! inc (['claude', 'openai'], rq.body.provider))) return reply (rs, 400, {error: 'provider must be claude or openai'});
       if (rq.body.model !== undefined && type (rq.body.model) !== 'string') return reply (rs, 400, {error: 'model must be a string'});
 
-      var continues = (type (rq.body.prompt) === 'string' && rq.body.prompt.trim ()) || rq.body.decisions !== undefined;
+      var controlParsed = parseControlInput (rq.body.control || '');
+      var hasControlDecisions = controlParsed.decisions.length > 0;
+      var continues = (type (rq.body.prompt) === 'string' && rq.body.prompt.trim ()) || rq.body.decisions !== undefined || hasControlDecisions;
 
       if (! continues) {
          var active = getActiveStream (rq.body.dialogId);
@@ -1994,7 +2215,7 @@ var routes = [
          }
 
          try {
-            var result = await updateDialogTurn (rq.data.params.project, rq.body.dialogId, rq.body.status, null, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
+            var result = await updateDialogTurn (rq.data.params.project, rq.body.dialogId, rq.body.status, null, rq.body.control, rq.body.decisions, rq.body.authorizations, rq.body.provider, rq.body.model, null);
             return reply (rs, 200, result);
          }
          catch (error) {
@@ -2016,6 +2237,7 @@ var routes = [
             rq.body.dialogId,
             rq.body.status,
             rq.body.prompt,
+            rq.body.control,
             rq.body.decisions,
             rq.body.authorizations,
             rq.body.provider,
@@ -2038,7 +2260,7 @@ var routes = [
             try {
                var activeAfterAbort = getActiveStream (rq.body.dialogId);
                var requestedStatus = activeAfterAbort && activeAfterAbort.requestedStatus ? activeAfterAbort.requestedStatus : 'waiting';
-               var dialogAfterAbort = loadDialog (ensureProjectDir (rq.data.params.project), rq.body.dialogId);
+               var dialogAfterAbort = loadDialog (getExistingProjectDir (rq.data.params.project), rq.body.dialogId);
                if (dialogAfterAbort.exists) setDialogStatus (dialogAfterAbort, requestedStatus);
                rs.write ('data: ' + JSON.stringify ({type: 'done', result: {dialogId: rq.body.dialogId, filename: dialogAfterAbort.filename, status: requestedStatus, interrupted: true}}) + '\n\n');
                rs.end ();
@@ -2079,7 +2301,9 @@ var routes = [
    // Get dialog by ID
    ['get', 'project/:project/dialog/:id', function (rq, rs) {
       var dialogId = rq.data.params.id;
-      var dialog = loadDialog (ensureProjectDir (rq.data.params.project), dialogId);
+      var projectDir;
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
+      var dialog = loadDialog (projectDir, dialogId);
 
       if (! dialog.exists) {
          return reply (rs, 404, {error: 'Dialog not found'});
@@ -2099,7 +2323,7 @@ var routes = [
    // List all dialogs
    ['get', 'project/:project/dialogs', function (rq, rs) {
       var projectDir;
-      try {projectDir = ensureProjectDir (rq.data.params.project);} catch (error) {return reply (rs, 400, {error: error.message});}
+      try {projectDir = getExistingProjectDir (rq.data.params.project);} catch (error) {return reply (rs, error.message === 'Project not found' ? 404 : 400, {error: error.message});}
 
       fs.readdir (projectDir, function (error, files) {
          if (error) return reply (rs, 500, {error: 'Failed to read directory'});

@@ -241,6 +241,36 @@ B.mrespond ([
       });
    }],
 
+   ['delete', 'project', function (x, name, ev) {
+      if (ev && ev.stopPropagation) ev.stopPropagation ();
+      if (ev && ev.preventDefault) ev.preventDefault ();
+      if (! name) return;
+      if (! confirm ('Delete project "' + name + '"? This cannot be undone.')) return;
+
+      B.call (x, 'delete', 'projects/' + encodeURIComponent (name), {}, '', function (x, error, rs) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to delete project');
+
+         var parsedHash = readHashTarget ();
+         var deletingCurrent = B.get ('currentProject') === name;
+         var deletingFromHash = parsedHash && parsedHash.project === name;
+
+         if (deletingCurrent || deletingFromHash) {
+            B.call (x, 'set', 'currentProject', null);
+            B.call (x, 'set', 'files', []);
+            B.call (x, 'set', 'currentFile', null);
+            B.call (x, 'set', 'pendingToolCalls', null);
+            B.call (x, 'set', 'streaming', false);
+            B.call (x, 'set', 'applyingToolDecisions', false);
+            B.call (x, 'set', 'streamingContent', '');
+            B.call (x, 'set', 'optimisticUserMessage', null);
+            B.call (x, 'reset', 'chatInput');
+            B.call (x, 'navigate', 'hash', '#/projects');
+         }
+
+         B.call (x, 'load', 'projects');
+      });
+   }],
+
    ['snapshot', 'project', function (x, type) {
       var project = B.get ('currentProject');
       if (! project) return;
@@ -1640,7 +1670,11 @@ views.projects = function () {
                      class: 'file-item',
                      onclick: B.ev ('navigate', 'hash', '#/project/' + encodeURIComponent (name) + '/docs')
                   }, [
-                     ['span', {class: 'file-name'}, name]
+                     ['span', {class: 'file-name'}, name],
+                     ['span', {
+                        class: 'file-delete',
+                        onclick: B.ev ('delete', 'project', name, {raw: 'event'})
+                     }, '×']
                   ]];
                })]
                : ['div', {style: style ({color: '#888'})}, 'No projects yet']
