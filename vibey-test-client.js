@@ -199,9 +199,9 @@
          return true;
       }],
 
-      // --- Step 7: Send message to read vibey.md ---
-      ['Step 7: Send "Please read vibey.md" message', function (done) {
-         B.call ('set', 'chatInput', 'Please read the file vibey.md using the run_command tool with cat, and summarize what it is about.');
+      // --- Step 7: Send message to read first 20 lines of vibey.md ---
+      ['Step 7: Send "Please read the first 20 lines of vibey.md" message', function (done) {
+         B.call ('set', 'chatInput', 'Please read the first 20 lines of vibey.md, which is two directories up from your working directory, using the run_command tool with `head -20 ../../vibey.md`, and summarize what it is about.');
          B.call ('send', 'message');
          done (LONG_WAIT, POLL);
       }, function () {
@@ -249,25 +249,32 @@
          return true;
       }],
 
-      // --- Step 9: Verify response has tokens, times ---
-      ['Step 9: Response shows tokens and times', function () {
+      // --- Step 9: Verify response shows gauges (time + duration + compact cumulative tokens) ---
+      ['Step 9: Response shows gauges with local time and compact in/out tokens', function () {
          var file = B.get ('currentFile');
          if (! file || ! file.content) return 'No current file';
          var content = file.content;
 
-         // Check for time metadata
+         // Check metadata exists in markdown source
          if (content.indexOf ('> Time:') === -1) return 'No "> Time:" metadata found in dialog';
 
-         // Check in the DOM for meta display
          var metaElements = document.querySelectorAll ('.chat-meta');
          if (metaElements.length === 0) return 'No .chat-meta elements found in chat view';
 
-         // At least one should show time info
          var hasTime = false;
+         var hasDuration = false;
+         var hasCompactTokens = false;
+
          for (var i = 0; i < metaElements.length; i++) {
-            if (metaElements [i].textContent.match (/\d{4}-\d{2}-\d{2}/)) hasTime = true;
+            var text = metaElements [i].textContent || '';
+            if (/\b\d{2}:\d{2}:\d{2}\b/.test (text) || /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\b/.test (text)) hasTime = true;
+            if (/\b\d+\.\ds\b/.test (text)) hasDuration = true;
+            if (/\b\d+\.\dkti\s+\+\s+\d+\.\dkto\b/.test (text)) hasCompactTokens = true;
          }
-         if (! hasTime) return 'No time displayed in chat meta';
+
+         if (! hasTime) return 'No local time shown in gauges';
+         if (! hasDuration) return 'No rounded seconds duration shown in gauges';
+         if (! hasCompactTokens) return 'No compact cumulative token gauge shown (expected like 3.3kti + 1.8kto)';
 
          return true;
       }],
@@ -288,24 +295,24 @@
          return true;
       }],
 
-      // --- Step 11: Ask for a diff (add console.log to vibey-server.js) ---
-      ['Step 11: Ask LLM to add console.log at top of vibey-server.js', function (done) {
-         B.call ('set', 'chatInput', 'Please add a console.log("vibey-server starting") at the very top of vibey-server.js, as the first line of the file.');
+      // --- Step 11: Ask to create dummy.js (write_file) ---
+      ['Step 11: Ask LLM to create dummy.js with console.log', function (done) {
+         B.call ('set', 'chatInput', 'Please create a file called dummy.js with the content: console.log("hello from dummy"); Use the write_file tool for this.');
          B.call ('send', 'message');
          done (LONG_WAIT, POLL);
       }, function () {
          var streaming = B.get ('streaming');
-         if (streaming) return 'Still streaming, waiting for edit_file tool request...';
+         if (streaming) return 'Still streaming, waiting for write_file tool request...';
          var pending = B.get ('pendingToolCalls');
          if (pending && pending.length > 0) return true;
          // It may have already been auto-approved if authorization was given
          var file = B.get ('currentFile');
-         if (file && file.content && file.content.indexOf ('edit_file') !== -1) return true;
-         return 'No edit_file tool request found yet';
+         if (file && file.content && file.content.indexOf ('write_file') !== -1) return true;
+         return 'No write_file tool request found yet';
       }],
 
-      // --- Step 12: Authorize the edit_file tool once ---
-      ['Step 12: Authorize edit_file tool request', function (done) {
+      // --- Step 12: Authorize the write_file tool once ---
+      ['Step 12: Authorize write_file tool request', function (done) {
          var pending = B.get ('pendingToolCalls');
          if (! pending || pending.length === 0) {
             // May have been auto-approved
@@ -326,60 +333,248 @@
          }
          var file = B.get ('currentFile');
          if (! file || ! file.content) return 'No file content';
-         // Check that edit_file was used and approved
-         if (file.content.indexOf ('edit_file') === -1) return 'edit_file tool not found in dialog';
+         // Check that write_file was used and approved
+         if (file.content.indexOf ('write_file') === -1) return 'write_file tool not found in dialog';
          if (file.content.indexOf ('Decision: approved') === -1) return 'No approved tool decision found';
          return true;
       }],
 
-      // --- Step 13: Verify diff shown with green background ---
-      ['Step 13: Diff applied and shown with green in chat view', function () {
+      // --- Step 13: Verify write_file result shown with success ---
+      ['Step 13: Write result shown with success in chat view', function () {
          var file = B.get ('currentFile');
          if (! file || ! file.content) return 'No current file';
 
-         // Check the dialog markdown has the edit_file approved
-         if (file.content.indexOf ('edit_file') === -1) return 'edit_file not found in dialog';
-         if (file.content.indexOf ('Decision: approved') === -1) return 'edit_file not approved';
+         // Check the dialog markdown has write_file approved
+         if (file.content.indexOf ('write_file') === -1) return 'write_file not found in dialog';
+         if (file.content.indexOf ('Decision: approved') === -1) return 'write_file not approved';
 
-         // Check the DOM for diff rendering with green lines
+         // Check the DOM for the chat messages area
          var chatArea = document.querySelector ('.chat-messages');
          if (! chatArea) return 'Chat messages area not found';
 
-         // The diff should render add lines with green color
-         var addLines = chatArea.querySelectorAll ('.tool-diff-add');
-
-         // If diff lines aren't rendered in chat (they're in the tool request panel for pending),
-         // for completed tool calls they appear inline in the markdown content.
-         // Let's check the markdown content itself for the edit result
+         // The tool result should show success
          var hasResult = file.content.indexOf ('"success": true') !== -1 || file.content.indexOf ('"success":true') !== -1;
-         if (! hasResult) return 'Edit tool result with success not found in dialog';
+         if (! hasResult) return 'Write tool result with success not found in dialog';
 
-         // Verify the actual file was modified
          return true;
       }],
 
-      // --- Step 14: Verify vibey-server.js was actually modified ---
-      ['Step 14: Verify vibey-server.js has the console.log', function (done) {
-         // Read the file via the server to verify the edit was applied
-         c.ajax ('get', 'project/' + encodeURIComponent (TEST_PROJECT) + '/file/vibey-server.js', {}, '', function (error, rs) {
+      // --- Step 14: Verify dummy.js was actually created ---
+      ['Step 14: Verify dummy.js exists with console.log', function (done) {
+         c.ajax ('get', 'project/' + encodeURIComponent (TEST_PROJECT) + '/file/dummy.js', {}, '', function (error, rs) {
             if (error) {
-               // The file might not be named vibey-server.js in the project dir
-               // The LLM operates inside the project dir, so it would need to find the file
-               // This is expected — the file is in the root, not in the project
+               window._testDummyContent = null;
                done ();
                return;
             }
-            window._testServerContent = rs.body ? rs.body.content : null;
+            window._testDummyContent = rs.body ? rs.body.content : null;
             done ();
          });
       }, function () {
-         // The edit may have been applied to the project-local copy or the actual file
-         // Either way, the dialog shows it was approved and applied
+         // dummy.js is not a .md file, so it won't be served by the files endpoint
+         // But write_file writes to the project dir, so we verify via the dialog markdown
+         var file = B.get ('currentFile');
+         if (! file || ! file.content) return 'No current file';
+         var hasWriteSuccess = file.content.indexOf ('File written') !== -1 || file.content.indexOf ('"success":true') !== -1 || file.content.indexOf ('"success": true') !== -1;
+         if (! hasWriteSuccess) return 'dummy.js write success not confirmed in dialog';
          return true;
       }],
 
-      // --- Cleanup ---
+      // --- Cleanup Flow #1 ---
       ['Cleanup: restore prompt', function () {
+         restorePrompt ();
+         return true;
+      }],
+
+      // =============================================
+      // *** FLOW #2: Docs editing ***
+      // =============================================
+
+      // --- F2 Step 1: Create a new project for Flow #2 ---
+      ['F2-1: Create project for docs editing', function (done) {
+         window._f2Project = 'test-flow2-' + Date.now ();
+         mockPrompt (window._f2Project);
+         B.call ('create', 'project');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         restorePrompt ();
+         var project = B.get ('currentProject');
+         if (project !== window._f2Project) return 'Expected project "' + window._f2Project + '", got "' + project + '"';
+         var tab = B.get ('tab');
+         if (tab !== 'docs') return 'Expected docs tab after project creation, got "' + tab + '"';
+         return true;
+      }],
+
+      // --- F2 Step 2: Create doc-main.md (shown as main.md) ---
+      ['F2-2: Create main.md', function (done) {
+         mockPrompt ('main.md');
+         B.call ('create', 'file');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         restorePrompt ();
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile after creating main.md';
+         if (file.name !== 'doc-main.md') return 'Expected name "doc-main.md", got "' + file.name + '"';
+         return true;
+      }],
+
+      // --- F2 Step 3: main.md appears in sidebar as "main.md" ---
+      ['F2-3: main.md visible in sidebar', function () {
+         var sidebar = document.querySelector ('.file-list');
+         if (! sidebar) return 'Sidebar not found';
+         var item = findByText ('.file-name', 'main.md');
+         if (! item) return 'main.md not found in sidebar';
+         return true;
+      }],
+
+      // --- F2 Step 4: Click main.md, editor opens with content ---
+      ['F2-4: Click main.md, editor shows content', function () {
+         var file = B.get ('currentFile');
+         if (! file || file.name !== 'doc-main.md') return 'doc-main.md not loaded';
+         var textarea = document.querySelector ('.editor-textarea');
+         if (! textarea) return 'Editor textarea not found';
+         if (textarea.value.indexOf ('main') === -1) return 'Editor does not contain initial content';
+         return true;
+      }],
+
+      // --- F2 Step 5: Edit content, verify dirty state ---
+      ['F2-5: Edit content and verify dirty indicator', function (done) {
+         var newContent = '# Main\n\nUpdated content for testing.\n';
+         B.call ('set', ['currentFile', 'content'], newContent);
+         done (SHORT_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile';
+         if (file.content === file.original) return 'Content should differ from original (dirty state)';
+         // Check dirty indicator in DOM
+         var dirty = document.querySelector ('.editor-dirty');
+         if (! dirty) return 'Dirty indicator "(unsaved)" not found in DOM';
+         if (dirty.textContent.indexOf ('unsaved') === -1) return 'Dirty indicator text missing "unsaved"';
+         return true;
+      }],
+
+      // --- F2 Step 6: Save changes ---
+      ['F2-6: Save changes', function (done) {
+         B.call ('save', 'file');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile after save';
+         if (file.content !== file.original) return 'After save, content and original should match';
+         // Dirty indicator should be gone
+         var dirty = document.querySelector ('.editor-dirty');
+         if (dirty) return 'Dirty indicator still present after save';
+         return true;
+      }],
+
+      // --- F2 Step 7: Verify saved content persisted on server ---
+      ['F2-7: Reload file and verify persisted content', function (done) {
+         B.call ('load', 'file', 'doc-main.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile after reload';
+         if (file.content.indexOf ('Updated content for testing') === -1) return 'Persisted content not found after reload: ' + file.content.slice (0, 100);
+         if (file.content !== file.original) return 'After fresh load, content and original should match';
+         return true;
+      }],
+
+      // --- F2 Step 8: Create a second doc so we can test navigating away ---
+      ['F2-8: Create second doc', function (done) {
+         mockPrompt ('doc-notes.md');
+         B.call ('create', 'file');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         restorePrompt ();
+         var file = B.get ('currentFile');
+         if (! file || file.name !== 'doc-notes.md') return 'Expected doc-notes.md as current file';
+         return true;
+      }],
+
+      // --- F2 Step 9: Go back to main.md, edit, then try to switch away ---
+      // We mock confirm to test the dirty-leave warning
+      ['F2-9: Edit main.md and attempt to leave (warned, stay and save)', function (done) {
+         // First load main.md
+         B.call ('load', 'file', 'doc-main.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file || file.name !== 'doc-main.md') return 'doc-main.md not loaded';
+         // Make it dirty
+         B.call ('set', ['currentFile', 'content'], file.original + '\nExtra unsaved line.\n');
+         var fileDirty = B.get ('currentFile');
+         if (fileDirty.content === fileDirty.original) return 'File should be dirty';
+         return true;
+      }],
+
+      // --- F2 Step 10: Try to load another file while dirty — mock confirm to save ---
+      ['F2-10: Navigate away from dirty doc triggers save via confirm', function (done) {
+         // Mock confirm: first confirm (save?) -> true, triggering save
+         var originalConfirm = window.confirm;
+         window.confirm = function () {
+            window.confirm = originalConfirm;
+            return true; // "Yes, save before leaving"
+         };
+         B.call ('load', 'file', 'doc-notes.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile';
+         // We should now be on doc-notes.md (the save succeeded and we navigated)
+         if (file.name !== 'doc-notes.md') return 'Expected to land on doc-notes.md, got ' + file.name;
+         return true;
+      }],
+
+      // --- F2 Step 11: Verify the save from step 10 persisted ---
+      ['F2-11: Verify main.md has the extra line saved', function (done) {
+         B.call ('load', 'file', 'doc-main.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file || file.name !== 'doc-main.md') return 'doc-main.md not loaded';
+         if (file.content.indexOf ('Extra unsaved line') === -1) return 'Extra line was not saved. Content: ' + file.content.slice (0, 200);
+         return true;
+      }],
+
+      // --- F2 Step 12: Edit again and discard changes ---
+      ['F2-12: Edit main.md, then discard changes', function (done) {
+         var file = B.get ('currentFile');
+         B.call ('set', ['currentFile', 'content'], file.original + '\nThis will be discarded.\n');
+         // Mock confirm: first confirm (save?) -> false (don't save), second confirm (discard?) -> true
+         var callCount = 0;
+         var originalConfirm = window.confirm;
+         window.confirm = function () {
+            callCount++;
+            if (callCount === 1) return false;  // "No, don't save"
+            if (callCount === 2) {               // "Yes, discard"
+               window.confirm = originalConfirm;
+               return true;
+            }
+            window.confirm = originalConfirm;
+            return true;
+         };
+         B.call ('load', 'file', 'doc-notes.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file) return 'No currentFile';
+         if (file.name !== 'doc-notes.md') return 'Expected doc-notes.md after discard, got ' + file.name;
+         return true;
+      }],
+
+      // --- F2 Step 13: Verify main.md does NOT have the discarded text ---
+      ['F2-13: Verify discarded changes not persisted', function (done) {
+         B.call ('load', 'file', 'doc-main.md');
+         done (MEDIUM_WAIT, POLL);
+      }, function () {
+         var file = B.get ('currentFile');
+         if (! file || file.name !== 'doc-main.md') return 'doc-main.md not loaded';
+         if (file.content.indexOf ('This will be discarded') !== -1) return 'Discarded text was persisted — should not be there';
+         return true;
+      }],
+
+      // --- F2 Cleanup ---
+      ['F2-Cleanup: restore prompt', function () {
          restorePrompt ();
          return true;
       }]
@@ -390,8 +585,8 @@
          alert ('❌ Test FAILED: ' + error.test + '\n\nResult: ' + error.result);
       }
       else {
-         console.log ('✅ All Flow #1 tests passed! (' + time + 'ms)');
-         alert ('✅ All Flow #1 tests passed! (' + time + 'ms)');
+         console.log ('✅ All tests passed (Flow #1 + Flow #2)! (' + time + 'ms)');
+         alert ('✅ All tests passed (Flow #1 + Flow #2)! (' + time + 'ms)');
       }
    });
 

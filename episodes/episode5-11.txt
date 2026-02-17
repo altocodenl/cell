@@ -1,2 +1,3 @@
+Eleventh episode of season 5! I'm building a programming substrate from scratch while recording myself. Building vibey is so strange. The measure of its success for me will be to get off pi and vim at the same time. Tall order.
 
 https://github.com/altocodenl/cell

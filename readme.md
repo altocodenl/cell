@@ -216,6 +216,26 @@ Prompts:
 - Please run vibey-server and then the backend tests, debug that minimal flow 1 we have, reporting on what you see while you work.
 - Please take the vibey client tests and the boot script and put it all in one file. If you're in node, run the pupeteer. If you're in the browser, run the c.test things. So we have one file, self-contained, for frontend tests.
 - Fantastic, now make this single file vibey-test-client.js, delete the boot one and vibey-test.js, but keep the other server tests file (vibey-test-server).
+- Great! Now please add the modifications I added on the flow 1 on vibey.md to the backend tests, then the frontend tests.
+- Please change flow 1 so that the LLM knows to go one directory up to look for vibey.md when running it from the client
+- Please implement tests for flow 2. Don't restart the server. Don't modify the client either.
+- There's another agent working on the server, so please work in the frontend.
+   - The tool uses have huge outputs: can you hide anything after a few lines? I think the issue is the unescaped `\n`, which should be escaped so that outputs look OK.
+   - Also, could you put the timestamps and tokens used at the end of the box, not the beginning?
+   - Let's make the gauges section show: time without ms (end time: 2026-02-17T14:28:29); how many seconds it took, rounded (2.5s or 0.2s), only cumulative tokens in ks (2.3kt in, 1.8kt out)
+   - Remove the "end time" stating, just put the time. Also don't put the date if it's today's date. Also compact the token part to "3.3k+1.8k in/out"
+   - Great! Now make the stdout/stderr of the tools look prettier, and auto-compact.
+   - Please use local times, you were right about that.
+   - Don't hide/show per key (stdout, stderr); rather, make it a general toggle of hide by default, show by clicking on expand (and allow to compress), use gotoB state to mark something as expanded with a good, unrepeatable prefix that depends on the dialog and the message.
+   - Keep the expansion when switching between dialogs, it might be handy. Please make the expanded output look like the compressed output.
+   - You're doing great. Please make sure we always autoscroll down when new things appear if we're already at the bottom, like in a terminal.
+   - Please fix the tests :D
+   - Thanks!! Please make it track how many seconds the response took for the LLM between the date and the tokens, like 3.5s for 3543 ms.
+   - Also, let's make it "2.3kti + 1.2kto"
+- Let's containerize this. Let's design how. Can you run in 2026 a docker inside a docker? I'd like vibey itself to run inside a docker, and then be able to spawn dockers inside for each project. Is that tenable?
+- The problem I see with dockers for each project on the host is port contention, perhaps also name clashes. Also, I'd like that if you kill vibey, you also kill all that's inside of it. Is dind quirky?
+- How quirky it is? What are the typical failure modes? Let's consider we're now, this is greenfield.
+- No, the --privileged flag is a major speed bump. Let's do it flat instead, and do good housekeeping. Write me a quick list of things to do containerize, to tackle it tomorrow.
 
 
 ### 2026-02-16

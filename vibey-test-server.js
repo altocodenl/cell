@@ -16,9 +16,6 @@ var CONFIG = require ('./config.js');
 var PROJECT = 'flow1-' + Date.now () + '-' + Math.floor (Math.random () * 100000);
 var DIALOG_SLUG = 'flow1-read-vibey';
 
-var ROOT_VIBEY_MD_PATH = Path.join (__dirname, 'vibey.md');
-var ROOT_VIBEY_SERVER_JS_PATH = Path.join (__dirname, 'vibey-server.js');
-
 var getDialogFilepath = function (projectName, dialogId) {
    var projectDir = Path.join (__dirname, 'vibey', projectName);
    var prefix = 'dialog-' + dialogId + '-';
@@ -28,14 +25,6 @@ var getDialogFilepath = function (projectName, dialogId) {
    });
    if (! match) throw new Error ('Dialog file not found for id: ' + dialogId);
    return Path.join (projectDir, match);
-};
-
-var seedProjectFiles = function (projectName) {
-   var projectDir = Path.join (__dirname, 'vibey', projectName);
-   if (! fs.existsSync (projectDir)) throw new Error ('Project directory not found: ' + projectDir);
-
-   fs.writeFileSync (Path.join (projectDir, 'vibey.md'), fs.readFileSync (ROOT_VIBEY_MD_PATH, 'utf8'), 'utf8');
-   fs.writeFileSync (Path.join (projectDir, 'vibey-server.js'), fs.readFileSync (ROOT_VIBEY_SERVER_JS_PATH, 'utf8'), 'utf8');
 };
 
 var parseSSE = function (body) {
@@ -104,16 +93,6 @@ var flow1Sequence = [
       return true;
    }],
 
-   ['Seed project with vibey.md and vibey-server.js', 'get', 'projects', {}, '', 200, function (s, rq, rs) {
-      try {
-         seedProjectFiles (PROJECT);
-      }
-      catch (error) {
-         return log ('Failed to seed project files: ' + error.message);
-      }
-      return true;
-   }],
-
    ['Create waiting dialog draft (openai/gpt-5)', 'post', 'project/' + PROJECT + '/dialog/new', {}, {provider: 'openai', model: 'gpt-5', slug: DIALOG_SLUG}, 200, function (s, rq, rs) {
       if (type (rs.body) !== 'object') return log ('dialog/new should return object');
       if (! rs.body.dialogId || ! rs.body.filename) return log ('dialog/new missing dialogId or filename');
@@ -135,10 +114,10 @@ var flow1Sequence = [
       return true;
    }],
 
-   ['Prompt #1: ask to read vibey.md (expect run_command request)', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
+   ['Prompt #1: ask to read first 20 lines of vibey.md (expect run_command request)', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
       return {
          dialogId: s.dialogId,
-         prompt: 'Please read vibey.md using the run_command tool with `cat vibey.md`, then summarize it in 3 short bullets. You must use the tool.'
+         prompt: 'Please read the first 20 lines of vibey.md, which is two directories up from your working directory, using the run_command tool with `head -20 ../../vibey.md`, then summarize it in 3 short bullets. You must use the tool.'
       };
    }, 200, function (s, rq, rs) {
       if (type (rs.body) !== 'string') return log ('Expected SSE text body');
@@ -187,10 +166,10 @@ var flow1Sequence = [
       return true;
    }],
 
-   ['Prompt #2: ask to add console.log at top of vibey-server.js', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
+   ['Prompt #2: ask to create dummy.js (expect write_file request)', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
       return {
          dialogId: s.dialogId,
-         prompt: 'Please add exactly one line as the first line of vibey-server.js: console.log("vibey-server starting"); Use edit_file for this change.'
+         prompt: 'Please create a file called dummy.js with the content: console.log("hello from dummy"); Use the write_file tool for this.'
       };
    }, 200, function (s, rq, rs) {
       if (type (rs.body) !== 'string') return log ('Expected SSE text body for second prompt');
@@ -200,37 +179,37 @@ var flow1Sequence = [
       if (! toolRequests.length) return log ('Expected tool_request event for second prompt');
 
       var pending = toolRequests [0].toolCalls || [];
-      var editCalls = dale.fil (pending, undefined, function (tc) {
-         if (tc.name === 'edit_file') return tc;
+      var writeCalls = dale.fil (pending, undefined, function (tc) {
+         if (tc.name === 'write_file') return tc;
       });
-      if (! editCalls.length) return log ('Expected edit_file in second tool request');
+      if (! writeCalls.length) return log ('Expected write_file in second tool request');
 
-      s.pendingEditToolCalls = editCalls;
+      s.pendingWriteToolCalls = writeCalls;
       return true;
    }],
 
-   ['Approve edit_file request + allow edit_file', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
+   ['Approve write_file request + allow write_file', 'put', 'project/' + PROJECT + '/dialog', {}, function (s) {
       return {
          dialogId: s.dialogId,
-         decisions: sentinelDecisions (s.pendingEditToolCalls),
-         authorizations: sentinelAllow ('edit_file')
+         decisions: sentinelDecisions (s.pendingWriteToolCalls),
+         authorizations: sentinelAllow ('write_file')
       };
    }, 200, function (s, rq, rs) {
-      if (type (rs.body) !== 'string') return log ('Expected SSE text response after edit approval');
+      if (type (rs.body) !== 'string') return log ('Expected SSE text response after write approval');
       var events = parseSSE (rs.body);
-      if (! getEventsByType (events, 'done').length) return log ('Missing done event after approving edit_file request');
+      if (! getEventsByType (events, 'done').length) return log ('Missing done event after approving write_file request');
       return true;
    }],
 
-   ['Verify edit applied in markdown and filesystem', 'get', 'project/' + PROJECT + '/dialogs', {}, '', 200, function (s, rq, rs) {
+   ['Verify dummy.js created in markdown and filesystem', 'get', 'project/' + PROJECT + '/dialogs', {}, '', 200, function (s, rq, rs) {
       try {
          var md = fs.readFileSync (getDialogFilepath (PROJECT, s.dialogId), 'utf8');
-         if (! hasToolMention (md, 'edit_file')) return log ('Missing edit_file block in dialog markdown');
-         if (! hasApprovedMarker (md)) return log ('edit_file block is not approved in markdown');
+         if (! hasToolMention (md, 'write_file')) return log ('Missing write_file block in dialog markdown');
+         if (! hasApprovedMarker (md)) return log ('write_file block is not approved in markdown');
 
-         var projectVibeyServer = fs.readFileSync (Path.join (__dirname, 'vibey', PROJECT, 'vibey-server.js'), 'utf8');
-         if (projectVibeyServer.indexOf ('console.log("vibey-server starting");') !== 0) {
-            return log ('console.log was not inserted as first line in project vibey-server.js');
+         var dummyJs = fs.readFileSync (Path.join (__dirname, 'vibey', PROJECT, 'dummy.js'), 'utf8');
+         if (dummyJs.indexOf ('console.log') === -1) {
+            return log ('dummy.js does not contain console.log');
          }
       }
       catch (error) {
@@ -254,13 +233,115 @@ var flow1Sequence = [
    }]
 ];
 
+// *** FLOW #2: Docs editing ***
+// Create project, write doc-main.md, read it, update it, verify updates,
+// create a second doc, list files, delete the second doc, verify main intact, cleanup.
+
+var PROJECT2 = 'flow2-' + Date.now () + '-' + Math.floor (Math.random () * 100000);
+var INITIAL_CONTENT = '# Main\n\nThis is the initial content of the project.\n';
+var UPDATED_CONTENT = '# Main\n\nThis is the updated content of the project.\n\n## New section\n\nWith more detail.\n';
+var SECOND_DOC = 'doc-notes.md';
+var SECOND_CONTENT = '# Notes\n\nSome notes here.\n';
+
+var flow2Sequence = [
+
+   ['F2: Create project', 'post', 'projects', {}, {name: PROJECT2}, 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('Project creation failed');
+      if (rs.body.name !== PROJECT2) return log ('Unexpected project name');
+      return true;
+   }],
+
+   ['F2: Write doc-main.md with initial content', 'post', 'project/' + PROJECT2 + '/file/doc-main.md', {}, {content: INITIAL_CONTENT}, 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('File write failed');
+      if (rs.body.name !== 'doc-main.md') return log ('Unexpected filename returned');
+      return true;
+   }],
+
+   ['F2: Read doc-main.md returns initial content', 'get', 'project/' + PROJECT2 + '/file/doc-main.md', {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object') return log ('Expected object body');
+      if (rs.body.name !== 'doc-main.md') return log ('Unexpected name: ' + rs.body.name);
+      if (rs.body.content !== INITIAL_CONTENT) return log ('Content mismatch. Got: ' + JSON.stringify (rs.body.content));
+      return true;
+   }],
+
+   ['F2: List files includes doc-main.md', 'get', 'project/' + PROJECT2 + '/files', {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'array') return log ('Expected array');
+      if (rs.body.indexOf ('doc-main.md') === -1) return log ('doc-main.md not in file list');
+      return true;
+   }],
+
+   ['F2: Overwrite doc-main.md with updated content', 'post', 'project/' + PROJECT2 + '/file/doc-main.md', {}, {content: UPDATED_CONTENT}, 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('File overwrite failed');
+      return true;
+   }],
+
+   ['F2: Read doc-main.md returns updated content', 'get', 'project/' + PROJECT2 + '/file/doc-main.md', {}, '', 200, function (s, rq, rs) {
+      if (rs.body.content !== UPDATED_CONTENT) return log ('Updated content mismatch. Got: ' + JSON.stringify (rs.body.content));
+      return true;
+   }],
+
+   ['F2: Write a second doc', 'post', 'project/' + PROJECT2 + '/file/' + SECOND_DOC, {}, {content: SECOND_CONTENT}, 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('Second file write failed');
+      return true;
+   }],
+
+   ['F2: List files includes both docs', 'get', 'project/' + PROJECT2 + '/files', {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'array') return log ('Expected array');
+      if (rs.body.indexOf ('doc-main.md') === -1) return log ('doc-main.md missing from list');
+      if (rs.body.indexOf (SECOND_DOC) === -1) return log (SECOND_DOC + ' missing from list');
+      return true;
+   }],
+
+   ['F2: Read second doc', 'get', 'project/' + PROJECT2 + '/file/' + SECOND_DOC, {}, '', 200, function (s, rq, rs) {
+      if (rs.body.content !== SECOND_CONTENT) return log ('Second doc content mismatch');
+      return true;
+   }],
+
+   ['F2: Delete second doc', 'delete', 'project/' + PROJECT2 + '/file/' + SECOND_DOC, {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('File deletion failed');
+      return true;
+   }],
+
+   ['F2: List files no longer has second doc', 'get', 'project/' + PROJECT2 + '/files', {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'array') return log ('Expected array');
+      if (rs.body.indexOf (SECOND_DOC) !== -1) return log (SECOND_DOC + ' still in list after deletion');
+      if (rs.body.indexOf ('doc-main.md') === -1) return log ('doc-main.md disappeared');
+      return true;
+   }],
+
+   ['F2: doc-main.md still has updated content', 'get', 'project/' + PROJECT2 + '/file/doc-main.md', {}, '', 200, function (s, rq, rs) {
+      if (rs.body.content !== UPDATED_CONTENT) return log ('doc-main.md content changed unexpectedly');
+      return true;
+   }],
+
+   ['F2: Read nonexistent file returns 404', 'get', 'project/' + PROJECT2 + '/file/' + SECOND_DOC, {}, '', 404],
+
+   ['F2: Write with invalid filename returns 400', 'post', 'project/' + PROJECT2 + '/file/bad..name.md', {}, {content: 'x'}, 400],
+
+   ['F2: Write with non-md extension returns 400', 'post', 'project/' + PROJECT2 + '/file/bad.txt', {}, {content: 'x'}, 400],
+
+   ['F2: Delete project', 'delete', 'projects/' + PROJECT2, {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'object' || rs.body.ok !== true) return log ('Project deletion failed');
+      return true;
+   }],
+
+   ['F2: Project removed from list', 'get', 'projects', {}, '', 200, function (s, rq, rs) {
+      if (type (rs.body) !== 'array') return log ('Expected array');
+      var stillExists = dale.stop (rs.body, false, function (name) {
+         if (name === PROJECT2) return true;
+      });
+      if (stillExists) return log ('Project still exists after deletion');
+      return true;
+   }]
+];
+
 h.seq (
    {
       host: 'localhost',
       port: CONFIG.vibeyPort || 3001,
       timeout: 180
    },
-   [flow1Sequence],
+   [flow1Sequence, flow2Sequence],
    function (error) {
       if (error) {
          try {
@@ -269,9 +350,9 @@ h.seq (
             }
          }
          catch (e) {}
-         return console.log ('VIBEY FLOW #1 TEST FAILED:', error);
+         return console.log ('VIBEY TEST FAILED:', error);
       }
-      log ('VIBEY FLOW #1 TEST PASSED');
+      log ('ALL TESTS PASSED (Flow #1 + Flow #2)');
    },
    h.stdmap
 );

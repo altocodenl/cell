@@ -102,6 +102,15 @@ var isSameDocTarget = function (parsed, file, currentProject) {
    return parsed && parsed.tab === 'docs' && parsed.target && file && parsed.project === currentProject && normalizeDocFilename (parsed.target) === file.name;
 };
 
+var getChatMessagesNode = function () {
+   return document.querySelector ('.chat-messages');
+};
+
+var isChatNearBottom = function (node) {
+   if (! node) return true;
+   return (node.scrollHeight - (node.scrollTop + node.clientHeight)) <= 24;
+};
+
 // *** RESPONDERS ***
 
 B.mrespond ([
@@ -113,6 +122,7 @@ B.mrespond ([
       B.call (x, 'set', 'chatProvider', 'openai');
       B.call (x, 'set', 'chatModel', 'gpt-5');
       B.call (x, 'set', 'chatInput', '');
+      B.call (x, 'set', 'chatAutoStick', true);
       B.call (x, 'load', 'projects');
       B.call (x, 'read', 'hash');
    }],
@@ -193,6 +203,36 @@ B.mrespond ([
    ['reset', 'chatInput', function (x) {
       B.call (x, 'set', 'chatInput', ' ');
       B.call (x, 'set', 'chatInput', '');
+   }],
+
+   ['track', 'chatScroll', function (x, ev) {
+      var node = ev && ev.target ? ev.target : getChatMessagesNode ();
+      B.call (x, 'set', 'chatAutoStick', isChatNearBottom (node));
+   }],
+
+   ['maybe', 'autoscrollChat', function (x) {
+      if (B.get ('chatAutoStick') === false) return;
+      setTimeout (function () {
+         var node = getChatMessagesNode ();
+         if (! node) return;
+         node.scrollTop = node.scrollHeight;
+      }, 0);
+   }],
+
+   ['change', 'streamingContent', {match: B.changeResponder}, function (x) {
+      B.call (x, 'maybe', 'autoscrollChat');
+   }],
+
+   ['change', 'currentFile', {match: B.changeResponder}, function (x) {
+      B.call (x, 'maybe', 'autoscrollChat');
+   }],
+
+   ['change', 'pendingToolCalls', {match: B.changeResponder}, function (x) {
+      B.call (x, 'maybe', 'autoscrollChat');
+   }],
+
+   ['change', 'optimisticUserMessage', {match: B.changeResponder}, function (x) {
+      B.call (x, 'maybe', 'autoscrollChat');
    }],
 
    ['confirm', 'leaveCurrentDoc', function (x, onContinue, onCancel) {
@@ -712,6 +752,11 @@ B.mrespond ([
       B.call (x, 'set', ['pendingToolCalls', toolIndex, 'diffExpanded'], ! current);
    }],
 
+   ['toggle', 'messageToolContent', function (x, key) {
+      var current = B.get (['toolMessageExpanded', key]);
+      B.call (x, 'set', ['toolMessageExpanded', key], ! current);
+   }],
+
    // Submit tool decisions to PUT /dialog
    ['submit', 'toolDecisions', function (x) {
       var pendingToolCalls = B.get ('pendingToolCalls');
@@ -1050,7 +1095,10 @@ views.css = [
    ['.chat-meta', {
       'text-transform': 'none',
       'font-size': '11px',
-      color: '#9aa4bf'
+      color: '#9aa4bf',
+      display: 'block',
+      'margin-top': '0.5rem',
+      'text-align': 'right'
    }],
    ['.chat-content', {
       'white-space': 'pre-wrap',
@@ -1261,11 +1309,128 @@ views.files = function () {
 };
 
 // Parse markdown dialog into messages
+var compactLines = function (text, maxLines) {
+   text = type (text) === 'string' ? text : '';
+   var lines = text.split ('\n');
+   if (lines.length <= maxLines) return {text: text, compacted: false};
+   return {
+      text: lines.slice (0, maxLines).join ('\n') + '\n... [hidden ' + (lines.length - maxLines) + ' lines]',
+      compacted: true
+   };
+};
+
+var normalizeToolPreviewValue = function (value) {
+   if (type (value) === 'string') {
+      var escaped = value.replace (/\r/g, '').replace (/\n/g, '\\n');
+      if (escaped.length > 1200) escaped = escaped.slice (0, 1200) + '... [truncated]';
+      return escaped;
+   }
+
+   if (type (value) === 'array') {
+      return dale.go (value, function (item) {
+         return normalizeToolPreviewValue (item);
+      });
+   }
+
+   if (type (value) === 'object') {
+      var out = {};
+      dale.go (Object.keys (value), function (key) {
+         out [key] = normalizeToolPreviewValue (value [key]);
+      });
+      return out;
+   }
+
+   return value;
+};
+
+var previewValueText = function (value) {
+   if (type (value) === 'string') return value;
+   try {return JSON.stringify (normalizeToolPreviewValue (value));}
+   catch (error) {return '' + value;}
+};
+
+var compactStdStream = function (label, text, maxLines) {
+   text = type (text) === 'string' ? text.replace (/\r/g, '') : '';
+   var out = [];
+   out.push (label + ' (' + text.length + ' chars)');
+   if (! text) {
+      out.push ('  (empty)');
+      return out.join ('\n');
+   }
+
+   var shown = text;
+   if (maxLines !== null && maxLines !== undefined) shown = compactLines (text, maxLines).text;
+
+   out.push ('  ' + shown.split ('\n').join ('\n  '));
+   return out.join ('\n');
+};
+
+var formatToolResultPreview = function (obj, maxStreamLines) {
+   if (type (obj) !== 'object' || ! obj) return null;
+   if (obj.stdout === undefined && obj.stderr === undefined) return null;
+
+   var lines = [];
+   if (obj.success !== undefined) lines.push ('success: ' + (obj.success ? 'true' : 'false'));
+   if (obj.error !== undefined) lines.push ('error: ' + previewValueText (obj.error));
+   if (obj.message !== undefined) lines.push ('message: ' + previewValueText (obj.message));
+
+   lines.push (compactStdStream ('stdout', type (obj.stdout) === 'string' ? obj.stdout : '', maxStreamLines));
+   lines.push (compactStdStream ('stderr', type (obj.stderr) === 'string' ? obj.stderr : '', maxStreamLines));
+
+   return lines.join ('\n\n');
+};
+
+var formatIndentedToolPayload = function (payload, compact) {
+   var deindented = payload.replace (/^    /gm, '').replace (/\s+$/, '');
+   if (! deindented) return payload;
+
+   var preview = deindented;
+   try {
+      var parsed = JSON.parse (deindented);
+      preview = formatToolResultPreview (parsed, compact ? 8 : null) || JSON.stringify (normalizeToolPreviewValue (parsed), null, 2);
+   }
+   catch (error) {}
+
+   var shown = compact ? compactLines (preview, 14).text : preview;
+   return '    ' + shown.split ('\n').join ('\n    ') + '\n';
+};
+
+var formatToolBlocksForMessage = function (text, compact) {
+   if (type (text) !== 'string' || text.indexOf ('Tool request:') === -1) return text;
+
+   return text.replace (/---\nTool request:[\s\S]*?\n---/g, function (block) {
+      return block.replace (/\n\n((?: {4}.*(?:\n|$))+)/g, function (full, payload) {
+         return '\n\n' + formatIndentedToolPayload (payload, compact !== false);
+      });
+   });
+};
+
+var compactToolBlocksForMessage = function (text) {
+   return formatToolBlocksForMessage (text, true);
+};
+
+var messageToolExpansionKey = function (dialogId, index, content) {
+   var hash = 0;
+   content = type (content) === 'string' ? content : '';
+   for (var i = 0; i < content.length; i++) hash = ((hash * 31) + content.charCodeAt (i)) >>> 0;
+   return 'vibey_toolmsg_v1_' + (dialogId || 'new') + '_' + index + '_' + hash;
+};
+
+var getMessageToolContentView = function (content, expanded) {
+   var compact = formatToolBlocksForMessage (content, true);
+   var full = formatToolBlocksForMessage (content, false);
+   var compactable = compact !== full;
+   return {
+      text: expanded ? full : compact,
+      compactable: compactable
+   };
+};
+
 var parseDialogContent = function (content) {
    if (! content) return [];
 
    var parseSection = function (role, lines) {
-      var time = null, usage = null, usageCumulative = null;
+      var time = null, usage = null, usageCumulative = null, resourcesMs = null;
       var body = [];
 
       dale.go (lines, function (line) {
@@ -1287,6 +1452,12 @@ var parseDialogContent = function (content) {
             return;
          }
 
+         var mResources = line.match (/^>\s*Resources:\s*.*\bms=(\d+)\b/i);
+         if (mResources) {
+            resourcesMs = Number (mResources [1]);
+            return;
+         }
+
          body.push (line);
       });
 
@@ -1298,7 +1469,8 @@ var parseDialogContent = function (content) {
          content: cleaned,
          time: time,
          usage: usage,
-         usageCumulative: usageCumulative
+         usageCumulative: usageCumulative,
+         resourcesMs: resourcesMs
       };
    };
 
@@ -1329,6 +1501,116 @@ var parseDialogContent = function (content) {
 
    flush ();
    return messages;
+};
+
+var pad2 = function (n) {return n < 10 ? '0' + n : '' + n;};
+
+var formatLocalDateTimeNoMs = function (iso) {
+   if (type (iso) !== 'string') return '';
+   var d = new Date (iso.trim ());
+   if (isNaN (d.getTime ())) return iso;
+
+   var yyyy = d.getFullYear ();
+   var mm = pad2 (d.getMonth () + 1);
+   var dd = pad2 (d.getDate ());
+   var hh = pad2 (d.getHours ());
+   var mi = pad2 (d.getMinutes ());
+   var ss = pad2 (d.getSeconds ());
+
+   var now = new Date ();
+   var isToday = yyyy === now.getFullYear () && (d.getMonth () === now.getMonth ()) && (d.getDate () === now.getDate ());
+   if (isToday) return hh + ':' + mi + ':' + ss;
+   return yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + mi + ':' + ss;
+};
+
+var parseInstantMs = function (value) {
+   value = type (value) === 'string' ? value.trim () : '';
+   if (! value || value === '...') return null;
+
+   var ms = Date.parse (value);
+   if (! isNaN (ms)) return ms;
+
+   if (/^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test (value)) {
+      ms = Date.parse (value + 'Z');
+      if (! isNaN (ms)) return ms;
+   }
+
+   return null;
+};
+
+var parseTimeOfDayMs = function (value) {
+   value = type (value) === 'string' ? value.trim () : '';
+   var m = value.match (/^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/);
+   if (! m) return null;
+
+   var h = Number (m [1]), mi = Number (m [2]), s = Number (m [3]);
+   var frac = m [4] || '0';
+   while (frac.length < 3) frac += '0';
+   var ms = Number (frac.slice (0, 3));
+
+   if (h > 23 || mi > 59 || s > 59) return null;
+   return (((h * 60) + mi) * 60 + s) * 1000 + ms;
+};
+
+var parseTimeRange = function (time) {
+   if (type (time) !== 'string') return null;
+
+   var normalized = time.trim ().replace (/[–—]/g, '-');
+   // Match the last occurrence of " - " to avoid splitting on dashes inside ISO dates
+   var idx = normalized.lastIndexOf (' - ');
+   if (idx < 1) return null;
+
+   var start = normalized.slice (0, idx).trim ();
+   var end = normalized.slice (idx + 3).trim ();
+
+   if (! start || ! end) return null;
+
+   return {
+      start: start,
+      end: end,
+      startMs: parseInstantMs (start),
+      endMs: parseInstantMs (end),
+      startTodMs: parseTimeOfDayMs (start),
+      endTodMs: parseTimeOfDayMs (end)
+   };
+};
+
+var formatSecondsRounded = function (ms) {
+   if (type (ms) !== 'number' || ! isFinite (ms) || ms < 0) return null;
+   return (Math.round ((ms / 1000) * 10) / 10).toFixed (1) + 's';
+};
+
+var formatKTokens = function (tokens) {
+   tokens = Number (tokens || 0);
+   return (Math.round ((tokens / 1000) * 10) / 10).toFixed (1) + 'k';
+};
+
+var formatMessageGauges = function (msg) {
+   var meta = [];
+
+   var timeRange = parseTimeRange (msg.time);
+   if (timeRange && timeRange.end && timeRange.end !== '...') {
+      meta.push (formatLocalDateTimeNoMs (timeRange.end));
+
+      var elapsedMs = null;
+      if (timeRange.startMs !== null && timeRange.endMs !== null) elapsedMs = timeRange.endMs - timeRange.startMs;
+      else if (timeRange.startTodMs !== null && timeRange.endTodMs !== null) {
+         elapsedMs = timeRange.endTodMs - timeRange.startTodMs;
+         if (elapsedMs < 0) elapsedMs += 24 * 60 * 60 * 1000;
+      }
+      if ((elapsedMs === null || elapsedMs < 0) && type (msg.resourcesMs) === 'number' && isFinite (msg.resourcesMs)) elapsedMs = msg.resourcesMs;
+
+      if (elapsedMs !== null) {
+         var duration = formatSecondsRounded (elapsedMs);
+         if (duration) meta.push (duration);
+      }
+   }
+
+   if (msg.usageCumulative) {
+      meta.push (formatKTokens (msg.usageCumulative.input) + 'ti + ' + formatKTokens (msg.usageCumulative.output) + 'to');
+   }
+
+   return meta.join (' · ');
 };
 
 var summarizeToolInput = function (tool, expanded) {
@@ -1543,7 +1825,7 @@ views.toolRequests = function (pendingToolCalls, applyingToolDecisions) {
 };
 
 views.dialogs = function () {
-   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['chatModel'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['optimisticUserMessage'], ['applyingToolDecisions']], function (files, currentFile, loadingFile, chatInput, chatProvider, chatModel, streaming, streamingContent, pendingToolCalls, optimisticUserMessage, applyingToolDecisions) {
+   return B.view ([['files'], ['currentFile'], ['loadingFile'], ['chatInput'], ['chatProvider'], ['chatModel'], ['streaming'], ['streamingContent'], ['pendingToolCalls'], ['optimisticUserMessage'], ['applyingToolDecisions'], ['toolMessageExpanded']], function (files, currentFile, loadingFile, chatInput, chatProvider, chatModel, streaming, streamingContent, pendingToolCalls, optimisticUserMessage, applyingToolDecisions, toolMessageExpanded) {
 
       var dialogFiles = dale.fil (files, undefined, function (f) {
          if (f.startsWith ('dialog-')) return f;
@@ -1589,19 +1871,25 @@ views.dialogs = function () {
                   onclick: B.ev ('close', 'file')
                }, 'Close'] : ''
             ]],
-            ['div', {class: 'chat-messages'}, [
-               messages.length ? dale.go (messages, function (msg) {
-                  var meta = [];
-                  if (msg.time) meta.push (msg.time);
-                  if (msg.usage) meta.push ('tokens: ' + msg.usage.total + ' (in ' + msg.usage.input + ' / out ' + msg.usage.output + ')');
-                  if (msg.usageCumulative) meta.push ('cumulative: ' + msg.usageCumulative.total);
+            ['div', {class: 'chat-messages', onscroll: B.ev ('track', 'chatScroll', {raw: 'event'})}, [
+               messages.length ? dale.go (messages, function (msg, msgIndex) {
+                  var gauges = formatMessageGauges (msg);
+                  var parsed = parseDialogFilename ((currentFile || {}).name || '') || {};
+                  var expandKey = messageToolExpansionKey (parsed.dialogId, msgIndex, msg.content);
+                  var expanded = !! ((toolMessageExpanded || {}) [expandKey]);
+                  var toolContentView = getMessageToolContentView (msg.content, expanded);
 
                   return ['div', {class: 'chat-message chat-' + msg.role}, [
-                     ['div', {class: 'chat-role'}, [
-                        ['span', msg.role],
-                        meta.length ? ['span', {class: 'chat-meta'}, meta.join (' · ')] : ''
-                     ]],
-                     ['div', {class: 'chat-content'}, msg.content]
+                     ['div', {class: 'chat-role'}, ['span', msg.role]],
+                     ['div', {class: 'chat-content'}, toolContentView.text],
+                     toolContentView.compactable ? ['div', {style: style ({display: 'flex', 'justify-content': 'flex-end', 'margin-top': '0.35rem'})}, [
+                        ['button', {
+                           class: 'btn-small',
+                           style: style ({'background-color': '#3a3a5f', color: '#c9d4ff'}),
+                           onclick: B.ev ('toggle', 'messageToolContent', expandKey)
+                        }, expanded ? 'Compress tool output' : 'Expand tool output']
+                     ]] : '',
+                     gauges ? ['div', {class: 'chat-meta'}, gauges] : ''
                   ]];
                }) : ['div', {style: style ({color: '#666', 'font-size': '13px'})}, loadingFile ? 'Loading...' : 'Start typing below to begin a new dialog'],
                optimisticUserMessage ? ['div', {class: 'chat-message chat-user'}, [

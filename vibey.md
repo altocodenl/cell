@@ -372,10 +372,10 @@ Flow #1:
 - I go to the dialogs tab
 - I open a new dialog, entering its name
 - A file named dialog-<timestamp>-<name>-waiting.md is created, but I only see the name of the dialog. The status is shown as an appropriate icon. The entire name is seen, even if it makes the label larger.
-- The dropdown for gpt5.3 is selected. I enter some text on the box below on the right (not a prompt window) and I send it and off the dialog goes. The request is to read vibey.md.
+- The dropdown for gpt5.3 is selected. I enter some text on the box below on the right (not a prompt window) and I send it and off the dialog goes. The request is to read the first 20 lines of vibey.md.
 - I get a request to read the file and I authorize it.
 - I get a LLM response. I can see tokens used, times of requests. The file sent is compacted, not shown fully. I can expand it (and re-contract it by clicking another button).
-- I ask a question to the LLM which requires tool use (say a diff): please add a console.log at the top of vibey-server.js.
+- I ask a question to the LLM which requires tool use (say a diff): please create a little dummy.js file with a console.log on it.
 - The LLM asks for it and I need to authorize it. I authorize it once.
 - The diff is applied. I can see it with a green background.
 
@@ -390,7 +390,7 @@ Flow #2:
 
 Flow #3:
 
-- I write in main.md that I want to create a little game on my browser. A tictactoe, for example. And that two agents should work on it.
+- I write in main.md that I want to create a little game on my browser. A tictactoe, for example. And that two agents should work on it. The game should be simple client side gotoB, provide docs/gotoB.md. Also use a simple express on port 4000 to serve the static file.
 - I go to the dialogs tab.
 - I start a new dialog to say "please start".
 - The agent starts working, spawning another agent.
@@ -402,7 +402,375 @@ Flow #4:
 - Any agents running in that project are stopped.
 - The folder is deleted.
 
-TODO:
+## TODO containers
+
+### 1. Vibey Dockerfile
+
+ - Base image: node:22-alpine
+ - Install docker-cli (not the daemon — just the CLI)
+ - Copy app, npm install, expose 3001
+ - No --privileged needed
+
+ ### 2. Vibey launch command
+
+ - Mount host Docker socket: -v /var/run/docker.sock:/var/run/docker.sock
+ - Named volume for project data: -v vibey-data:/app/vibey
+ - Label the container: --label vibey=master
+
+ ### 3. Project sandbox image
+
+ - Separate Dockerfile: node:22-alpine + git, curl, bash
+ - Pre-baked, tagged vibey-sandbox:latest
+ - All project containers use this image
+
+ ### 4. Container naming convention (solves name clashes)
+
+ - All project containers named vibey-proj-<projectName>
+ - All labeled --label vibey=project --label vibey-project=<name>
+ - Labels are the key to housekeeping — you can query them
+
+ ### 5. Port strategy (solves port contention)
+
+ - Project containers get no host port mapping by default
+ - vibey-server talks to them via docker exec (for run_command)
+ - When a project needs a web server (e.g. tictactoe on port 4000), dynamically allocate a host port: -p 0:4000 (Docker picks a free port)
+ - Store the mapping in memory, return it to the client
+ - Add a route: GET /project/:project/ports → returns {4000: 49152} so the user knows where to open their browser
+
+ ### 6. Container lifecycle in vibey-server.js
+
+ - ensureProjectContainer(projectName): if vibey-proj-<name> doesn't exist, docker run -d --name vibey-proj-<name> --label vibey=project -v
+ vibey-data/<name>:/workspace -w /workspace vibey-sandbox:latest sleep infinity
+ - executeTool change: run_command does docker exec vibey-proj-<name> sh -c "<command>" instead of child_process.exec
+ - write_file / edit_file: operate on the shared volume directly (no change needed, paths resolve through the mount)
+ - launch_agent: no change (it's a dialog concern, not a container concern)
+
+ ### 7. Housekeeping: kill vibey → kill children
+
+ - Shutdown hook in vibey-server.js:
+   ```js
+     process.on('SIGTERM', cleanup);
+     process.on('SIGINT', cleanup);
+   ```
+ - cleanup does: docker rm -f $(docker ps -q --filter label=vibey=project)
+ - Startup hook: same cleanup on boot — kill any orphaned vibey-proj-* containers from a previous unclean shutdown
+ - Project delete: docker rm -f vibey-proj-<name> before removing files
+
+ ### 8. Housekeeping: SIGKILL / unclean death
+
+ - The shutdown hook won't run on docker kill or OOM
+ - Fix: on vibey startup, always run cleanup first (item 7 covers this)
+ - Orphan containers from a previous crash get cleaned up on next launch
+
+ ### 9. docker-compose.yml (ties it together)
+
+ ```yaml
+   services:
+     vibey:
+       build: .
+       ports:
+         - "3001:3001"
+       volumes:
+         - /var/run/docker.sock:/var/run/docker.sock
+         - vibey-data:/app/vibey
+       labels:
+         - vibey=master
+   volumes:
+     vibey-data:
+ ```
+
+ ### 10. Order of work tomorrow
+
+ 1. Write Dockerfile for vibey
+ 2. Write Dockerfile.sandbox for project containers
+ 3. Write docker-compose.yml
+ 4. Add startup cleanup + shutdown hook to vibey-server.js
+ 5. Add ensureProjectContainer() + modify executeTool to use docker exec
+ 6. Add GET /project/:project/ports for dynamic port discovery
+ 7. Test: docker compose up, create project, run a dialog, verify run_command executes inside sandbox
+ 8. Test: docker compose down, verify project containers are gone
+
+
+## TODO other
 
 - To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
 - The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to `POST /project/:project/dialog`. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (`POST /project/:project/dialog` should support sending an initial prompt).
+- A fifth tool that is that the server stops agents after a certain size of the token window, after a message is responded. The server auto-calls that tool. I want this to be specified in main.md or one of the files referenced in it.
+
+### TODO vi mode
+
+ Vi mode applies to the docs editor textarea and the chat input textarea. It's a client-side concern only — no server changes.
+
+ ### Settings (rename Accounts → Settings)
+
+ Rename the accounts tab/route to settings. Add vi mode toggle:
+
+ ```
+   Settings
+   ├── API Keys (existing)
+   ├── Subscriptions (existing)
+   └── Editor
+       └── [x] Vi mode
+ ```
+
+ Persisted in vibey/config.json alongside accounts:
+
+ ```json
+   {
+     "accounts": { ... },
+     "editor": {
+       "viMode": true
+     }
+   }
+ ```
+
+ New routes:
+ - GET /settings → returns accounts + editor config (merge current GET /accounts)
+ - POST /settings → saves accounts + editor config (merge current POST /accounts)
+
+ ### Store shape
+
+ ```js
+   B.store = {
+     // ...existing...
+     viMode: true,          // from settings
+     viState: {
+       mode: 'normal',      // 'normal' | 'insert' | 'command'
+       pending: '',         // partial command buffer: 'd' waiting for 'w', '3' waiting for 'j', etc.
+       register: '',        // yanked text
+       lastSearch: '',      // for n/N
+       message: ''          // bottom bar: "-- INSERT --", ":w", "3 lines yanked"
+     }
+   }
+ ```
+
+ ### Modes
+
+ ```
+     NORMAL ──── i/a/o/O ────► INSERT
+       ▲                          │
+       └──────── Escape ──────────┘
+       │
+       : ────────────────────► COMMAND
+       ▲                          │
+       └──────── Escape/Enter ────┘
+ ```
+
+ Normal mode: cursor movement, operators, mode switches. Textarea is readonly.
+
+ Insert mode: textarea is editable normally. Show -- INSERT -- in status bar.
+
+ Command mode: a one-line input appears at the bottom of the editor. Supports :w (save), :q (close file), :wq (save + close).
+
+ ### Keymap: Normal mode
+
+ Essentials only — keep it small, extend later:
+
+ ```
+   Movement
+     h/l         char left/right
+     j/k         line down/up
+     w/b         word forward/backward
+     0/$         line start/end
+     gg/G        file start/end
+     Ctrl-d/u    half-page down/up
+
+
+
+   Insert entry
+     i           insert at cursor
+     a           insert after cursor
+     o           open line below, insert
+     O           open line above, insert
+     A           insert at end of line
+     I           insert at start of line
+
+   Editing (normal mode)
+     x           delete char under cursor
+     dd          delete line
+     yy          yank line
+     p           paste after cursor
+     u           undo
+     Ctrl-r      redo
+
+   Search
+     /           forward search (opens command bar with /)
+     n/N         next/prev match
+
+   Commands
+     :           enter command mode
+ ```
+
+ ### Keymap: Insert mode
+
+ ```
+     Escape      back to normal
+     All other   default textarea behavior (typing, arrows, etc.)
+ ```
+
+ ### Keymap: Command mode
+
+ ```
+     :w          save (calls B.call('save', 'file'))
+     :q          close (calls B.call('close', 'file'))
+     :wq         save then close
+     :q!         close without save (discard dirty)
+     Escape      cancel, back to normal
+     Enter       execute command
+ ```
+
+ ### Implementation: viController
+
+ One module, viController, that wraps textarea interaction:
+
+ ```js
+   var viController = {
+
+     // Called on every keydown in the textarea
+     handleKey: function (ev, textarea, store) {
+       var mode = store.viState.mode;
+
+       if (mode === 'normal')  return viController.normalKey(ev, textarea, store);
+       if (mode === 'insert')  return viController.insertKey(ev, textarea, store);
+       if (mode === 'command') return viController.commandKey(ev, textarea, store);
+     },
+
+     // Cursor manipulation via textarea.selectionStart / selectionEnd
+     moveCursor: function (textarea, pos) {
+       textarea.selectionStart = textarea.selectionEnd = pos;
+     },
+
+     // Get current line number, column, line content
+     cursorInfo: function (textarea) {
+       var val = textarea.value;
+       var pos = textarea.selectionStart;
+       var before = val.slice(0, pos);
+       var lineNum = before.split('\n').length - 1;
+       var lines = val.split('\n');
+       var colNum = pos - before.lastIndexOf('\n') - 1;
+       return {pos: pos, line: lineNum, col: colNum, lines: lines, text: val};
+     },
+
+     // Execute a normal-mode motion, return new cursor position
+     motion: function (key, info) {
+       // h/j/k/l/w/b/0/$/gg/G/ctrl-d/ctrl-u
+       // Returns new pos (integer)
+     },
+
+     // Execute an operator (dd, yy, x, p)
+     operator: function (key, textarea, info, register) {
+       // Mutates textarea.value, returns {value, cursor, register}
+     }
+   };
+ ```
+
+ ### Integration with gotoB views
+
+ The textarea in views.files gains a onkeydown handler that routes through vi:
+
+ ```js
+   ['textarea', {
+     class: 'editor-textarea' + (viMode ? ' vi-active' : ''),
+     readonly: viMode && viState.mode === 'normal',
+     oninput: B.ev('set', ['currentFile', 'content']),
+     onkeydown: viMode
+       ? B.ev('vi', 'key', {raw: 'event'})
+       : B.ev('keydown', 'editor', {raw: 'event'})
+   }]
+ ```
+
+ New responders:
+
+ ```js
+   ['vi', 'key', function (x, ev) {
+     var textarea = ev.target;
+     var viState = B.get('viState');
+     var result = viController.handleKey(ev, textarea, viState);
+
+     if (result.mode)     B.call(x, 'set', ['viState', 'mode'], result.mode);
+     if (result.pending !== undefined) B.call(x, 'set', ['viState', 'pending'], result.pending);
+     if (result.register) B.call(x, 'set', ['viState', 'register'], result.register);
+     if (result.message !== undefined) B.call(x, 'set', ['viState', 'message'], result.message);
+     if (result.save)     B.call(x, 'save', 'file');
+     if (result.close)    B.call(x, 'close', 'file');
+
+     if (result.preventDefault) ev.preventDefault();
+   }],
+ ```
+
+ ### Status bar
+
+ A thin bar below the editor textarea:
+
+ ```
+   ┌─────────────────────────────────────┐
+   │  (textarea content)                 │
+   │                                     │
+   ├─────────────────────────────────────┤
+   │ -- INSERT --          Ln 42, Col 17 │  ← vi status bar
+   └─────────────────────────────────────┘
+ ```
+
+ In command mode, the left side shows the command being typed:
+
+ ```
+   │ :wq                   Ln 42, Col 17 │
+ ```
+
+ CSS:
+
+ ```js
+   ['.vi-status', {
+     display: 'flex',
+     'justify-content': 'space-between',
+     padding: '0.25rem 0.75rem',
+     'background-color': '#0d0d1a',
+     'font-family': 'Monaco, Consolas, monospace',
+     'font-size': '12px',
+     color: '#9aa4bf',
+     'border-radius': '0 0 8px 8px'
+   }]
+ ```
+
+ View:
+
+ ```js
+   viMode ? ['div', {class: 'vi-status'}, [
+     ['span', viState.mode === 'insert'  ? '-- INSERT --' :
+              viState.mode === 'command' ? ':' + (viState.pending || '') :
+              ''],
+     ['span', 'Ln ' + cursorLine + ', Col ' + cursorCol]
+   ]] : ''
+ ```
+
+ ### Chat input: lighter vi
+
+ The chat textarea gets vi too, but simpler:
+ - Normal/insert modes only (no command mode — no :w for chat)
+ - Escape → normal, i/a → insert
+ - Movement keys in normal mode
+ - Ctrl+Enter sends in both modes (override vi)
+
+ ### What NOT to build (keep scope small)
+
+ - No visual mode (v/V/Ctrl-v)
+ - No macros (q/@ recording)
+ - No marks (m/')
+ - No registers beyond one (no "a/"b)
+ - No . repeat
+ - No ciw/diw text objects
+ - No split/tabs (this isn't vim, it's a vi-flavored textarea)
+
+ These can all be added later. The core — normal/insert/command, basic motions, dd/yy/p, :w/:q — is what makes it feel like vi.
+
+ ### Order of work
+
+ 1. Rename Accounts → Settings, add viMode toggle + persistence
+ 2. Add viState to store, viController object
+ 3. Wire onkeydown routing in editor textarea
+ 4. Implement normal mode motions (h/j/k/l/w/b/0/$)
+ 5. Implement insert mode (Escape to exit)
+ 6. Implement dd, yy, x, p
+ 7. Implement command mode (:w, :q, :wq)
+ 8. Add status bar
+ 9. Wire chat input (lighter variant)
