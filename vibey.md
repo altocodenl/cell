@@ -359,9 +359,7 @@ There is no orchestration loop. To get the system going, the user starts a singl
 
 Goal: be able to build vibey with vibey itself.
 
-Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then vibey-test.js.
-
-Please read the stack of libraries I use at `arch/gotoB.min.js` (it's not minified). That'll give you a style too.
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
 
 The flows to implement:
 

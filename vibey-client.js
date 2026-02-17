@@ -806,8 +806,8 @@ B.mrespond ([
    }],
 
    ['run', 'tests', function (x) {
-      c.loadScript ('vibey-test.js', function (error) {
-         if (error) return B.call (x, 'report', 'error', 'Failed to load vibey-test.js');
+      c.loadScript ('vibey-test-client.js', function (error) {
+         if (error) return B.call (x, 'report', 'error', 'Failed to load vibey-test-client.js');
       });
    }],
 ]);

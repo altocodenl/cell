@@ -209,7 +209,16 @@ view
 
 ## Development notes
 
-### 2026-02-14
+### 2026-02-17
+
+Prompts:
+- Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
+- Please run vibey-server and then the backend tests, debug that minimal flow 1 we have, reporting on what you see while you work.
+- Please take the vibey client tests and the boot script and put it all in one file. If you're in node, run the pupeteer. If you're in the browser, run the c.test things. So we have one file, self-contained, for frontend tests.
+- Fantastic, now make this single file vibey-test-client.js, delete the boot one and vibey-test.js, but keep the other server tests file (vibey-test-server).
+
+
+### 2026-02-16
 
 Rather than build one app for everyone, build a platform so that people can build their own apps. It's exactly like Yegge says (https://gist.github.com/chitchcock/1281611):
 "Our Google+ team took a look at the aftermarket and said: "Gosh, it looks like we need some games. Let's go contract someone to, um, write some games for us." Do you begin to see how incredibly wrong that thinking is now? The problem is that we are trying to predict what people want and deliver it for them."
@@ -235,10 +244,10 @@ vibey as a platform for vibe coding.
      1. You buy underlying resources, and can create throwaway VMs on top of those resources.
      2. The VMs have a persistent disk.
      3. You can use a browser-based agent to interact with the VMs.
- - Val Town
+  - Val Town
      1. Excellent for tiny serverless/backend scripts and quick automations, especially JS/TS-first workflows.
      2. Less of a full “build your own app system” environment with local-first containers + portable infra path.
- - Replit
+  - Replit
      1. Strongest all-in-one cloud coding product for broad users (editor, deploy, collaboration, AI help).
      2. Very locked-in.
 

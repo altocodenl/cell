@@ -1855,7 +1855,7 @@ var routes = [
       ]]
    ])],
    ['get', 'vibey-client.js', cicek.file],
-   ['get', 'vibey-test.js', cicek.file],
+   ['get', 'vibey-test-client.js', cicek.file],
 
    // *** ACCOUNTS ***
 

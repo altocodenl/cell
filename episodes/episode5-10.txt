@@ -1,0 +1,3 @@
+Tenth episode of season 5! I'm building a programming substrate from scratch while recording myself. Keeping on vibey-ing. It's hard to stop debugging with agents. Tightening up the flows. I have a plan A now.
+
+https://github.com/altocodenl/cell
