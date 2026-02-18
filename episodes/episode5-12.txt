@@ -1,0 +1,3 @@
+Twelfth episode of season 5! I'm building a programming substrate from scratch while recording myself. Dockerized vibey without half a clue of what's going on. I'm an agent powered script kiddie, except that I just mostly attack myself. Flow 3, which spawns more agents, seems to be kinda working.
+
+https://github.com/altocodenl/cell

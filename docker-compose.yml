@@ -1,0 +1,15 @@
+services:
+  vibey:
+    build: .
+    ports:
+      - "5353:5353"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - vibey-data:/app/vibey
+    labels:
+      - vibey=master
+    environment:
+      - VIBEY_DOCKER=1
+
+volumes:
+  vibey-data:

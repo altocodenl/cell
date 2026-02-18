@@ -1,7 +1,5 @@
 // *** SETUP ***
 
-var CONFIG = require ('./config.js');
-
 var fs    = require ('fs');
 var Path  = require ('path');
 
@@ -26,6 +24,21 @@ var crypto = require ('crypto');
 var http   = require ('http');
 
 var VIBEY_DIR = Path.join (__dirname, 'vibey');
+
+// *** PROMPTS ***
+
+var PROMPTS_PATH = Path.join (__dirname, 'vibey-prompt.md');
+
+var loadSystemPrompt = function () {
+   try {
+      var md = fs.readFileSync (PROMPTS_PATH, 'utf8');
+      var match = md.match (/```\n([\s\S]*?)\n```/);
+      return match ? match [1].trim () : '';
+   }
+   catch (e) {
+      return 'You are a helpful assistant with access to local system tools.';
+   }
+};
 
 // *** CONFIG.JSON ***
 
@@ -552,9 +565,145 @@ var endActiveStream = function (dialogId) {
    delete ACTIVE_STREAMS [dialogId];
 };
 
-// *** MCP TOOLS ***
+// *** DOCKER CONTAINER MANAGEMENT ***
 
 var exec = require ('child_process').exec;
+var execSync = require ('child_process').execSync;
+
+var DOCKER_MODE = !! process.env.VIBEY_DOCKER;
+var SANDBOX_IMAGE = 'vibey-sandbox:latest';
+var PORT_MAP = {}; // {projectName: {containerPort: hostPort, ...}}
+
+var containerName = function (projectName) {
+   return 'vibey-proj-' + projectName;
+};
+
+var cleanupProjectContainers = function () {
+   try {
+      var ids = execSync ('docker ps -aq --filter label=vibey=project', {encoding: 'utf8'}).trim ();
+      if (ids) {
+         execSync ('docker rm -f ' + ids, {encoding: 'utf8'});
+         clog ('Cleaned up orphaned project containers: ' + ids);
+      }
+   }
+   catch (e) {
+      // No containers to clean or docker not available
+   }
+};
+
+var ensureProjectContainer = function (projectName) {
+   if (! DOCKER_MODE) return;
+
+   var name = containerName (projectName);
+
+   try {
+      var running = execSync ('docker ps -q --filter name=^/' + name + '$', {encoding: 'utf8'}).trim ();
+      if (running) return; // already running
+   }
+   catch (e) {}
+
+   // Check if exists but stopped
+   try {
+      var exists = execSync ('docker ps -aq --filter name=^/' + name + '$', {encoding: 'utf8'}).trim ();
+      if (exists) {
+         execSync ('docker start ' + name, {encoding: 'utf8'});
+         clog ('Started existing container: ' + name);
+         return;
+      }
+   }
+   catch (e) {}
+
+   // Create new container — mount from master's vibey dir into sandbox /workspace
+   var hostVolumePath = Path.join (VIBEY_DIR, projectName);
+   execSync (
+      'docker run -d' +
+      ' --name ' + name +
+      ' --label vibey=project' +
+      ' --label vibey-project=' + projectName +
+      ' --volumes-from ' + (process.env.HOSTNAME || execSync ('hostname', {encoding: 'utf8'}).trim ()) +
+      ' -w /app/vibey/' + projectName +
+      ' ' + SANDBOX_IMAGE +
+      ' sleep infinity',
+      {encoding: 'utf8'}
+   );
+   clog ('Created project container: ' + name);
+};
+
+var removeProjectContainer = function (projectName) {
+   if (! DOCKER_MODE) return;
+   try {
+      execSync ('docker rm -f ' + containerName (projectName), {encoding: 'utf8'});
+      clog ('Removed project container: ' + containerName (projectName));
+   }
+   catch (e) {}
+   delete PORT_MAP [projectName];
+};
+
+var dockerExec = function (projectName, command, cb) {
+   var name = containerName (projectName);
+   // Escape single quotes in command for sh -c
+   var escaped = command.replace (/'/g, "'\\''");
+   exec ('docker exec ' + name + " sh -c '" + escaped + "'", {timeout: 30000, maxBuffer: 1024 * 1024}, cb);
+};
+
+var exposePort = function (projectName, containerPort, cb) {
+   if (! DOCKER_MODE) return cb (null, containerPort);
+
+   var name = containerName (projectName);
+
+   // Check if already mapped
+   if (PORT_MAP [projectName] && PORT_MAP [projectName] [containerPort]) {
+      return cb (null, PORT_MAP [projectName] [containerPort]);
+   }
+
+   // Stop the old container, re-create with port mapping
+   // Simpler approach: use a proxy or just docker run a port-forward sidecar
+   // Easiest: use `docker run` with -p 0:containerPort to get a random host port
+   var sidecarName = 'vibey-port-' + projectName + '-' + containerPort;
+   try {
+      execSync ('docker rm -f ' + sidecarName, {encoding: 'utf8'});
+   }
+   catch (e) {}
+
+   // Get the container's IP on the bridge network, then run a socat sidecar
+   // that publishes -p 0:<containerPort> and forwards to <containerIP>:<containerPort>.
+   exec (
+      "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " + name,
+      {encoding: 'utf8'},
+      function (error, ipOut) {
+         if (error) return cb (new Error ('Could not get container IP: ' + error.message));
+         var containerIP = (ipOut || '').trim ();
+         if (! containerIP) return cb (new Error ('Container has no IP address'));
+
+         exec (
+            'docker run -d' +
+            ' --name ' + sidecarName +
+            ' --label vibey=port-forward' +
+            ' --label vibey-project=' + projectName +
+            ' -p 0:' + containerPort +
+            ' alpine/socat' +
+            ' TCP-LISTEN:' + containerPort + ',fork,reuseaddr TCP:' + containerIP + ':' + containerPort,
+            {encoding: 'utf8'},
+            function (error) {
+               if (error) return cb (error);
+               // Get the assigned host port
+               exec ('docker port ' + sidecarName + ' ' + containerPort, {encoding: 'utf8'}, function (error, stdout) {
+                  if (error) return cb (error);
+                  // Output: 0.0.0.0:49152 or :::49152
+                  var match = (stdout || '').match (/:(\d+)/);
+                  if (! match) return cb (new Error ('Could not determine host port'));
+                  var hostPort = Number (match [1]);
+                  if (! PORT_MAP [projectName]) PORT_MAP [projectName] = {};
+                  PORT_MAP [projectName] [containerPort] = hostPort;
+                  cb (null, hostPort);
+               });
+            }
+         );
+      }
+   );
+};
+
+// *** MCP TOOLS ***
 
 var resolveProjectPath = function (projectDir, path) {
    if (type (path) !== 'string' || ! path.trim ()) throw new Error ('Invalid path');
@@ -667,7 +816,7 @@ var OPENAI_TOOLS = dale.go (TOOLS, function (tool) {
    };
 });
 
-// Execute a tool locally
+// Execute a tool (locally or inside Docker sandbox)
 var executeTool = function (toolName, toolInput, projectName) {
    return new Promise (function (resolve) {
       var projectDir;
@@ -678,11 +827,24 @@ var executeTool = function (toolName, toolInput, projectName) {
          return resolve ({success: false, error: error.message});
       }
 
+      if (DOCKER_MODE) {
+         try {ensureProjectContainer (projectName);}
+         catch (e) {return resolve ({success: false, error: 'Failed to ensure sandbox container: ' + e.message});}
+      }
+
       if (toolName === 'run_command') {
-         exec (toolInput.command, {cwd: projectDir, timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
-            if (error) resolve ({success: false, error: error.message, stderr: stderr});
-            else       resolve ({success: true, stdout: stdout, stderr: stderr});
-         });
+         if (DOCKER_MODE) {
+            dockerExec (projectName, toolInput.command, function (error, stdout, stderr) {
+               if (error) resolve ({success: false, error: error.message, stderr: stderr});
+               else       resolve ({success: true, stdout: stdout, stderr: stderr});
+            });
+         }
+         else {
+            exec (toolInput.command, {cwd: projectDir, timeout: 30000, maxBuffer: 1024 * 1024}, function (error, stdout, stderr) {
+               if (error) resolve ({success: false, error: error.message, stderr: stderr});
+               else       resolve ({success: true, stdout: stdout, stderr: stderr});
+            });
+         }
       }
 
       else if (toolName === 'write_file') {
@@ -1250,7 +1412,7 @@ var parseControlInput = function (control) {
 var chatWithClaude = async function (projectDir, messages, model, onChunk, abortSignal) {
    model = model || 'claude-sonnet-4-20250514';
 
-   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection (projectDir);
+   var systemPrompt = loadSystemPrompt () + getDocMainInjection (projectDir);
 
    var requestBody = {
       model: model,
@@ -1394,7 +1556,7 @@ var normalizeMessagesForResponsesApi = function (messages) {
 var chatWithOpenAI = async function (projectDir, messages, model, onChunk, abortSignal) {
    model = model || 'gpt-5';
 
-   var systemPrompt = 'You are a helpful assistant with access to local system tools. When the user asks you to run commands, read files, write files, edit files, or spawn another agent, USE the provided tools to actually execute these operations. Do not just describe what you would do - actually call the tools to perform the requested actions.' + getDocMainInjection (projectDir);
+   var systemPrompt = loadSystemPrompt () + getDocMainInjection (projectDir);
 
    var requestBody = {
       model: model,
@@ -1581,7 +1743,7 @@ var runCompletion = async function (projectName, dialog, provider, model, onChun
    var autoExecutedAll = [];
    var lastContent = '';
 
-   for (var round = 0; round < 8; round++) {
+   for (var round = 0; round < 20; round++) {
       upsertDocMainContextBlock (dialog.filepath, projectDir);
       var markdown = fs.readFileSync (dialog.filepath, 'utf8');
       var messages = parseDialogForProvider (markdown, provider);
@@ -1978,6 +2140,7 @@ var routes = [
       if (stop (rs, [['name', rq.body.name, 'string']])) return;
       try {
          ensureProjectDir (rq.body.name);
+         if (DOCKER_MODE) ensureProjectContainer (rq.body.name);
          reply (rs, 200, {ok: true, name: rq.body.name});
       }
       catch (error) {
@@ -2010,6 +2173,8 @@ var routes = [
          });
       }
       catch (error) {}
+
+      removeProjectContainer (projectName);
 
       fs.rm (projectDir, {recursive: true, force: false}, function (error) {
          if (error) {
@@ -2347,6 +2512,25 @@ var routes = [
          reply (rs, 200, withStats);
       });
    }],
+
+   // *** PORTS (Docker mode) ***
+
+   ['get', 'project/:project/ports', function (rq, rs) {
+      var projectName = rq.data.params.project;
+      if (! DOCKER_MODE) return reply (rs, 200, {docker: false, ports: {}});
+      reply (rs, 200, {docker: true, ports: PORT_MAP [projectName] || {}});
+   }],
+
+   ['post', 'project/:project/ports', function (rq, rs) {
+      var projectName = rq.data.params.project;
+      if (! DOCKER_MODE) return reply (rs, 200, {docker: false, port: rq.body.port});
+      if (stop (rs, [['port', rq.body.port, 'integer']])) return;
+
+      exposePort (projectName, rq.body.port, function (error, hostPort) {
+         if (error) return reply (rs, 500, {error: 'Failed to expose port: ' + error.message});
+         reply (rs, 200, {docker: true, containerPort: rq.body.port, hostPort: hostPort});
+      });
+   }],
 ];
 
 // *** SERVER ***
@@ -2356,7 +2540,23 @@ process.on ('uncaughtException', function (error, origin) {
    process.exit (1);
 });
 
-var port = CONFIG.vibeyPort || 3001;
+// Docker housekeeping: cleanup orphaned project containers on startup
+if (DOCKER_MODE) {
+   clog ('Docker mode enabled — cleaning up orphaned project containers...');
+   cleanupProjectContainers ();
+}
+
+// Docker housekeeping: kill project containers on shutdown
+var cleanupAndExit = function (signal) {
+   clog ('Received ' + signal + ', cleaning up...');
+   if (DOCKER_MODE) cleanupProjectContainers ();
+   process.exit (0);
+};
+
+process.on ('SIGTERM', function () {cleanupAndExit ('SIGTERM');});
+process.on ('SIGINT',  function () {cleanupAndExit ('SIGINT');});
+
+var port = 5353;
 cicek.listen ({port: port}, routes);
 
-clog ('vibey server running on port ' + port);
+clog ('vibey server running on port ' + port + (DOCKER_MODE ? ' (Docker mode)' : ''));

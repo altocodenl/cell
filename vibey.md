@@ -4,6 +4,24 @@ An agentic interface for those who love text.
 
 Use text to coordinate agents. From your browser. Surrounded by a container.
 
+## Vibey in a nutshell
+
+1. **Everything is a document**: your description of what you're building. The dialogs with AI while building it. Views of your app or images are embedded. A document as the gateway to everything.
+2. **In your browser**: allows to see not just text, but images, audio, and embed little apps in your documents.
+3. **Containerized**: so that the blast radius is reduced, with your local machine and also between apps.
+
+All you need is an AI provider and to install vibey locally.
+
+## Vibey cloud in a nutshell
+
+*WARNING: vaporware, will only build if Vibey itself makes sense*
+
+1. **Automatic infra**: accessible anywhere with a browser; put projects (containers) onto servers, proxy traffic from/to your apps, HTTPS (bring your DNS record), receive emails, vibey session cookies.
+2. **Aligned pricing**: An annual subscription (30 USD?) that gives you access to key cloud providers priced at cost (Hetzner for VPS, Backblaze for files); calls to LLM APIs; email sending. You can also of course bring your own API keys or subscriptions.
+3. **Zero lock-in**: the whole thing being open source, so you can always run the same thing yourself elsewhere, also in the cloud.
+
+All you need is an AI provider, no need to install anything.
+
 ## The concept
 
 Think of a text-based agentic system as three things:
@@ -37,6 +55,8 @@ Well, everything except what you're building (unless you're building the Next Am
 What about versioning? You can save the project at any point and get out a zip file with a snapshot of the project at that time (docs only, docs + dialogs, everything).
 
 We take great inspiration from Unix's "everything is a file": here, everything is text, except for the artifacts that your agents build, which might be something else than text.
+
+We can also embed things in markdown: images, audio, even mini-windows with dynamic views. But each main center is a document, a page, built around text.
 
 ## How can everything be running from your browser?
 
@@ -355,13 +375,12 @@ By default, only 3 context lines around each change are visible. A "Show full di
 
 There is no orchestration loop. To get the system going, the user starts a single dialog. That first agent reads `doc-main.md` and decides what to do - including spawning more agents via the `launch_agent` tool if needed. Each spawned agent is a flat, independent dialog that can itself spawn further agents.
 
-## TODO
+## Dockerization
 
-Goal: be able to build vibey with vibey itself.
+- For local vibey (all we have now), all dockers run on the host. Each with its own data volume.
+- For hosted vibey, since it's Ubuntu, we'll do docker inside docker.
 
-Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
-
-The flows to implement:
+## Test flows
 
 Flow #1:
 
@@ -402,99 +421,17 @@ Flow #4:
 - Any agents running in that project are stopped.
 - The folder is deleted.
 
-## TODO containers
 
-### 1. Vibey Dockerfile
+## TODO
 
- - Base image: node:22-alpine
- - Install docker-cli (not the daemon — just the CLI)
- - Copy app, npm install, expose 3001
- - No --privileged needed
+Goal: be able to build vibey with vibey itself.
 
- ### 2. Vibey launch command
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
 
- - Mount host Docker socket: -v /var/run/docker.sock:/var/run/docker.sock
- - Named volume for project data: -v vibey-data:/app/vibey
- - Label the container: --label vibey=master
-
- ### 3. Project sandbox image
-
- - Separate Dockerfile: node:22-alpine + git, curl, bash
- - Pre-baked, tagged vibey-sandbox:latest
- - All project containers use this image
-
- ### 4. Container naming convention (solves name clashes)
-
- - All project containers named vibey-proj-<projectName>
- - All labeled --label vibey=project --label vibey-project=<name>
- - Labels are the key to housekeeping — you can query them
-
- ### 5. Port strategy (solves port contention)
-
- - Project containers get no host port mapping by default
- - vibey-server talks to them via docker exec (for run_command)
- - When a project needs a web server (e.g. tictactoe on port 4000), dynamically allocate a host port: -p 0:4000 (Docker picks a free port)
- - Store the mapping in memory, return it to the client
- - Add a route: GET /project/:project/ports → returns {4000: 49152} so the user knows where to open their browser
-
- ### 6. Container lifecycle in vibey-server.js
-
- - ensureProjectContainer(projectName): if vibey-proj-<name> doesn't exist, docker run -d --name vibey-proj-<name> --label vibey=project -v
- vibey-data/<name>:/workspace -w /workspace vibey-sandbox:latest sleep infinity
- - executeTool change: run_command does docker exec vibey-proj-<name> sh -c "<command>" instead of child_process.exec
- - write_file / edit_file: operate on the shared volume directly (no change needed, paths resolve through the mount)
- - launch_agent: no change (it's a dialog concern, not a container concern)
-
- ### 7. Housekeeping: kill vibey → kill children
-
- - Shutdown hook in vibey-server.js:
-   ```js
-     process.on('SIGTERM', cleanup);
-     process.on('SIGINT', cleanup);
-   ```
- - cleanup does: docker rm -f $(docker ps -q --filter label=vibey=project)
- - Startup hook: same cleanup on boot — kill any orphaned vibey-proj-* containers from a previous unclean shutdown
- - Project delete: docker rm -f vibey-proj-<name> before removing files
-
- ### 8. Housekeeping: SIGKILL / unclean death
-
- - The shutdown hook won't run on docker kill or OOM
- - Fix: on vibey startup, always run cleanup first (item 7 covers this)
- - Orphan containers from a previous crash get cleaned up on next launch
-
- ### 9. docker-compose.yml (ties it together)
-
- ```yaml
-   services:
-     vibey:
-       build: .
-       ports:
-         - "3001:3001"
-       volumes:
-         - /var/run/docker.sock:/var/run/docker.sock
-         - vibey-data:/app/vibey
-       labels:
-         - vibey=master
-   volumes:
-     vibey-data:
- ```
-
- ### 10. Order of work tomorrow
-
- 1. Write Dockerfile for vibey
- 2. Write Dockerfile.sandbox for project containers
- 3. Write docker-compose.yml
- 4. Add startup cleanup + shutdown hook to vibey-server.js
- 5. Add ensureProjectContainer() + modify executeTool to use docker exec
- 6. Add GET /project/:project/ports for dynamic port discovery
- 7. Test: docker compose up, create project, run a dialog, verify run_command executes inside sandbox
- 8. Test: docker compose down, verify project containers are gone
-
-
-## TODO other
-
-- To get the ball rolling, just start one dialog and let agents spawn other agents based on the instructions. No need for a loop. When they start, agents can figure out what's necessary, if they need to spawn more or not. One agent reading main.md can decide to spawn more agents as tool calling.
-- The fourth tool call being the spwaning of an agent! Specify which provider & model. It is just like a call to `POST /project/:project/dialog`. No subagent, the structure is flat. Whatever every agent gets, this one also gets, plus what the spawning action sent (`POST /project/:project/dialog` should support sending an initial prompt).
+- Debug flow 3 in test-server.
+- Implement flow 3 in test-client.
+- Flow 4 in test-client and test-server.
+- Show s taken properly in the UI.
 - A fifth tool that is that the server stops agents after a certain size of the token window, after a message is responded. The server auto-calls that tool. I want this to be specified in main.md or one of the files referenced in it.
 
 ### TODO vi mode

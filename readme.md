@@ -209,6 +209,61 @@ view
 
 ## Development notes
 
+### 2026-02-18
+
+Four ideas for vibey:
+- Audience: those with GPT or claude accounts, paid but perhaps even free. They already have their own inference and are using it.
+- Add audio support in case you prefer to talk instead of type! Auto-conversion to text.
+- It's not just about text, but perhaps the document. I feel there's tremendous power in putting little views on the docs that you can click on and expand as modals, or as a small iframe. You make the document dynamic. I'm thinking of a proxy that can show parts of the app you build there in the document. A throwback to the old web of pages, rather than the graphical SPA with its navigation.
+- Vibey can function as a memory area for your interaction with different AIs. You store the interactions as documents. The results are also stored there as documents. You own it, and you can switch providers.
+
+Summary:
+
+Local vibey:
+1. Offline vibey will provide a good interface, or a platform, for vibe coding locally: through your browser (not the terminal, not another native app). All you need to bring is your own inference.
+2. The concept: everything is a document. Your docs. The dialogs with AI. Views of your app or images are embedded. The document is the gateway to everything.
+3. Containerized: so that the blast radius is reduced, with your local machine and also between apps.
+
+Cloud vibey:
+1. Aligned pricing: An annual subscription (30 USD?) that gives you access to key cloud providers priced at cost (Hetzner for VPS, Backblaze for files); calls to LLM APIs; email sending. You can also of course bring your own API keys or subscriptions.
+2. Automatic infra to: put projects (containers) onto servers, proxy traffic from/to your apps, HTTPS (bring your DNS record), receive emails, vibey session cookies.
+3. No lock-in: the whole thing being open source, so you can always run the same thing yourself elsewhere, also in the cloud.
+
+claude: "Weakest link right now: the embedded views / iframe proxy idea is technically the hardest and also the most novel — it needs a proof of concept to know if it actually feels good or just feels clever. I'd prototype that early."
+
+### Prompts
+
+Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
+
+- Now, could you implement a dockerized version of vibey, local, based on what the TODO plan says in vibey.md?
+- Nice work! WIth what command can I spin up dockerized vibey?
+- Nice! It is running. There's another agent writing backend/frontend tests. If you run the backend tests, flow 1 breaks if vibey is dockerized. Can you debug why?
+- I think you fixed it! But I don't want to mount anything local. I want no blast radius. Can you copy the config files on build? I want that if a catastrophe happens inside vibey, your FS is untouched.
+- Silly question: if I update the credentials through the UI, they are only changed in the data volume, right?
+- What is docker.sandbox?
+- Can you extract any system prompts inside vibey-server and vibey-client to a prompts.md?
+- Please rename that to prompt.md but don't restart or rebuild docker, there's another agent working.
+
+
+
+
+
+- Hi! Could you write the tests for flow 3? If we need functionality for launching agents as a tool, build that first. Then do the backend tests first.
+- Response:
+    - Global authorizations in doc-main.md auto-authorize run_command + launch_agent so the orchestrator can read files and spawn agents without manual approval
+    - write_file stays unauthorized so the spawned agent stops at waiting quickly (instead of running indefinitely writing code)
+    - Timeout bumped to 300s since the request involves two sequential LLM calls (parent + spawned dialog)
+- Did you have to modify the server? I don't think so, just checking.
+- Wait. Can you make the test so that the code actually gets written? A simple express backend. A simple static gotoB frontend with tictactoe. You can click on the authorizations yourself!
+- Excellent! Can you implement the client side tests now for flow 3?
+- Sorry about that. It was another agent. Make the backend test suite modular, so you can run each flow separately. If you pass no flag, you run all three. Then retry just for #3.
+- We just dockerized vibey. Please check there.
+- The tests shouldn't know anything about the filesystem. All assertions should be done through interfaces! The proof is in the app running at port 4000.
+- I don't understand why runCompletion has rounds. Isn't this just one call and one response, on a given dialog? Please explain.
+- No, let's do 20. I want to make sure that there's no subagent. Agents are all flat respective to the project.
+- If you read the dialog, it seems to be done after a while. Can you check that? Maybe it's just that the port 4000 is not mapped. What exactly are you waiting for?
+- Great work! But what is the SSE doing then? Is the main agent stuck? It shouldn't consume infinite tokens for no good reason.
+
 ### 2026-02-17
 
 Prompts:
@@ -288,7 +343,6 @@ Alternative idea that I'm not considering for now: a place to store markdown and
 Vibey will have a vi-like mode in, because "vi" is in "vibey". It has to have a powerful editor as an opt-in.
 
 Really curious to see if we can use documents as channels, so that LLMs can cooperate through them, like it was a slack channel.
-
 
 Prompt header:
 Hi! I'm building vibey. See please vibey.md, then vibey-server.js and vibey-client.js, then docs/hitit.md (backend tests) and docs/gotoB.md (frontend framework).
