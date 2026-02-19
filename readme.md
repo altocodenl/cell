@@ -209,6 +209,30 @@ view
 
 ## Development notes
 
+### 2026-02-19
+
+The feeling of computing is a way to express yourself. Sometimes, it can also be useful; tool building can also be expressive. Using JIRA is not conducent to being expressive.
+
+https://github.com/timhwang/nyrc/blob/main/NYRC%201%20-%20The%20Computer%20is%20a%20Feeling.md
+"For us, computer is the specific feeling of artifacts that allow for intimate systems of personal meaning."
+"“Computer”, once an apt term for both the technology and the feeling it gave, has become less descriptive with time."
+
+For vibey: build with ideas
+Ideas are expressed in natural language. The implementation now can happen through agents. What makes things different now is your ideas on what to do, much less on the code that makes those ideas happen.
+
+Knowledge work was always more about figuring out what to do than actually doing. AI simply shifts the percentages more towards the former, to a point where the doing of knowledge work starts to become a commodity. If agents do most of the execution, then we all have to shift towards figuring out what to do and outlining it with great clarity.
+
+What's exciting is to make vibey into making Tim Berners Lee's browser-editor more of a reality.
+
+To have proxies to your own app, or even other apps, inside a document, is the key embedding in vibey. Forget about CORS: you send the request to the server that hosts vibey, then your own server does the proxying for you.
+I can already see a security nightmare looming, which sometimes is indication of something massively useful. Let's start with public access things, or proxying to your own app which means you're already logged in (with the vibey cookies).
+
+It feels like vibey is built on the shadow of the roads not taken by openclaw: 1) use the double sandbox of the browser and docker to make it much safer (and limited); 2) put it online rather than running it locally.
+
+claude: "Vibey's bet is that the document is the right primitive — that coordinating agents is fundamentally an authoring and reading activity, something you want to compose, review, share, and return to. That's deeply web-native. A document has a URL. It's inspectable. It persists in a meaningful way. The interaction is first-class content, not ephemeral chat bubbles in someone else's silo."
+
+It should be trivial to make a document public in read-only mode. But any embeddings are live.
+
 ### 2026-02-18
 
 Four ideas for vibey:
