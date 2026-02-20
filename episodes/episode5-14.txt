@@ -1,0 +1,4 @@
+Fourteenth episode of season 5! I'm building a programming substrate from scratch while recording myself. Added voice support. And embeddings. It's all coming together very quickly. Really difficult to stop working on it today.
+
+https://github.com/altocodenl/cell
+https://github.com/altocodenl/vibey

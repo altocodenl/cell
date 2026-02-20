@@ -1,0 +1,3 @@
+Thirteenth episode of season 5! I'm building a programming substrate from scratch while recording myself. Flows 3 and 4 working. Much better UI for dialogs. Bought the domain and started the repo for vibey.
+
+https://github.com/altocodenl/cell
