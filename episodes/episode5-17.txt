@@ -1,0 +1,11 @@
+Seventeenth episode of season 5! I'm building a programming substrate from scratch while recording myself. More vibey! Got a website (buildwithvibey.com).. Worked on the installation. Also on snapshots.
+
+Hi! Silent episode today.
+
+Honestly, I didn't even want to record. I'm just having fun with agents. But I decided to not break the streak and simply record a bit, boring and pointless as it probably is for anything watching.
+
+The agents did a lot of work throughout the day, with minimal supervision. At lunch time I gave them a couple of prompts. I checked back at 15 and they were done. I've been now working on and off for an hour, improving the workflows. And adding a ton of things to vibey: mostly improving tests, but also figuring out that I need uploads, improving the vim mode, etc.
+
+If you'd told me three months ago that I could develop software like this, I wouldn't have believed you. This is straight up scifi.
+
+A lot of progress. See you next time!

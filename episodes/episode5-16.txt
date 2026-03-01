@@ -1,0 +1,4 @@
+Sixteenth episode of season 5! I'm building a programming substrate from scratch while recording myself. More vibey. Dockerized the projects, which really makes for safer YOLO. Swatting bugs.
+
+https://github.com/altocodenl/cell
+https://github.com/altocodenl/vibey
