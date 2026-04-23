@@ -209,6 +209,39 @@ view
 
 ## Development notes
 
+### 2026-04-23
+
+C has block scope, but not function scope. It has no free variables except for globals. What I still don't understand is the absence of the context. What would this context be? What the variable, if the variable were to be a function, refers to? I think that's what it is.
+
+```
+   function a() {
+     var b = 0;
+     return function () {
+       b = b + 1;
+       return b;
+     };
+   }
+
+   var f = a();
+
+   console.log(f()); // 1
+   console.log(f()); // 2
+   console.log(f()); // 3
+```
+
+Basically, every instance of a holds state. I wonder if I can do this in cell automatically.
+
+https://computerhistory.org/blog/discovering-dennis-ritchies-lost-dissertation/
+"What Ritchie shows in his dissertation is that these loop functions are exactly what is needed to produce Gödel’s primitive recursive functions, and only these functions; just those functions of Grzegorczyk hierarchy."
+"Further, he shows that assessing loop programs by their depth of loops is exactly equivalent to Grzegorczyk’s hierarchy. The rate of growth of primitive recursive functions is indeed related to their computational complexity, in fact, they are identical.:
+"More likely, Ritchie’s graduate school experience was one in which the lure of the theoretical gave way to the enchantments of implementation, of building new systems and new languages as a way to explore the bounds, nature, and possibilities of computing." He wanted to make things.
+
+### 2026-03-30
+
+An useful thing to consider when doing the cell engine, for analogies: https://micahkepe.com/blog/jsongrep/
+"This is the key difference from tools like jq, jmespath, or jsonpath-rust. Those tools interpret path expressions: at each node in the JSON tree, they evaluate the query, check predicates, and recursively descend into matching branches. If a query involves recursive descent (.. or $..), these tools may revisit subtrees or maintain worklists. jsongrep does something fundamentally different-- it compiles the query into a DFA before it ever looks at the JSON, then walks the document tree exactly once, taking a single state transition at each edge. No interpretation, no backtracking, one pass."
+Beautiful.
+
 ### 2026-02-19
 
 The feeling of computing is a way to express yourself. Sometimes, it can also be useful; tool building can also be expressive. Using JIRA is not conducent to being expressive.
