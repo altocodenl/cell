@@ -209,6 +209,52 @@ view
 
 ## Development notes
 
+### 2026-06-23
+
+I just realized, the unified dataspace is about overcoming "external" fragmentation and unified representation is about overcoming "internal" fragmentation. They're both about not separateness! By seeing everything in one place (pillar 2) and seeing all things through one lens (pillar 1), the whole comes together!
+
+I need to rethink and rewrite TODIS on sequence to explain forks. That's the missing piece. A fork is when you send off something and don't wait. If you send it off without waiting, that's a new sequence that is forked. Wait is the converse: a merge. If the fork kept on going and never came back to anybody waiting, it'd be just a sequence. But the wait is the merge. So: fork and merge.
+
+The actor is a sequence.
+For concurrency: fork and wait. a fork is a call for which you don't wait the response, you just keep on going. a wait is a call triggered by a change of value on a location.
+Errors can be handled with stop and catch.
+
+Multiple forks can write to the same place, but they can use an add call instead of just a write.
+And wait can wait for multiple places. to decide if it's ready, it can do a read on all the locations and decide conditionally, with normal logic, if it should proceed or wait.
+A wait is a reverse call: instead of the caller deciding what to trigger, a call writes something; that change in that something triggers a call.
+
+Calls are atomic.
+Concurrency is essentially non-deterministic, unless you determine how things run.
+Reactivity: just like a spreadsheet, no batching, order of dependencies.
+Wait is reactive. a wait is a reference to a blank place.
+Dynamic scoping: that's a tough one. i feel this dynamic scope is macro-like. what'd be interesting is to be able to pack the environment in a containing sequence. So i'm headed to literal closures of sorts. that'd be an intersting one
+
+claude:
+"Fork is @ without =. The sequence keeps going; the response lands at a location in the dataspace whenever it arrives.
+Wait is = without @. The sequence pauses until a value at a location changes, then resumes with that value."
+
+Three files: stdin is arguments, stdout is return value, stderr is something unexpected that bubbles up and is caught. understand error handling as a constant conditional that bubbles up, rather than being written constantly.
+
+To stream is to unhook and put a listener on where the results go! The listener is a call that can either put another stream or instead conditionally wait until the stream is done. The "done" should then be represented as data.
+
+Redux: fork is to decouple @ from =. wait is to couple a change of a value (or n values) with a call. That's all we need for concurrency.
+
+Interesting to understand that an event is like a reverse call: when X location changes, consider it to be a call.
+
+### 2026-06-18
+
+An "orchestrator" is a call with conditionals, loops, forks and joins. It is just logic. Let's apply logic primitives to it, which means actual code. If languages fail in recovering from errors, being inspectable, and holding state, those are failures that need to be addressed at the programming language level.
+
+From Claude:
+
+"If logic is just what happens between call and response, and the dataspace is persistent and reactive, then you've described a system where code and data are unified, where every intermediate result is visible, and where changes propagate automatically. This is essentially a live, inspectable, persistent, reactive programming environment. The closest existing things are spreadsheets (reactive but not general), Smalltalk images (persistent but not reactive), and Erlang/OTP (concurrent and fault-tolerant but not unified-dataspace).
+
+The question is whether the simplicity of the model survives contact with the problems those systems individually struggled with: versioning code in a persistent image, debugging reactive cascades, maintaining consistency under concurrency, and garbage-collecting a dataspace that never forgets. The treatise gestures at all of these but solves none of them. That's not a criticism of the vision — it's a statement about where the hard engineering lies. The five pillars are the easy part. The persistent, reactive, concurrent dataspace is the cathedral."
+
+### 2026-06-07
+
+Any system that wants to keep consistency but shouldn't block the entire world needs to be prefix based. You claim a prefix (or N) for your operation.
+
 ### 2026-04-23
 
 C has block scope, but not function scope. It has no free variables except for globals. What I still don't understand is the absence of the context. What would this context be? What the variable, if the variable were to be a function, refers to? I think that's what it is.
