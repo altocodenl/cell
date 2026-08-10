@@ -1,5 +1,11 @@
 ## Cell development notes
 
+### 2026-08-10
+
+Normal server/clients are starting to look like hardcoded logic to me. Imagine having either a natural language description or the cell representation of that logic, and no clunky dropdowns in the middle, and the full power of whatever is available at every stage.
+
+How would the cell's version of BNF be? <...> could be a mere call to something. It could be `@ integer`. But how do you pass the thing itself? You need to apply the schema.
+
 ### 2026-08-02
 
 It's interesting that fork and wait only make sense in the context of concurrency; if your system can only do one thing at a time, there's no point in either forking or waiting. Or rather, the fork would always be a sequence (one has to come before the other) and the wait is the mere wait for a call to respond.
