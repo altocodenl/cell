@@ -1,5 +1,11 @@
 ## Cell development notes
 
+### 2026-08-21
+
+Memory allocation errors are a failure of abstraction.
+
+Validations reduce the space of possibilities enough to make dynamic analysis possible, with dynamic being like static but considering all relevant possibilities as a sequence of transformations on a part of the dataspace.
+
 ### 2026-08-10
 
 Normal server/clients are starting to look like hardcoded logic to me. Imagine having either a natural language description or the cell representation of that logic, and no clunky dropdowns in the middle, and the full power of whatever is available at every stage.
